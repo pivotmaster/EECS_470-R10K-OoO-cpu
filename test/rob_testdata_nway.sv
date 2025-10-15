@@ -1,95 +1,120 @@
 `timescale 1ns/1ps
 
+module rob_testdata_nway;
 
-module rob_testdata_depchain_nway;
-  parameter int N = 4;          // N-way superscalar issue width
-  parameter int WIDTH = 32;     // instruction width
+  // ==========
+  // Parameters
+  // ==========
+  localparam int N = 2;   // N-way 發射寬度
+  localparam int DEPTH = 64;
+  localparam int ARCH_REGS = 64;
+  localparam int PHYS_REGS = 128;
 
-  logic clk, reset, flush;
-
-  // issue interface
-  logic [N-1:0]               issue_valid;
-  logic [N-1:0][WIDTH-1:0]    issue_inst;
-  logic [N-1:0][4:0]          issue_rd;
-  logic [N-1:0][WIDTH-1:0]    issue_val;
-
-  // clock generation
+  // ==========
+  // Clock / Reset
+  // ==========
+  logic clk, rst_n;
   always #5 clk = ~clk;
 
+  // ==========
+  // Dispatch signals
+  // ==========
+  logic [N-1:0] disp_valid_i;
+  logic [N-1:0] disp_rd_wen_i;
+  logic [$clog2(ARCH_REGS)-1:0] disp_rd_arch_i [N];
+  logic [$clog2(PHYS_REGS)-1:0] disp_rd_new_prf_i [N];
+  logic [$clog2(PHYS_REGS)-1:0] disp_rd_old_prf_i [N];
+
+  logic [N-1:0] disp_ready_o;
+  logic [N-1:0] disp_alloc_o;
+  logic [$clog2(DEPTH)-1:0] disp_rob_idx_o [N];
+
+  // ==========
+  // Writeback / Commit / Flush
+  // ==========
+  logic [3:0] wb_valid_i, wb_exception_i, wb_mispred_i;
+  logic [$clog2(DEPTH)-1:0] wb_rob_idx_i [4];
+
+  logic [N-1:0] commit_valid_o, commit_rd_wen_o;
+  logic [$clog2(ARCH_REGS)-1:0] commit_rd_arch_o [N];
+  logic [$clog2(PHYS_REGS)-1:0] commit_new_prf_o [N];
+  logic [$clog2(PHYS_REGS)-1:0] commit_old_prf_o [N];
+
+  logic flush_o;
+  logic [$clog2(DEPTH)-1:0] flush_upto_rob_idx_o;
+
+  // ==========
+  // DUT instance
+  // ==========
+  ROB #(
+    .DEPTH(DEPTH),
+    .DISPATCH_WIDTH(N),
+    .COMMIT_WIDTH(N),
+    .WB_WIDTH(4),
+    .ARCH_REGS(ARCH_REGS),
+    .PHYS_REGS(PHYS_REGS)
+  ) dut (
+    .clk(clk),
+    .rst_n(rst_n),
+    .disp_valid_i(disp_valid_i),
+    .disp_rd_wen_i(disp_rd_wen_i),
+    .disp_rd_arch_i(disp_rd_arch_i),
+    .disp_rd_new_prf_i(disp_rd_new_prf_i),
+    .disp_rd_old_prf_i(disp_rd_old_prf_i),
+    .disp_ready_o(disp_ready_o),
+    .disp_alloc_o(disp_alloc_o),
+    .disp_rob_idx_o(disp_rob_idx_o),
+    .wb_valid_i(wb_valid_i),
+    .wb_rob_idx_i(wb_rob_idx_i),
+    .wb_exception_i(wb_exception_i),
+    .wb_mispred_i(wb_mispred_i),
+    .commit_valid_o(commit_valid_o),
+    .commit_rd_wen_o(commit_rd_wen_o),
+    .commit_rd_arch_o(commit_rd_arch_o),
+    .commit_new_prf_o(commit_new_prf_o),
+    .commit_old_prf_o(commit_old_prf_o),
+    .flush_o(flush_o),
+    .flush_upto_rob_idx_o(flush_upto_rob_idx_o)
+  );
+
+  // ==========
+  // Stimulus (test data)
+  // ==========
   initial begin
-    clk = 0;
-    reset = 1;
-    flush = 0;
-    issue_valid = '0;
+    clk = 0; rst_n = 0;
+    disp_valid_i = '0; wb_valid_i = '0;
+    #10 rst_n = 1;
+    $display("=== Start ROB N-way Test ===");
 
-    #10 reset = 0;
-    $display("=== [Start N-way Dependency Chain Test] ===");
+    // Cycle 1: issue two instructions
+    disp_valid_i = 2'b11;
+    disp_rd_wen_i = 2'b11;
+    disp_rd_arch_i[0] = 3;  disp_rd_new_prf_i[0] = 8;  disp_rd_old_prf_i[0] = 3;
+    disp_rd_arch_i[1] = 4;  disp_rd_new_prf_i[1] = 9;  disp_rd_old_prf_i[1] = 4;
+    #10 disp_valid_i = '0;
 
-    // ----------------------------------------------------------
-    // Cycle 1: issue I0, I1
-    // I0: R3 = R1 + R2
-    // I1: R4 = R3 - R1
-    // ----------------------------------------------------------
-    issue_valid[0] = 1; issue_inst[0] = 32'h00B101B3; issue_rd[0] = 5'd3; issue_val[0] = 32'h0;
-    issue_valid[1] = 1; issue_inst[1] = 32'h40118233; issue_rd[1] = 5'd4; issue_val[1] = 32'h0;
-    for (int i = 2; i < N; i++) issue_valid[i] = 0;
-    #10 issue_valid = '0;
-    $display("[Cycle %0t] Issued I0, I1", $time);
+    // Cycle 2: issue next two instructions
+    disp_valid_i = 2'b11;
+    disp_rd_arch_i[0] = 1;  disp_rd_new_prf_i[0] = 10; disp_rd_old_prf_i[0] = 1;
+    disp_rd_arch_i[1] = 2;  disp_rd_new_prf_i[1] = 11; disp_rd_old_prf_i[1] = 2;
+    #10 disp_valid_i = '0;
 
-    // ----------------------------------------------------------
-    // Cycle 2: issue I2, I3
-    // I2: R1 = R1 + R2
-    // I3: R2 = R1 + 5
-    // ----------------------------------------------------------
+    // Simulate WB of first few ROB entries
+    #20;
+    wb_valid_i = 4'b0011;
+    wb_rob_idx_i[0] = 0; // writeback entry 0
+    wb_rob_idx_i[1] = 1; // writeback entry 1
+    #10 wb_valid_i = '0;
+
+    // Trigger a mispredict (flush)
     #10;
-    issue_valid[0] = 1; issue_inst[0] = 32'h00B080B3; issue_rd[0] = 5'd1; issue_val[0] = 32'h0;
-    issue_valid[1] = 1; issue_inst[1] = 32'h00508113; issue_rd[1] = 5'd2; issue_val[1] = 32'h0;
-    for (int i = 2; i < N; i++) issue_valid[i] = 0;
-    #10 issue_valid = '0;
-    $display("[Cycle %0t] Issued I2, I3", $time);
-
-    // ----------------------------------------------------------
-    // Cycle 3: issue I4, I5
-    // I4: R2 = R3 + R4
-    // I5: R4 = R1 + R2
-    // ----------------------------------------------------------
-    #10;
-    issue_valid[0] = 1; issue_inst[0] = 32'h00418133; issue_rd[0] = 5'd2; issue_val[0] = 32'h0;
-    issue_valid[1] = 1; issue_inst[1] = 32'h00B202B3; issue_rd[1] = 5'd4; issue_val[1] = 32'h0;
-    for (int i = 2; i < N; i++) issue_valid[i] = 0;
-    #10 issue_valid = '0;
-    $display("[Cycle %0t] Issued I4, I5", $time);
-
-    // ----------------------------------------------------------
-    // Cycle 4: issue I6
-    // I6: R1 = R3 + 7
-    // ----------------------------------------------------------
-    #10;
-    issue_valid[0] = 1; issue_inst[0] = 32'h00718113; issue_rd[0] = 5'd1; issue_val[0] = 32'h0;
-    for (int i = 1; i < N; i++) issue_valid[i] = 0;
-    #10 issue_valid = '0;
-    $display("[Cycle %0t] Issued I6", $time);
-
-    // ----------------------------------------------------------
-    // Cycle 5: 模擬 branch mispredict → flush
-    // ----------------------------------------------------------
-    #10;
-    flush = 1;
-    $display("[Cycle %0t] Triggered FLUSH (mispredict recovery)", $time);
-    #10 flush = 0;
-
-    // ----------------------------------------------------------
-    // Cycle 6: 再 issue 新指令確認 ROB 可恢復
-    // ----------------------------------------------------------
-    #10;
-    issue_valid[0] = 1; issue_inst[0] = 32'h00B50533; issue_rd[0] = 5'd10; issue_val[0] = 32'h0; // ADD
-    issue_valid[1] = 1; issue_inst[1] = 32'h40C60633; issue_rd[1] = 5'd12; issue_val[1] = 32'h0; // SUB
-    for (int i = 2; i < N; i++) issue_valid[i] = 0;
-    #10 issue_valid = '0;
-    $display("[Cycle %0t] Issued recovery instructions", $time);
+    wb_valid_i = 4'b0001;
+    wb_mispred_i = 4'b0001;
+    wb_rob_idx_i[0] = 2;
+    #10 wb_valid_i = '0; wb_mispred_i = '0;
 
     #50;
-    $display("=== [End of N-way Dependency Chain Test] ===");
+    $display("=== End ROB N-way Test ===");
     $finish;
   end
 endmodule
