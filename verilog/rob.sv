@@ -89,7 +89,8 @@ module ROB #(
     always_comb begin
         retire_en = '0;
         for (int i = 0; i < COMMIT_WIDTH; i++) begin
-            if (!empty && rob_table[(head + i) % DEPTH].valid && rob_table[(head + i) % DEPTH].ready) begin
+            if (!empty && rob_table[(head + i) % DEPTH].valid && rob_table[(head + i) % DEPTH].ready 
+                && ((i == 0) || retire_en[i-1])) begin
                 retire_en[i] = 1'b1;
             end
         end
@@ -141,10 +142,10 @@ module ROB #(
             for (int i = 0; i < COMMIT_WIDTH; i++) begin
                 if (retire_en[i]) begin
                     commit_valid_o[i]   <= 1'b1;
-                    commit_rd_wen_o[i]  <= rob_table[head].rd_wen;
-                    commit_rd_arch_o[i] <= rob_table[head].rd_arch;
-                    commit_new_prf_o[i] <= rob_table[head].new_prf;
-                    commit_old_prf_o[i] <= rob_table[head].old_prf;
+                    commit_rd_wen_o[i]  <= rob_table[head + i].rd_wen;
+                    commit_rd_arch_o[i] <= rob_table[head + i].rd_arch;
+                    commit_new_prf_o[i] <= rob_table[head + i].new_prf;
+                    commit_old_prf_o[i] <= rob_table[head + i].old_prf;
 
                     // Flush if mispred or exception
                     if (rob_table[head].mispred || rob_table[head].exception) begin
@@ -158,13 +159,13 @@ module ROB #(
                         end
                     end else begin
                         rob_table[head].valid <= 1'b0;
-                        head <= (head == DEPTH-1) ? '0 : head + 1;
-                        count <= count - 1;
                     end
                 end else begin
                     commit_valid_o[i] <= 1'b0;
                 end
             end
+
+            head <= head + $countones(retire_en);
 
             // ==== Update count and tail ====
             count <= count + $countones(disp_alloc_o) - $countones(retire_en);
