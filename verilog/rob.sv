@@ -1,4 +1,4 @@
-module ROB #(
+module rob #(
     parameter int unsigned DEPTH           = 64,
     parameter int unsigned INST_W          = 16,
     parameter int unsigned DISPATCH_WIDTH  = 2,
@@ -14,26 +14,26 @@ module ROB #(
     // Dispatch
     input  logic [DISPATCH_WIDTH-1:0] disp_valid_i,
     input  logic [DISPATCH_WIDTH-1:0] disp_rd_wen_i,
-    input  logic [$clog2(ARCH_REGS)-1:0] disp_rd_arch_i [DISPATCH_WIDTH],
-    input  logic [$clog2(PHYS_REGS)-1:0] disp_rd_new_prf_i [DISPATCH_WIDTH],
-    input  logic [$clog2(PHYS_REGS)-1:0] disp_rd_old_prf_i [DISPATCH_WIDTH],
+    input  logic [DISPATCH_WIDTH-1:0][$clog2(ARCH_REGS)-1:0] disp_rd_arch_i,
+    input  logic [DISPATCH_WIDTH-1:0][$clog2(PHYS_REGS)-1:0] disp_rd_new_prf_i,
+    input  logic [DISPATCH_WIDTH-1:0][$clog2(PHYS_REGS)-1:0] disp_rd_old_prf_i,
 
     output logic [DISPATCH_WIDTH-1:0] disp_ready_o,
     output logic [DISPATCH_WIDTH-1:0] disp_alloc_o,
-    output logic [$clog2(DEPTH)-1:0]  disp_rob_idx_o [DISPATCH_WIDTH],
+    output logic [DISPATCH_WIDTH-1:0][$clog2(DEPTH)-1:0]  disp_rob_idx_o,
 
     // Writeback
     input  logic [WB_WIDTH-1:0] wb_valid_i,
-    input  logic [$clog2(DEPTH)-1:0] wb_rob_idx_i [WB_WIDTH],
+    input  logic [WB_WIDTH-1:0][$clog2(DEPTH)-1:0] wb_rob_idx_i,
     input  logic [WB_WIDTH-1:0] wb_exception_i,
     input  logic [WB_WIDTH-1:0] wb_mispred_i,
 
     // Commit
     output logic [COMMIT_WIDTH-1:0] commit_valid_o,
     output logic [COMMIT_WIDTH-1:0] commit_rd_wen_o,
-    output logic [$clog2(ARCH_REGS)-1:0] commit_rd_arch_o [COMMIT_WIDTH],
-    output logic [$clog2(PHYS_REGS)-1:0] commit_new_prf_o [COMMIT_WIDTH],
-    output logic [$clog2(PHYS_REGS)-1:0] commit_old_prf_o [COMMIT_WIDTH],
+    output logic [COMMIT_WIDTH-1:0][$clog2(ARCH_REGS)-1:0] commit_rd_arch_o,
+    output logic [COMMIT_WIDTH-1:0][$clog2(PHYS_REGS)-1:0] commit_new_prf_o,
+    output logic [COMMIT_WIDTH-1:0][$clog2(PHYS_REGS)-1:0] commit_old_prf_o,
 
     // Branch flush
     output logic flush_o,
