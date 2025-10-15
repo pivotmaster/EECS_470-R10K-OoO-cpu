@@ -17,25 +17,28 @@ module tb_rob_only;
 
   // DUT I/O
   logic [DISPATCH_WIDTH-1:0] disp_valid_i, disp_rd_wen_i;
-  logic [$clog2(ARCH_REGS)-1:0] disp_rd_arch_i [DISPATCH_WIDTH];
-  logic [$clog2(PHYS_REGS)-1:0] disp_rd_new_prf_i [DISPATCH_WIDTH];
-  logic [$clog2(PHYS_REGS)-1:0] disp_rd_old_prf_i [DISPATCH_WIDTH];
+  logic [DISPATCH_WIDTH-1:0][$clog2(ARCH_REGS)-1:0] disp_rd_arch_i;
+  logic [DISPATCH_WIDTH-1:0][$clog2(PHYS_REGS)-1:0] disp_rd_new_prf_i;
+  logic [DISPATCH_WIDTH-1:0][$clog2(PHYS_REGS)-1:0] disp_rd_old_prf_i;
   logic [DISPATCH_WIDTH-1:0] disp_ready_o, disp_alloc_o;
-  logic [$clog2(DEPTH)-1:0] disp_rob_idx_o [DISPATCH_WIDTH];
+  logic [DISPATCH_WIDTH-1:0][$clog2(DEPTH)-1:0] disp_rob_idx_o;
 
   logic [WB_WIDTH-1:0] wb_valid_i, wb_exception_i, wb_mispred_i;
-  logic [$clog2(DEPTH)-1:0] wb_rob_idx_i [WB_WIDTH];
+  logic [WB_WIDTH-1:0][$clog2(DEPTH)-1:0] wb_rob_idx_i;
 
   logic [COMMIT_WIDTH-1:0] commit_valid_o, commit_rd_wen_o;
-  logic [$clog2(ARCH_REGS)-1:0] commit_rd_arch_o [COMMIT_WIDTH];
-  logic [$clog2(PHYS_REGS)-1:0] commit_new_prf_o [COMMIT_WIDTH];
-  logic [$clog2(PHYS_REGS)-1:0] commit_old_prf_o [COMMIT_WIDTH];
+  logic [COMMIT_WIDTH-1:0][$clog2(ARCH_REGS)-1:0] commit_rd_arch_o;
+  logic [COMMIT_WIDTH-1:0][$clog2(PHYS_REGS)-1:0] commit_new_prf_o;
+  logic [COMMIT_WIDTH-1:0][$clog2(PHYS_REGS)-1:0] commit_old_prf_o;
+  // logic [COMMIT_WIDTH-1:0][$clog2(ARCH_REGS)-1:0] commit_rd_arch_o;
+  // logic [COMMIT_WIDTH-1:0][$clog2(PHYS_REGS)-1:0] commit_new_prf_o;
+  // logic [COMMIT_WIDTH-1:0][$clog2(PHYS_REGS)-1:0] commit_old_prf_o;
 
   logic flush_o;
   logic [$clog2(DEPTH)-1:0] flush_upto_rob_idx_o;
 
   // Instantiate ROB
-  ROB #(
+  rob #(
     .DEPTH(DEPTH), .INST_W(INST_W),
     .DISPATCH_WIDTH(DISPATCH_WIDTH), .COMMIT_WIDTH(COMMIT_WIDTH),
     .WB_WIDTH(WB_WIDTH), .ARCH_REGS(ARCH_REGS),
