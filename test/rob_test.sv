@@ -101,15 +101,15 @@ module tb_rob_only;
   // end
     // Stimulus: multiple dispatch/writeback/flush tests
   initial begin
-    // === 初始化 ===
+    // === init ===
     disp_valid_i = '0; disp_rd_wen_i = '0;
     wb_valid_i   = '0; wb_exception_i = '0; wb_mispred_i = '0;
 
     @(negedge reset);
-    @(negedge clk); // 等 reset 結束
+    @(negedge clk); // wait reset end
 
      // =====================================================
-    // [Phase 1] Dispatch 一條指令，正常 commit
+    // [Phase 1] Dispatch a ins -> commit
     // =====================================================
     $display("\n=== Phase 1: Single Dispatch/Commit ===");
     @(negedge clk);
@@ -122,7 +122,7 @@ module tb_rob_only;
     @(negedge clk);
     disp_valid_i = '0;
 
-    // Writeback 該指令 (ROB idx 0)
+    // Writeback (ROB idx 0)
     @(negedge clk);
     wb_valid_i[0]   = 1;
     wb_rob_idx_i[0] = 0;
@@ -133,7 +133,7 @@ module tb_rob_only;
     repeat (5) @(negedge clk);
 
     // =====================================================
-    // [Phase 2] 同時 dispatch 兩條，writeback 一條，另一條延遲
+    // [Phase 2] dispatch two ways, writeback one way
     // =====================================================
     $display("\n=== Phase 2: Dual Dispatch, Staggered WB ===");
     @(negedge clk);
@@ -145,18 +145,18 @@ module tb_rob_only;
     @(negedge clk);
     disp_valid_i = '0;
 
-    // Writeback 第一條（ROB idx 1）
+    // Writeback second（ROB idx 1）
     @(negedge clk);
     wb_valid_i[0]   = 1;
-    wb_rob_idx_i[0] = 1;
+    wb_rob_idx_i[0] = 2;
 
     @(negedge clk);
     wb_valid_i = '0;
 
-    // 延遲幾拍再 writeback 第二條（ROB idx 2）
+    // writeback first（ROB idx 2）
     repeat (3) @(negedge clk);
     wb_valid_i[1]   = 1;
-    wb_rob_idx_i[1] = 2;
+    wb_rob_idx_i[1] = 1;
 
     @(negedge clk);
     wb_valid_i = '0;
@@ -164,7 +164,7 @@ module tb_rob_only;
     repeat (6) @(negedge clk);
 
     // =====================================================
-    // [Phase 3] 測試 mispredict 觸發 flush
+    // [Phase 3] test mispredict -> flush
     // =====================================================
     $display("\n=== Phase 3: Mispredict Flush Test ===");
     @(negedge clk);
@@ -177,11 +177,11 @@ module tb_rob_only;
     @(negedge clk);
     disp_valid_i = '0;
 
-    // Writeback 該指令，標記 mispred (ROB idx 3)
+    // Writeback, mispred (ROB idx 3)
     @(negedge clk);
     wb_valid_i[0]   = 1;
     wb_rob_idx_i[0] = 3;
-    wb_mispred_i[0] = 1;  // 觸發 flush
+    wb_mispred_i[0] = 1;  // flush
 
     @(negedge clk);
     wb_valid_i = '0; wb_mispred_i = '0;
@@ -189,7 +189,7 @@ module tb_rob_only;
     repeat (5) @(negedge clk);
 
     // =====================================================
-    // [Phase 4] Flush 後重新 dispatch 新指令
+    // [Phase 4] dispatch after flush
     // =====================================================
     $display("\n=== Phase 4: Post-Flush Dispatch ===");
     @(negedge clk);
@@ -202,12 +202,37 @@ module tb_rob_only;
     @(negedge clk);
     disp_valid_i = '0;
 
-    // Writeback + Commit 新指令 (ROB idx 4)
+    // Writeback + Commit (ROB idx 4)
     @(negedge clk);
     wb_valid_i[0]   = 1;
     wb_rob_idx_i[0] = 4;
 
     @(negedge clk);
+    wb_valid_i = '0;
+
+    repeat (5) @(negedge clk);
+
+    // =====================================================
+    // [Phase 5] Commit two ins at the same time
+    // =====================================================
+    $display("\n=== Phase 5: test Commit two ins at the same time ===");
+
+    @(negedge clk);
+    // Dispatch
+    disp_valid_i      = 2'b11;
+    disp_rd_wen_i     = 2'b11;
+    disp_rd_arch_i[0] = 5'd10; disp_rd_new_prf_i[0] = 7'd15; disp_rd_old_prf_i[0] = 7'd3;
+    disp_rd_arch_i[1] = 5'd11; disp_rd_new_prf_i[1] = 7'd16; disp_rd_old_prf_i[1] = 7'd4;
+    @(negedge clk);
+    disp_valid_i = '0;
+
+    // writeback two ins
+    @(negedge clk);
+    wb_valid_i = 4'b0011;
+    wb_rob_idx_i[0] = 5;
+    wb_rob_idx_i[1] = 6;
+    @(negedge clk);
+    
     wb_valid_i = '0;
 
     repeat (8) @(negedge clk);
@@ -218,10 +243,14 @@ module tb_rob_only;
 
   // Monitor
   always @(negedge clk) begin
-    if (commit_valid_o[0])
-      $display("[%0t] Commit: arch=%0d new=%0d old=%0d",
-              $time, commit_rd_arch_o[0],
-              commit_new_prf_o[0], commit_old_prf_o[0]);
+    for(int i = 0; i < COMMIT_WIDTH; i++) begin
+      if (commit_valid_o[i])
+        $display("[%0t] Commit %0d: arch=%0d new=%0d old=%0d",
+                $time, i, commit_rd_arch_o[i],
+                commit_new_prf_o[i], commit_old_prf_o[i]);
+    end
+    if (|commit_valid_o)
+      $display("commit num: %0d", $countones(commit_valid_o));
     if (flush_o)
       $display("[%0t] Flush up to ROB idx %0d", $time, flush_upto_rob_idx_o);
   end
