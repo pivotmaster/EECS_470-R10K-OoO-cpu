@@ -2,6 +2,8 @@
 
 module tb_rob_only;
 
+  logic start_sim;
+
   // Parameters match ROB
   localparam int DEPTH          = 64;
   localparam int INST_W         = 16;
@@ -30,9 +32,6 @@ module tb_rob_only;
   logic [COMMIT_WIDTH-1:0][$clog2(ARCH_REGS)-1:0] commit_rd_arch_o;
   logic [COMMIT_WIDTH-1:0][$clog2(PHYS_REGS)-1:0] commit_new_prf_o;
   logic [COMMIT_WIDTH-1:0][$clog2(PHYS_REGS)-1:0] commit_old_prf_o;
-  // logic [COMMIT_WIDTH-1:0][$clog2(ARCH_REGS)-1:0] commit_rd_arch_o;
-  // logic [COMMIT_WIDTH-1:0][$clog2(PHYS_REGS)-1:0] commit_new_prf_o;
-  // logic [COMMIT_WIDTH-1:0][$clog2(PHYS_REGS)-1:0] commit_old_prf_o;
 
   logic flush_o;
   logic [$clog2(DEPTH)-1:0] flush_upto_rob_idx_o;
@@ -69,52 +68,24 @@ module tb_rob_only;
     repeat (3) @(negedge clk);
     reset = 0;
   end
-
-  // Stimulus: dispatch → writeback → commit
-  // initial begin
-  //   // init
-  //   disp_valid_i = '0; disp_rd_wen_i = '0;
-  //   wb_valid_i   = '0; wb_exception_i = '0; wb_mispred_i = '0;
-
-  //   @(edge reset);
-
-  //   // Dispatch one instruction
-  //   @(negedge clk);
-  //   disp_valid_i[0]     = 1;
-  //   disp_rd_wen_i[0]    = 1;
-  //   disp_rd_arch_i[0]   = 5'd1;
-  //   disp_rd_new_prf_i[0]= 7'd10;
-  //   disp_rd_old_prf_i[0]= 7'd2;
-
-  //   @(negedge clk);
-  //   disp_valid_i = '0;
-
-  //   // Writeback that instruction
-  //   @(negedge clk);
-  //   wb_valid_i[0]   = 1;
-  //   wb_rob_idx_i[0] = disp_rob_idx_o[0];
-
-  //   @(negedge clk);
-  //   wb_valid_i = '0;
-
-  //   // Observe commit
-  //   repeat (5) @(negedge clk);
-
-  //   $finish;
-  // end
-    // Stimulus: multiple dispatch/writeback/flush tests
+  
+  // Stimulus: multiple dispatch/writeback/flush tests
+  int total_dispatched, prf_counter, ridx;
   initial begin
     // === init ===
+    start_sim = 0;
     disp_valid_i = '0; disp_rd_wen_i = '0;
     wb_valid_i   = '0; wb_exception_i = '0; wb_mispred_i = '0;
 
     @(negedge reset);
     @(negedge clk); // wait reset end
 
+    
      // =====================================================
     // [Phase 1] Dispatch a ins -> commit
     // =====================================================
     $display("\n=== Phase 1: Single Dispatch/Commit ===");
+    start_sim = 1;
     @(negedge clk);
     disp_valid_i[0]      = 1;
     disp_rd_wen_i[0]     = 1;
@@ -237,6 +208,53 @@ module tb_rob_only;
     @(negedge clk);
     
     wb_valid_i = '0;
+    @(negedge clk);
+    // =====================================================
+    // [Phase 6] Dispatch until ROB is full
+    // =====================================================
+    $display("\n=== Phase 6: Dispatch until ROB is full ===");
+    total_dispatched = 0;
+    prf_counter = 20;
+    while(total_dispatched < 100) begin
+      @(negedge clk);
+      for (int i = 0; i < DISPATCH_WIDTH; i++) begin
+        disp_valid_i[i]      = 1;
+        disp_rd_wen_i[i]     = 1;
+        disp_rd_arch_i[i]    = (total_dispatched + 12) % ARCH_REGS;
+        disp_rd_new_prf_i[i] = prf_counter + 10;
+        disp_rd_old_prf_i[i] = prf_counter;
+        total_dispatched++;
+        prf_counter++;
+        // $display("dispatch 2");
+      end
+    end
+    disp_valid_i = 0;
+    @(negedge clk);
+    // =====================================================
+    // [Phase 7] WB from back
+    // =====================================================
+    $display("\n=== Phase 7: WB from back ===");
+    for (ridx = DEPTH-1; ridx >= 0; ridx--) begin
+      @(negedge clk);
+      wb_valid_i      = 4'b0011;
+      wb_rob_idx_i[0] = ridx;
+      if(ridx == DEPTH - 11) begin
+        wb_mispred_i[0] = 1;
+        $display("%0d is mispred", ridx);
+      end else begin
+        wb_mispred_i[0] = 0;
+      end
+      wb_rob_idx_i[1] = (ridx > 0) ? ridx-1 : ridx;
+      $display("[%0t] WB two entries: ROB[%0d] and ROB[%0d]", 
+               $time, wb_rob_idx_i[0], wb_rob_idx_i[1]);
+      ridx--;
+    end
+
+    @(negedge clk);
+    wb_valid_i = '0;
+    $display("\n=== Phase 7 Complete: Reverse writeback finished ===");
+
+    repeat (40) @(negedge clk);
 
     repeat (8) @(negedge clk);
 
@@ -244,18 +262,19 @@ module tb_rob_only;
     $finish;
   end
 
-  // Monitor
   always @(negedge clk) begin
-    for(int i = 0; i < COMMIT_WIDTH; i++) begin
-      if (commit_valid_o[i])
-        $display("[%0t] Commit %0d: arch=%0d new=%0d old=%0d",
-                $time, i, commit_rd_arch_o[i],
-                commit_new_prf_o[i], commit_old_prf_o[i]);
+    if(start_sim) begin
+      for(int i = 0; i < COMMIT_WIDTH; i++) begin
+        if (commit_valid_o[i])
+          $display("[%0t] Commit %0d: arch=%0d new=%0d old=%0d",
+                  $time, i, commit_rd_arch_o[i],
+                  commit_new_prf_o[i], commit_old_prf_o[i]);
+      end
+      if (|commit_valid_o)
+        $display("commit num: %0d", $countones(commit_valid_o));
+      if (flush_o)
+        $display("[%0t] Flush up to ROB idx %0d", $time, flush_upto_rob_idx_o);
     end
-    if (|commit_valid_o)
-      $display("commit num: %0d", $countones(commit_valid_o));
-    if (flush_o)
-      $display("[%0t] Flush up to ROB idx %0d", $time, flush_upto_rob_idx_o);
   end
 
 endmodule
