@@ -1,10 +1,5 @@
 `timescale 1ns/1ps
 
-// =====================================================
-// EECS 470 – Team 14: Ron Fisher
-// ROB Test Data (N-way with Value, Valid, and Pass/Fail)
-// Author: Tzu Hsuan Lee
-// =====================================================
 
 module rob_testdata_nway;
 
