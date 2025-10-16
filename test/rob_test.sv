@@ -254,6 +254,7 @@ module tb_rob_only;
     @(negedge clk);
     wb_valid_i = '0;
     $display("\n=== Phase 7 Complete: Reverse writeback finished ===");
+
     // =====================================================
     // [Phase 8] Alternating mispredict/exception flush
     // =====================================================
@@ -304,6 +305,9 @@ module tb_rob_only;
       end
     end
 
+    // =====================================================
+    // Ground Truth
+    // =====================================================
     typedef struct packed {
       int arch;
       int new_prf;
@@ -431,6 +435,9 @@ module tb_rob_only;
     }}
   };
 
+  // =====================================================
+  // Task for comparing Ground Truth and DUT result
+  // =====================================================
   task automatic compare_group(commit_group_t expg, int dut_cnt,
                              int dut_arch[COMMIT_WIDTH],
                              int dut_new [COMMIT_WIDTH],
@@ -449,16 +456,20 @@ module tb_rob_only;
   end
 endtask
 
+// =====================================================
+// Comparing Ground Truth and DUT result
+// =====================================================
 int group_idx  = 0;
 always @(negedge clk) begin
   if (start_sim && !reset && group_idx < exp_groups.size()) begin
     automatic commit_group_t expg = exp_groups[group_idx];
+
     if (($time) == (expg.cycle/100)) begin
-      // 收集 DUT outputs
       automatic int dut_cnt = 0;
       automatic int dut_arch[COMMIT_WIDTH];
       automatic int dut_new [COMMIT_WIDTH];
       automatic int dut_old [COMMIT_WIDTH];
+      // Get individual commits data from groups
       for (int i = 0; i < COMMIT_WIDTH; i++) begin
         if (dut.commit_valid_o[i]) begin
           dut_arch[dut_cnt] = dut.commit_rd_arch_o[i];
@@ -467,7 +478,7 @@ always @(negedge clk) begin
           dut_cnt++;
         end
       end
-
+      // Use Task to compare
       compare_group(expg, dut_cnt, dut_arch, dut_new, dut_old); 
       group_idx++;
     end
