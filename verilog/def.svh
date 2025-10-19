@@ -4,6 +4,7 @@
 typedef struct packed {
     logic                          valid;     // = busy
     logic [$clog2(ROB_DEPTH)-1:0]  rob_idx;
+    logic [$clog2(ARCH_REGS)-1:0]  dest_arch_reg; // for cdb update map table
     logic [31:0]                   imm;
     logic [8:0]                    fu_type;   // on hot code
     logic [$clog2(OPCODE_N)-1:0]   opcode;
@@ -25,6 +26,13 @@ typedef struct packed {
     logic                         is_branch;
     logic                         mispredicted;
 } rob_entry_t;
+
+typedef struct packed {
+    logic                         valid;      // broadcast valid
+    logic [$clog2(ARCH_REGS)-1:0] dest_arch;  // Arch reg
+    logic [$clog2(PHYS_REGS)-1:0] phys_tag;   // PRF tag
+    logic [XLEN-1:0]              value;      // result value
+} cdb_entry_t;
 
 typedef struct packed {
     INST  inst;

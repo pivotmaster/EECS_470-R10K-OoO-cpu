@@ -2,7 +2,7 @@
 //                                                                     //
 //   Modulename :  RS.sv                                               //
 //                                                                     //
-//  Description :  operand value were access at dispatch stage         //
+//  Description :        //
 //                                         //
 //                                                                     //
 /////////////////////////////////////////////////////////////////////////
@@ -16,6 +16,7 @@ module RS #(
     parameter int unsigned CDB_WIDTH       = 2,
     parameter int unsigned PHYS_REGS       = 128,
     parameter int unsigned OPCODE_N        = 8,  //number of opcodes
+    parameter int unsigned XLEN            = 64,
 )(
     input  logic clk,
     input  logic reset,
@@ -34,8 +35,8 @@ module RS #(
     // =========================================================
     // CDB -> RS 
     // =========================================================
-    input  logic [CDB_WIDTH-1:0]                               cdb_valid_i, 
-    input  logic [CDB_WIDTH-1:0][$clog2(PHYS_REGS)-1:0]        cdb_tag_i,
+    output  logic [CDB_WIDTH-1:0]                               cdb_valid_i, 
+    output  logic [CDB_WIDTH-1:0][$clog2(PHYS_REGS)-1:0]        cdb_tag_i,
 
     // =========================================================
     // RS -> FU (Issue)

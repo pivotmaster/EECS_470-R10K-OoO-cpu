@@ -40,7 +40,10 @@ module dispatch_stage #(
 )(
     input   logic                                     clock,          
     input   logic                                     reset,         
-
+    input   logic                                     disp_valid,       
+    input   logic                                     disp_flush,      
+    input   logic                                     disp_stall,   
+    
     // =========================================================
     // Decode Instructions 
     // =========================================================  
