@@ -16,7 +16,7 @@ module free_list #(
     input  logic reset,
 
     // =========================================================
-    // Rename <-> free list 
+    // Dispatch <-> free list 
     // =========================================================
     input  logic [DISPATCH_WIDTH-1:0]                       alloc_req_i,
 
