@@ -20,7 +20,7 @@
     // =========================================================
 
 // =========================================================
-// BTB: Instr -> target Addr
+// BTB: Record [Instr -> target Addr]
 // =========================================================
 module btb #(
     parameter int unsigned           PHT_ENTRY_NUM  = 1024,
@@ -48,8 +48,13 @@ module btb #(
 
 endmodule
 
+// =========================================================
+// Gshare Predictor: Include [GHR + BHT (2-bit)]
+// =========================================================
 module gshare_predictor #(
     parameter int unsigned           PHT_ENTRY_NUM  = 1024,
+    parameter int unsigned           BHT_ENTRIES    = 1024,  // how many entries in history table
+    parameter int unsigned           GHR_BITS       = $clog2(BHT_ENTRIES),  // record how many history events in GHR   
     parameter int unsigned           ADDR_WIDTH     = 64     // = address bits
 
 )(
@@ -70,11 +75,22 @@ module gshare_predictor #(
     input  logic                     gshare_update_taken_i
 ) ;
 
+    // GHR
+    logic [GHR_BITS-1:0] ghr, ghr_next;  
+   
+    // BHT (2-bit counter)
+    logic [1:0] BHT [BHT_ENTRIES-1:0]; // idx = PC_low_bits ^ GHR;
+
 endmodule
 
+
+// =========================================================
+// Top Module for Branch Predict
+// =========================================================
 module top_brench_predictor #(
     parameter int unsigned           BTB_ENTRY_NUM = 256,
-    parameter int unsigned           PHT_ENTRY_NUM = 1024, // how many entries in history table
+    parameter                        BHT_ENTRIES    = 1024,  // how many entries in history table
+    parameter                        GHR_BITS       = 7,     // record how many history events in GHR 
     parameter int unsigned           ADDR_WIDTH    = 32    // = address bits
 )(
     input  logic                     clk,
@@ -130,7 +146,9 @@ module top_brench_predictor #(
     // ==============================================
     gshare_predictor #(
         .PHT_ENTRY_NUM (PHT_ENTRY_NUM),
-        .ADDR_WIDTH    (ADDR_WIDTH)
+        .BHT_ENTRIES(BHT_ENTRIES),
+        .GHR_BITS(GHR_BITS),
+        .ADDR_WIDTH(ADDR_WIDTH)
     ) gsh_0 (
         .clk             (clk),
         .reset           (reset),
