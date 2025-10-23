@@ -4,9 +4,8 @@
 typedef struct packed {
     logic                          valid;     // = busy
     logic [$clog2(ROB_DEPTH)-1:0]  rob_idx;
-    logic [$clog2(ARCH_REGS)-1:0]  dest_arch_reg; // for cdb update map table
     logic [31:0]                   imm;
-    logic [8:0]                    fu_type;   // on hot code
+    logic [$clog2(FU_NUM)-1:0]     fu_type;   
     logic [$clog2(OPCODE_N)-1:0]   opcode;
     logic [$clog2(PHYS_REGS)-1:0]  dest_tag;  // write reg
     logic [$clog2(PHYS_REGS)-1:0]  src1_tag;  // source reg 1      
@@ -40,3 +39,14 @@ typedef struct packed {
     ADDR  NPC; // PC + 4
     logic valid;
 } IF_ID_PACKET;
+
+typedef struct packed {
+    logic                          valid;     // = busy
+    logic [$clog2(ROB_DEPTH)-1:0]  rob_idx;
+    logic [31:0]                   imm;
+    logic [$clog2(FU_NUM)-1:0]     fu_type;   
+    logic [$clog2(OPCODE_N)-1:0]   opcode;
+    logic [$clog2(PHYS_REGS)-1:0]  dest_tag;  // write reg
+    logic [$clog2(PHYS_REGS)-1:0]  src1_tag;  // source reg 1      
+    logic [$clog2(PHYS_REGS)-1:0]  src2_tag;  // source reg 2
+} issue_packet_t;
