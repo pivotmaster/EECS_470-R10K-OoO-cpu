@@ -1,4 +1,4 @@
-module rs_selector #(
+module disp_selector #(
     parameter int unsigned RS_DEPTH        = 64, //RS entry numbers
     parameter int unsigned DISPATCH_WIDTH  = 2
 )(
