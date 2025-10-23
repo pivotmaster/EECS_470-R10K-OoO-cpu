@@ -9,7 +9,7 @@ module rs_single_entry #(
     parameter int unsigned CDB_WIDTH    = 2,
     parameter int unsigned FU_NUM       = 8,
 )(
-    input                                                clk, reset, 
+    input                                                clk, reset, flush,
 
     // Dispatch interface
     input  logic                                         disp_enable_i,
@@ -71,10 +71,17 @@ module rs_single_entry #(
         if (reset) begin
             tpm_rs_issue_pkt <= empty_issue_pkt;
             rs_issue_pkt_o   <= empty_issue_pkt;
-            rs_issue_valid_o <= 0;
-            src1_ready       <= 0;
-            src2_ready       <= 0;   
-            empty            <= 1;
+            rs_issue_valid_o <= 1'b0;
+            src1_ready       <= 1'b0;
+            src2_ready       <= 1'b0;   
+            empty            <= 1'b1;
+        end else if (flush) begin
+            tpm_rs_issue_pkt <= empty_issue_pkt;
+            rs_issue_pkt_o   <= empty_issue_pkt;
+            rs_issue_valid_o <= 1'b0;
+            src1_ready       <= 1'b0;
+            src2_ready       <= 1'b0;   
+            empty            <= 1'b1;
         end else if (disp_enable_i && empty) begin
             empty <= 0; // not empty
             tpm_rs_issue_pkt.valid    <= 1;
