@@ -64,7 +64,7 @@ module rob #(
 
     assign full  = (count == DEPTH);
     assign empty = (count == 0);
-    assign disp_ready_o = {!full, !full};
+    assign disp_ready_o = {!full, !full};   //fixed to 2 bits
 
     // ===== Dispatch Logic =====
     always_comb begin
