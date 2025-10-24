@@ -9,8 +9,8 @@ module arch_map_table #(
     // ========== Lookup Interface ===========================
     // =======================================================
     // Used to query the current architectural-to-physical register mapping
-    input  logic [$clog2(ARCH_REGS)-1:0] arch_reg_i,  // Architectural register index to lookup
-    output logic [$clog2(PHYS_REGS)-1:0] phys_reg_o,  // Mapped physical register output
+    // input  logic [$clog2(ARCH_REGS)-1:0] arch_reg_i,  // Architectural register index to lookup
+    // output logic [$clog2(PHYS_REGS)-1:0] phys_reg_o,  // Mapped physical register output
 
     // =======================================================
     // ========== Commit Update Interface ====================
@@ -33,5 +33,28 @@ module arch_map_table #(
 );
 
    
+    logic [ARCH_REGS-1:0][$clog2(PHYS_REGS)-1:0] table;
+
+
+    // =======================================================
+    // Commit update
+    // =======================================================
+    always_ff @(posedge clk && posedge reset)begin
+        if(reset)begin
+            for(int i =0; i< ARCH_REGS; i++)begin
+                    table[i] <= i;
+            end
+        end else if (restore_snapshot_i)begin
+            for(int i =0; i< ARCH_REGS; i++)begin
+                table[i] <= restore_snapshot_i[i];
+            end
+        end else begin
+            for (int i =0 ; i< COMMIT_WIDTH ; i++)begin
+                if(commit_valid_i[i]) table[commit_arch_i[i]] <= commit_phys_i[i];
+            end
+        end
+    end
+
+    assign snapshot_o = table;
 
 endmodule
