@@ -214,6 +214,12 @@ build/rob.simv: $(ROB_FILES)
 build/rob.cov: $(ROB_FILES)
 synth/rob.vg: $(ROB_FILES)
 
+# ---- Fetch Stage dependencies ---- #
+FETCH_FILES = verilog/sys_defs.svh
+build/fetch_stage.simv: $(FETCH_FILES)
+build/fetch_stage.cov: $(FETCH_FILES)
+synth/fetch_stage.vg: $(FETCH_FILES)
+
 # ---- Retire Stage dependencies ---- #
 RETIRE_STAGE_FILES = verilog/sys_defs.svh
 build/retire_stage.simv: $(RETIRE_STAGE_FILES)
