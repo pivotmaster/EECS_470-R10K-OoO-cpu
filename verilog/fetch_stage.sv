@@ -97,18 +97,16 @@ module stage_if #(
     // --------------------------
     // Lane packing helpers
     // --------------------------
-    // 以 base PC + 4*i 計算每個 lane 的指令位址
+    // Compute each lane’s instruction address as base PC + 4 × i.
     function automatic logic [31:0] pick_inst_from_block
     (
         input MEM_BLOCK                   blk,
         input logic [ADDR_WIDTH-1:0]      inst_addr
     );
-        // 假設 MEM_BLOCK 是 64b -> 兩個 32b words，使用 bit[2] 選擇
-        // 若你的 MEM_BLOCK 欄位名不同，請把下方替換成實際欄位/拼接方式
         case (inst_addr[2])
             1'b0: pick_inst_from_block = blk.word_level[0];
             1'b1: pick_inst_from_block = blk.word_level[1];
-            default: pick_inst_from_block = `NOP; // 理論上不會到這
+            default: pick_inst_from_block = `NOP; 
         endcase
     endfunction
 
@@ -125,11 +123,11 @@ module stage_if #(
             assign this_pc   = PC_reg + (k << 2);
             assign this_inst = pick_inst_from_block(Imem_data[k], this_pc);
 
-            // lane valid 規則：
-            //  - flush 當拍：全部 0（也可改成在 flush 當拍仍輸出 NOP/valid=0）
-            //  - stall (if_valid=0)：全部 0
-            //  - 預測分支被判定 taken：只允許 <= pred_lane_i 的 lane 有效
-            //  - 其他情況：全部有效
+            // Lane valid rules:
+            // During flush: all lanes are invalid (0) — or alternatively, output NOP with valid=0 in the same cycle.
+            // When stalled (if_valid=0): all lanes are invalid (0).
+            // When a predicted branch is taken: only lanes with index ≤ pred_lane_i are valid.
+            // Otherwise: all lanes are valid.
             always_comb begin
                 if (reset || if_flush || !if_valid) begin
                     this_valid = 1'b0;
