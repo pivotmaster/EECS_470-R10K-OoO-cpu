@@ -4,7 +4,7 @@
 // This has a few changes, it now sets a "mult" flag for multiply instructions
 // Pass these to the mult module with inst.r.funct3 as the MULT_FUNC
 
-`include "sys_defs.svh"
+`include "def.svh"
 `include "ISA.svh"
 
 // Decode an instruction: generate useful datapath control signals by matching the RISC-V ISA
