@@ -190,7 +190,7 @@ GREP = grep -E --color=auto
 # ---- Modules to Test ---- #
 
 # TODO: add more modules here
-MODULES = cpu mult rob rs retire_stage complete_stage fetch_stage
+MODULES = cpu mult rob rs retire_stage complete_stage
 
 # TODO: update this if you add more header files
 ALL_HEADERS = $(CPU_HEADERS)
@@ -231,6 +231,12 @@ COMPLETE_STAGE_FILES = verilog/sys_defs.svh
 build/complete_stage.simv: $(COMPLETE_STAGE_FILES)
 build/complete_stage.cov: $(COMPLETE_STAGE_FILES)
 synth/complete_stage.vg: $(COMPLETE_STAGE_FILES)
+
+# ---- Retire Stage dependencies ---- #
+FU_FILES = verilog/sys_defs.svh
+build/fu.simv: $(FU_FILES)
+build/fu.cov: $(FU_FILES)
+synth/fu.vg: $(FU_FILES)
 
 #################################
 # ---- Main CPU Definition ---- #
