@@ -190,7 +190,7 @@ GREP = grep -E --color=auto
 # ---- Modules to Test ---- #
 
 # TODO: add more modules here
-MODULES = cpu mult rob rs retire_stage complete_stage
+MODULES = cpu mult rob rs retire_stage complete_stage fetch_stage
 
 # TODO: update this if you add more header files
 ALL_HEADERS = $(CPU_HEADERS)
@@ -213,6 +213,12 @@ ROB_FILES = verilog/sys_defs.svh
 build/rob.simv: $(ROB_FILES)
 build/rob.cov: $(ROB_FILES)
 synth/rob.vg: $(ROB_FILES)
+
+# ---- Fetch Stage dependencies ---- #
+FETCH_FILES = verilog/sys_defs.svh
+build/fetch_stage.simv: $(FETCH_FILES)
+build/fetch_stage.cov: $(FETCH_FILES)
+synth/fetch_stage.vg: $(FETCH_FILES)
 
 # ---- Retire Stage dependencies ---- #
 RETIRE_STAGE_FILES = verilog/sys_defs.svh
