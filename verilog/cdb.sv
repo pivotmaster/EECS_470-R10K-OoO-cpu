@@ -13,6 +13,7 @@
 module cdb #(
     parameter int unsigned CDB_WIDTH  = 2,
     parameter int unsigned PHYS_REGS  = 128,
+    parameter int unsigned ARCH_REGS  = 32,
     parameter int unsigned ROB_DEPTH  = 64,
     parameter int unsigned XLEN       = 64
 )(
@@ -36,7 +37,76 @@ module cdb #(
     // =========================================================   
     output  logic [CDB_WIDTH-1:0]                               cdb_valid_mp_o,  // commit_valid_i in 'map_table.sv'
     output  logic [CDB_WIDTH-1:0][$clog2(PHYS_REGS)-1:0]        cdb_phy_tag_mp_o,
-    output  logic [CDB_WIDTH-1:0][$clog2(ARCH_REGS)-1:0]        cdb_dest_arch_mp_o
+    output  logic [CDB_WIDTH-1:0][$clog2(ARCH_REGS)-1:0]        cdb_dest_arch_mp_o,
 
-)
+    // =========================================================
+    // Optional backpressure signals (from RS / MT)
+    // =========================================================
+    input  logic                                rs_ready_i,
+    input  logic                                map_ready_i
+
+);
+
+    // =========================================================
+    // Internal signals
+    // =========================================================
+    logic [CDB_WIDTH-1:0]arb_grant;
+    cdb_entry_t [CDB_WIDTH-1:0]selected_entries;
+    logic cdb_stall;
+
+    // =========================================================
+    // Backpressure logic
+    // =========================================================
+    assign cdb_stall = !(rs_ready_i && map_ready_i);
+    // =========================================================
+    // Arbitration (simple priority)
+    // =========================================================
+    always_comb begin
+        arb_grant = '0;
+        int used = 0 ;
+
+        for(int i = 0 ; i < CDB_WIDTH ; i++)begin
+            if(complete_cdb_valid_i[i] && !cdb_stall && used < CDB_WIDTH)begin
+                arb_grant[i] = 1'b1;
+                used++;
+            end
+        end
+    end
+
+    // =========================================================
+    // Select entries that will be broadcast
+    // =========================================================
+    always_comb begin
+        for(int j = 0; j < CDB_WIDTH ; j++)begin
+            if(arb_grant[j])begin
+                selected_entries[j] = cdb_packets_i[j];
+            end else begin
+                selected_entries[j] = '0;
+            end
+        end
+    end
+
+    // =========================================================
+    // Output register stage (timing alignment)
+    // =========================================================
+
+    always_ff @(posedge clk or posedge reset)begin
+        if(reset)begin
+            cdb_valid_rs_o      <= '0;
+            cdb_valid_mp_o      <= '0;
+            cdb_tag_rs_o        <= '0;
+            cdb_phy_tag_mp_o    <= '0;
+            cdb_dest_arch_mp_o  <= '0;
+        end else if (!cdb_stall)begin
+        for (int k = 0; k < CDB_WIDTH; k++) begin
+                cdb_valid_rs_o[k]      <= selected_entries[k].valid;
+                cdb_valid_mp_o[k]      <= selected_entries[k].valid;
+                cdb_tag_rs_o[k]        <= selected_entries[k].phys_tag;
+                cdb_phy_tag_mp_o[k]    <= selected_entries[k].phys_tag;
+                cdb_dest_arch_mp_o[k]  <= selected_entries[k].dest_arch;
+            end
+        end
+    end 
+
+
 endmodule
