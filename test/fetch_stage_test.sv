@@ -54,7 +54,7 @@ module fetch_test;
     // -------------------------------
     // Memory model (dummy)
     // -------------------------------
-    // 模擬簡單的 ICache：每個 block 給出固定指令序號
+    // Simulate a simple ICache: each block outputs a fixed sequence of instruction numbers.
     initial begin : MEM_INIT
         int i;
         for (i = 0; i < FETCH_WIDTH; i++) begin
@@ -128,8 +128,8 @@ module fetch_test;
         begin
             pred_valid_i = 1;
             pred_taken_i = 1;
-            pred_lane_i  = 1;             // 假設 branch 在 lane1
-            pred_target_i = 32'h0000_0040; // 跳到 0x40
+            pred_lane_i  = 1;             // Assume the branch is in lane 1
+            pred_target_i = 32'h0000_0040; // Jump to 0x40.
             @(posedge clock);
             pred_valid_i = 0;
             pred_taken_i = 0;
@@ -143,7 +143,7 @@ module fetch_test;
     task flush_recovery();
         begin
             if_flush = 1;
-            correct_pc_target_o = 32'h0000_0080; // 正確 PC
+            correct_pc_target_o = 32'h0000_0080; // Correct PC.
             @(posedge clock);
             if_flush = 0;
             repeat (3) @(posedge clock);
