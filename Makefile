@@ -190,7 +190,7 @@ GREP = grep -E --color=auto
 # ---- Modules to Test ---- #
 
 # TODO: add more modules here
-MODULES = cpu mult rob rs retire_stage complete_stage dispatch_stage
+MODULES = cpu mult rob rs decoder retire_stage complete_stage dispatch_stage
 
 # TODO: update this if you add more header files
 ALL_HEADERS = $(CPU_HEADERS)
@@ -227,7 +227,7 @@ build/complete_stage.cov: $(COMPLETE_STAGE_FILES)
 synth/complete_stage.vg: $(COMPLETE_STAGE_FILES)
 
 # ---- Dispatch Stage dependencies ---- #
-DISPATCH_STAGE_FILES = verilog/sys_defs.svh verilog/def.svh
+DISPATCH_STAGE_FILES = verilog/def.svh
 build/dispatch_stage.simv: $(DISPATCH_STAGE_FILES)
 build/dispatch_stage.cov: $(DISPATCH_STAGE_FILES)
 synth/dispatch_stage.vg: $(DISPATCH_STAGE_FILES)

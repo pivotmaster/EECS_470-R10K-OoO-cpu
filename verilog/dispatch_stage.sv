@@ -15,12 +15,17 @@
 // It seems like there was no datapath between ROB and RS in R10K? 
 // =========================================================  
 
-`include "defs.svh"
+
+`include "def.svh"
+`include "decoder.sv"
 
 module dispatch_stage #(
-    parameter int unsigned           FETCH_WIDTH     = 2,
-    parameter int unsigned           DISPATCH_WIDTH  = 2,
-    parameter int unsigned           ADDR_WIDTH      = 32
+    parameter int unsigned FETCH_WIDTH = 2,
+    parameter int unsigned DISPATCH_WIDTH = 2,
+    parameter int unsigned PHYS_REGS = 128,
+    parameter int unsigned ARCH_REGS = 64,
+    parameter int unsigned DEPTH = 64,
+    parameter int unsigned ADDR_WIDTH = 32
 
 )(
     input   logic clock,          
@@ -90,11 +95,11 @@ module dispatch_stage #(
     //output  logic      [ADDR_WIDTH-1:0]    btb_update_target_o,
 
     //packet
-    output DISP_PACKET [DISPATCH_WIDTH-1:0] disp_packet_o;
-    output logic stall;
+    output DISP_PACKET [DISPATCH_WIDTH-1:0] disp_packet_o,
+    output logic stall
 
 );
-    logic [$clog2(DISPATCH_WIDTH)-1:0] disp_n;
+    logic [$clog2(DISPATCH_WIDTH+1)-1:0] disp_n;
     assign stall = (disp_n == '0);
 
 
@@ -116,7 +121,7 @@ module dispatch_stage #(
             disp_packet_o[i].PC = if_packet_i[i].PC;
             disp_packet_o[i].NPC = if_packet_i[i].NPC;
             disp_packet_o[i].valid = if_packet_i[i].valid;
-            disp_packet_o[i].dest_reg_idx = (disp_rs_rd_wen_o,[i]) ? if_packet_i[i].inst.r.rd : `ZERO_REG;
+            disp_packet_o[i].dest_reg_idx = (disp_rs_rd_wen_o[i]) ? if_packet_i[i].inst.r.rd : `ZERO_REG;
         end
     end
 
@@ -146,7 +151,7 @@ module dispatch_stage #(
         disp_rob_valid_o = '0;
 
         for (int i = 0; i < DISPATCH_WIDTH; i++) begin
-            disp_packet_o[i].dest_reg_idx
+            //disp_packet_o[i].dest_reg_idx = ;
 
             // Dispatch -> Map Table
             src1_arch_o[i] = if_packet_i[i].inst.r.rs1;
@@ -165,7 +170,7 @@ module dispatch_stage #(
 
                 rs_packets_o[i].dest_arch_reg = disp_packet_o[i].dest_reg_idx;
 
-                rs_packets_o[i].dest_tag = new_reg_i[i]//from free list
+                rs_packets_o[i].dest_tag = new_reg_i[i];//from free list
 
                 rs_packets_o[i].src1_tag = src1_phys_i[i];  // physical tag for rs1
                 rs_packets_o[i].src2_tag = src2_phys_i[i];  // physical tag for rs2
@@ -177,7 +182,7 @@ module dispatch_stage #(
                 disp_rob_valid_o[i] = 1;
                 disp_rd_arch_o[i] = disp_packet_o[i].dest_reg_idx;
                 disp_rd_old_prf_o[i] = dest_reg_old_i[i]; // Told
-                disp_rd_new_prf_o[i] = new_reg_i[i],  //from free list
+                disp_rd_new_prf_o[i] = new_reg_i[i];  //from free list
                 
             end
             
