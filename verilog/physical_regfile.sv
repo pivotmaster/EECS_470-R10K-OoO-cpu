@@ -1,4 +1,4 @@
-module #(
+module pr #(
     parameter int unsigned PHYS_REGS = 128,
     parameter int unsigned XLEN      = 64,
     parameter int unsigned READ_PORTS = 4,
@@ -16,4 +16,30 @@ module #(
     input  logic [WRITE_PORTS-1:0][$clog2(PHYS_REGS)-1:0] waddr,
     input  logic [WRITE_PORTS-1:0][XLEN-1:0]          wdata
 );
+
+    logic [PHYS_REGS-1:0][XLEN-1:0] regfile;
+
+    always_ff @(posedge clk) begin
+        if (reset) begin
+            regfile <= '0;
+        end else begin
+            for (int w = 0; w < WRITE_PORTS; w++) begin
+                if (wr_en[w])
+                    regfile[waddr[w]] <= wdata[w];
+            end
+        end
+    end
+
+    always_comb begin
+        for (int r = 0; r < READ_PORTS; r++) begin
+            rdata_o[r] = regfile[raddr[r]];
+            if (BYPASS_EN) begin
+                for (int w = 0; w < WRITE_PORTS; w++) begin
+                    if (wr_en[w] && (waddr[w] == raddr[r]))
+                        rdata_o[r] = wdata[w];
+                end
+            end
+        end
+    end
+
 endmodule
