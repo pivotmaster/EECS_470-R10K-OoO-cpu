@@ -190,7 +190,7 @@ GREP = grep -E --color=auto
 # ---- Modules to Test ---- #
 
 # TODO: add more modules here
-MODULES = cpu mult rob rs retire_stage complete_stage
+MODULES = cpu mult rob rs retire_stage complete_stage fetch_stage
 
 # TODO: update this if you add more header files
 ALL_HEADERS = $(CPU_HEADERS)
