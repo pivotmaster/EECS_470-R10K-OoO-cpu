@@ -226,17 +226,17 @@ build/retire_stage.simv: $(RETIRE_STAGE_FILES)
 build/retire_stage.cov: $(RETIRE_STAGE_FILES)
 synth/retire_stage.vg: $(RETIRE_STAGE_FILES)
 
-# ---- Retire Stage dependencies ---- #
+# ---- Copmplete Stage dependencies ---- #
 COMPLETE_STAGE_FILES = verilog/sys_defs.svh
 build/complete_stage.simv: $(COMPLETE_STAGE_FILES)
 build/complete_stage.cov: $(COMPLETE_STAGE_FILES)
 synth/complete_stage.vg: $(COMPLETE_STAGE_FILES)
 
-# ---- Retire Stage dependencies ---- #
-FU_FILES = verilog/sys_defs.svh
-build/fu.simv: $(FU_FILES)
-build/fu.cov: $(FU_FILES)
-synth/fu.vg: $(FU_FILES)
+# ---- Dispatch Stage dependencies ---- #
+DISPATCH_STAGE_FILES = verilog/def.svh
+build/dispatch_stage.simv: $(DISPATCH_STAGE_FILES)
+build/dispatch_stage.cov: $(DISPATCH_STAGE_FILES)
+synth/dispatch_stage.vg: $(DISPATCH_STAGE_FILES)
 
 #################################
 # ---- Main CPU Definition ---- #
