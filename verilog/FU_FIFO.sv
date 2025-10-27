@@ -21,7 +21,7 @@ module FIFO #(
     // =========================================================
     // FIFO <-> FU
     // =========================================================
-    input  logic                rd_en, // issue logic wants to pull (read)
+    input  logic                rd_en, // FU wants to pull (read)
     output issue_packet_t       issue_packet_o,
     output logic                empty_o    // since output data is alwats visible, FU need to check if the FIFO is empty (zero latency for read)
 );
@@ -119,13 +119,13 @@ module FU_FIFO #(
     input  issue_packet_t [FU_NUM-1:0]        fu_fifo_wr_pkt,
 
     output logic          [FU_NUM-1:0]        fu_fifo_full,
-    output logic          [CNT_BITS-1:0]      fu_free_slots, [FU_NUM],
+    output logic          [CNT_BITS-1:0]      fu_free_slots [FU_NUM],
 
     // =========================================================
     // FU FIFO -> FU
     // =========================================================
     input  logic          [FU_NUM-1:0]        fu_rd_en,        // FU read enable per FU
-    output issue_packet_t [FU_NUM-1:0]        fu_issue_pkt_o,  // output packets per FU
+    output issue_packet_t [FU_NUM-1:0]        fu_issue_pkt,  // output packets per FU
     output logic          [FU_NUM-1:0]        fu_fifo_empty    // per-FU empty flag
 );
 

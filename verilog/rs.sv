@@ -47,7 +47,7 @@ module RS #(
 
     output  rs_entry_t     [RS_DEPTH-1:0]                          rs_entries_o,
     output  logic          [RS_DEPTH-1:0]                          rs_ready_o,  
-    output  logic          [$clog2(FU_NUM)-1:0]                    fu_type_o [RS_DEPTH]    
+    output  fu_type_e                                              fu_type_o [RS_DEPTH]    
 ); 
 
     // =========================================================
