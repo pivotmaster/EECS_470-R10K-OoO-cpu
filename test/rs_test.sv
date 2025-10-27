@@ -23,7 +23,7 @@ module RS_tb;
   logic [RS_DEPTH-1:0] issue_enable_i;
   rs_entry_t [RS_DEPTH-1:0] rs_entries_o;
   logic [RS_DEPTH-1:0] rs_ready_o;
-  logic [$clog2(FU_NUM)-1:0] fu_type_o [RS_DEPTH];
+  fu_type_e fu_type_o [RS_DEPTH];
 
   // --- Clock ---
   always #5 clk = ~clk;
@@ -206,6 +206,7 @@ module RS_tb;
     // Phase 3: CDB Wakeup 
     // -------------------------------------------------------
     $display("=== Phase 3: CDB Wakeup ===");
+    @(negedge clk);
     cdb_valid_i[0] = 1;
     cdb_tag_i[0]   = 12; // Wakeup src1_tag of entry 1
     cdb_valid_i[1] = 1;
@@ -222,6 +223,7 @@ module RS_tb;
   // Phase 4: Issue ready entries
   // -------------------------------------------------------
   $display("=== Phase 4: Issue ready entries ===");
+  @(negedge clk);
   issue_enable_i[0] = 1;  // issue entry 0
   issue_enable_i[1] = 1;  // issue entry 1
   @(posedge clk);
