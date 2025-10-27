@@ -55,6 +55,7 @@ module map_table#(
     input  logic [DISPATCH_WIDTH-1:0]                        disp_valid_i,
     input  logic [DISPATCH_WIDTH-1:0][$clog2(ARCH_REGS)-1:0] disp_arch_i,
     input  logic [DISPATCH_WIDTH-1:0][$clog2(PHYS_REGS)-1:0] disp_new_phys_i,
+    output logic [DISPATCH_WIDTH-1:0][$clog2(PHYS_REGS)-1:0] disp_old_phys_o,
 
     // =======================================================
     // ======== Writeback: mark phys reg ready ===============
@@ -123,11 +124,11 @@ module map_table#(
     // arch reg i -> phys i, and mark valid = 1
     // (this assumes PHYS_REGS >= ARCH_REGS)
     // =======================================================
-    always_ff @(posedge clk && posedge reset)begin
+    always_ff @(posedge clk or posedge reset)begin
         if(reset)begin
             for(int i =0; i< ARCH_REGS; i++)begin
                 table[i].phys <= i;
-                table.valid <= 1'b1;
+                table[i].valid <= 1'b1;
             end
         end else begin
             // ===================================================
@@ -136,6 +137,7 @@ module map_table#(
             // ===================================================
             for(int i =0 ; i < DISPATCH_WIDTH ; i++)begin
                 if(disp_valid_i[i])begin
+                    disp_old_phys_o[i] <= table[disp_arch_i[i]].phys;
                     table[disp_arch_i[i]].phys <= disp_new_phys_i[i];
                     table[disp_arch_i[i]].valid <= 1'b0; 
                 end
@@ -146,12 +148,12 @@ module map_table#(
             //  every architectural mapping that references that physical tag as valid.
             //  (This is a simple model: scan all ARCH_REGS; it's correct but O(ARCH_REGS * WB_WIDTH).)
             // ===================================================
-            for (int i =0 ; i < WB_WIDTH; i ++)begin
-                if(wb_valid_i[i] && )begin
+            for (int i = 0 ; i < WB_WIDTH; i ++)begin
+                if(wb_valid_i[i])begin
                     // table[wb_phys_i[i]].valid <= 1'b1;
-                    for(int j =0 ; j < ARCH_REGS ; j++)begin
+                    for(int j = 0 ; j < ARCH_REGS ; j++)begin
                         if(table[j].phys == wb_phys_i[i])begin
-                            table[i].valid <= 1'b1;
+                            table[j].valid <= 1'b1;
                         end
                     end
                 end
@@ -180,6 +182,7 @@ module map_table#(
                     table[i].valid <= 1'b1;
                 end
             end
+        end
     end
 
     // =======================================================
@@ -187,10 +190,10 @@ module map_table#(
     // =======================================================
     // Provide mapped phys tag and ready bit for each rs1/rs2 of every dispatch slot
     generate 
-        for(genvar i =0 ; i <DISPATCH_WIDTH ; i++)begin
+        for(genvar i =0 ; i < DISPATCH_WIDTH ; i++)begin
             //rs1 outputs
             assign rs1_phys_o[i] = table[rs1_arch_i[i]].phys;
-            assign rs1_valid_o[i] = table[ts1_arch_i[i]].valid;
+            assign rs1_valid_o[i] = table[rs1_arch_i[i]].valid;
             //rs2 outputs
             assign rs2_phys_o[i] = table[rs2_arch_i[i]].phys;
             assign rs2_valid_o[i] = table[rs2_arch_i].valid;
