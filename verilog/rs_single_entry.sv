@@ -80,12 +80,17 @@ module rs_single_entry #(
             // Clear RS entry after issue
             if (issue_i && ready_o) begin
                 empty_next = 1'b1;
+                rs_entry_next.valid = 1'b0;
             end
         end
     end
 
     // Save the update to register
     always_ff @(posedge clk) begin : update
+        if (reset) begin
+            rs_entry     <= '{default:'0}; 
+            empty        <= 1'b1;
+        end else
         if (flush) begin
             rs_entry     <= '{default:'0}; 
             empty        <= 1'b1;
@@ -103,7 +108,7 @@ module rs_single_entry #(
 
     // Output to issue logic 
     assign ready_o   = (rs_entry.src1_ready || src1_hit) &&  (rs_entry.src2_ready || src2_hit);
-    assign fu_type_o = rs_entry.fu_type 
+    assign fu_type_o = rs_entry.fu_type; 
     assign rs_single_entry_o = rs_entry ;
 
 endmodule
