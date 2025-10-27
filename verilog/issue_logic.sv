@@ -12,7 +12,7 @@ module issue_logic #(
     parameter int unsigned MAX_FIFO_DEPTH  = 4,  // Remaining FIFO space for each FU
     parameter int unsigned XLEN            = 64
 )(
-    input  logic                                                  clk,
+    input  logic                                                  clock,
     input  logic                                                  reset,
 
     // =========================================================
@@ -64,7 +64,7 @@ module issue_logic #(
     );
 
     // Prevent issue_enable_o -> affect RS (input of issue selector) at the same cycle
-    always_ff @( posedge clk or posedge reset) begin 
+    always_ff @( posedge clock or posedge reset) begin 
         //$display("issue_enable_o_ = %b | issue_enable_o_next = %b", issue_enable_o, issue_enable_o_next);
         if (reset) begin
             issue_enable_o <= '0;
