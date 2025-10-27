@@ -21,6 +21,7 @@ module rob #(
     output logic [DISPATCH_WIDTH-1:0] disp_ready_o,
     output logic [DISPATCH_WIDTH-1:0] disp_alloc_o,
     output logic [DISPATCH_WIDTH-1:0][$clog2(DEPTH)-1:0]  disp_rob_idx_o,
+    output logic [$clog2(DEPTH+1)-1:0] disp_enable_space_o, 
 
     // Writeback
     input  logic [WB_WIDTH-1:0] wb_valid_i,
@@ -67,6 +68,7 @@ module rob #(
     assign disp_ready_o = {!full, !full};   //fixed to 2 bits
 
     // ===== Dispatch Logic =====
+    assign disp_enable_space_o = DEPTH - count;
     always_comb begin
         next_tail = tail;
         for (int i = 0; i < DISPATCH_WIDTH; i++) begin
