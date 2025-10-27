@@ -23,7 +23,7 @@ module cdb #(
     // =========================================================
     // Complate Stage -> CDB 
     // =========== ============================================== 
-    input  logic        [CDB_WIDTH-1:0]                         complete_cdb_valid_i,
+    // input  logic        [CDB_WIDTH-1:0]                         complete_cdb_valid_i,
     input  cdb_entry_t  [CDB_WIDTH-1:0]                         cdb_packets_i,
 
     // =========================================================
@@ -66,7 +66,7 @@ module cdb #(
         int used = 0 ;
 
         for(int i = 0 ; i < CDB_WIDTH ; i++)begin
-            if(complete_cdb_valid_i[i] && !cdb_stall && used < CDB_WIDTH)begin
+            if(cdb_packets_i[i].valid && !cdb_stall && used < CDB_WIDTH)begin
                 arb_grant[i] = 1'b1;
                 used++;
             end
