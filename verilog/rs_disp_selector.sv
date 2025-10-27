@@ -4,12 +4,12 @@ module disp_selector #(
 )(
     input  logic [RS_DEPTH-1:0]                     empty_vec,
     input  logic [DISPATCH_WIDTH-1:0]               disp_valid_vec, //from dispatch stage (which slot is going to dispatch)
-    output logic [DISPATCH_WIDTH-1:0][RS_DEPTH-1:0] disp_grant_vec,
+    output logic [DISPATCH_WIDTH-1:0][RS_DEPTH-1:0] disp_grant_vec
 );  
     logic [RS_DEPTH-1:0]                            internal_mask; // for multi-selection, mask the slot that has been choosen by previous one
     
     always_comb begin 
-        disp_entry_vec = '0;
+        disp_grant_vec = '0;
         internal_mask  = '0;
 
         // For each dispatch slot

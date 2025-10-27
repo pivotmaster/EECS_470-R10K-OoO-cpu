@@ -31,7 +31,7 @@ module RS #(
     input   rs_entry_t     [DISPATCH_WIDTH-1:0]                    rs_packets_i,
     input   logic          [DISPATCH_WIDTH-1:0]                    disp_rs_rd_wen_i,     // read (I think it is whether write PRF?)
 
-    output  logic          [$clog2(DISPATCH_WIDTH)-1:0]            free_slots_o,      // how many slot is free? (saturate at DISPATCH_WIDTH)
+    output  logic          [$clog2(DISPATCH_WIDTH+1)-1:0]          free_slots_o,      // how many slot is free? (saturate at DISPATCH_WIDTH)
     output  logic                                                  rs_full_o,
 
     // =========================================================
@@ -59,24 +59,27 @@ module RS #(
     logic         [RS_DEPTH-1:0]             rs_empty;
 
     // Issue signal
-    rs_entry_t    [RS_DEPTH-1:0]             rs_entries,
-    logic         [RS_DEPTH-1:0]             rs_ready,  
-    logic         [$clog2(FU_NUM)-1:0]       fu_types [RS_DEPTH],
-
+    rs_entry_t    [RS_DEPTH-1:0]             rs_entries;
+    logic         [RS_DEPTH-1:0]             rs_ready;  
+    logic         [$clog2(FU_NUM)-1:0]       fu_types [RS_DEPTH];
 
     // Dispatch_grant_rs_slot
     logic [DISPATCH_WIDTH-1:0][RS_DEPTH-1:0] disp_grant_vec;
+
+    // Output 
+    int free_slots;
+    bit rs_full;
 
     // =========================================================
     // Whole RS table
     // =========================================================
     genvar i;
     generate 
-        for (i=0; i < RS_DEPTH; i++) begin
-            rs_single_entry rs_entry #(
+        for (i=0; i < RS_DEPTH; i++) begin    
+            rs_single_entry  #(
                 .PHYS_REGS(PHYS_REGS),
                 .CDB_WIDTH(CDB_WIDTH)
-            )(
+            ) rs_entry (
                 .clk(clk),
                 .reset(reset),
                 .flush(flush),
@@ -97,10 +100,10 @@ module RS #(
     // Dispatch packets to RS entries
     // =========================================================
     // Dispatch selector: select which rs entry to dispatch
-    disp_selector disp_sel #(
+    disp_selector  #(
         .RS_DEPTH(RS_DEPTH),
         .DISPATCH_WIDTH(DISPATCH_WIDTH)
-    )(
+    ) disp_sel (
         .empty_vec(rs_empty),
         .disp_valid_vec(disp_valid_i),
         .disp_grant_vec(disp_grant_vec)
@@ -112,10 +115,6 @@ module RS #(
         disp_enable = '0;
         for (int i = 0; i<DISPATCH_WIDTH; i++) begin
             for (int j=0; j<RS_DEPTH; j++) begin
-                /* from gpt: assert if two granted to the same rs entry (only  for simulation)
-                assert ($onehot0(disp_grant_vec[:, j])) else
-                    $error("Multiple dispatch slots assigned to RS entry %0d!", j);
-                */
                 if (disp_grant_vec[i][j]) begin
                     rs_packets[j]  = rs_packets_i[i]; // dispatch slot i allocates RS entry j
                     disp_enable[j] = 1'b1;
@@ -128,12 +127,12 @@ module RS #(
     // Check remaining free slots (report to dispatch stage)
     // =========================================================
     always_comb begin : count_free_slot
-        int free_slots = 0; 
-        bit rs_full    = 0;
+        free_slots = 0; 
+        rs_full    = 1;
         for (int i = 0; i < RS_DEPTH; i++) begin
             if (rs_empty[i] && (free_slots < DISPATCH_WIDTH) ) begin
                 free_slots++;
-                rs_full = 1;
+                rs_full = 0;
             end
         end
     end
