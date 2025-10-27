@@ -17,7 +17,7 @@ module cdb #(
     parameter int unsigned ROB_DEPTH  = 64,
     parameter int unsigned XLEN       = 64
 )(
-    input  logic clk,
+    input  logic clock,
     input  logic reset,
 
     // =========================================================
@@ -90,7 +90,7 @@ module cdb #(
     // Output register stage (timing alignment)
     // =========================================================
 
-    always_ff @(posedge clk or posedge reset)begin
+    always_ff @(posedge clock or posedge reset)begin
         if(reset)begin
             cdb_valid_rs_o      <= '0;
             cdb_valid_mp_o      <= '0;

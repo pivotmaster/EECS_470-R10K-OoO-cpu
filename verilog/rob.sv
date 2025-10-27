@@ -8,7 +8,7 @@ module rob #(
     parameter int unsigned PHYS_REGS       = 128,
     parameter int unsigned XLEN            = 64
 )(
-    input  logic clk,
+    input  logic clock,
     input  logic reset,
 
     // Dispatch
@@ -99,7 +99,7 @@ module rob #(
     end
 
     // ===== Sequential Block =====
-    always_ff @(posedge clk or posedge reset) begin
+    always_ff @(posedge clock or posedge reset) begin
         if (reset) begin
             head   <= '0;
             tail   <= '0;
