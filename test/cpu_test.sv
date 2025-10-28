@@ -338,5 +338,10 @@ module testbench;
         //);
     endtask
 
+    always @(posedge clock) begin
+        if (verisimpleV.if_valid_dbg[0])
+            $display("[FETCH] PC=%h INST=%h", verisimpleV.if_NPC_dbg[0], verisimpleV.if_inst_dbg[0]);
+    end
+
 
 endmodule // module testbench
