@@ -74,7 +74,6 @@ module issue_logic #(
     // =========================================================
     // Packets that sent to the FIFOs
     issue_packet_t issue_pkts [ISSUE_WIDTH]     ;    // packets to FIFOs
-    logic test;
     logic [ISSUE_WIDTH-1:0] issue_pkt_rs_idx; // store the idx of RS entry for each issue pkt
 
     // Generate Issue Packets
