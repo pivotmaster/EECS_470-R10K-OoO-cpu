@@ -56,21 +56,23 @@ module testbench;
     COMMIT_PACKET [`N-1:0] committed_insts;
     EXCEPTION_CODE error_status = NO_ERROR;
 
-    ADDR  if_NPC_dbg;
-    DATA  if_inst_dbg;
-    logic if_valid_dbg;
-    ADDR  if_id_NPC_dbg;
-    DATA  if_id_inst_dbg;
-    logic if_id_valid_dbg;
-    ADDR  id_ex_NPC_dbg;
-    DATA  id_ex_inst_dbg;
-    logic id_ex_valid_dbg;
-    ADDR  ex_mem_NPC_dbg;
-    DATA  ex_mem_inst_dbg;
-    logic ex_mem_valid_dbg;
-    ADDR  mem_wb_NPC_dbg;
-    DATA  mem_wb_inst_dbg;
-    logic mem_wb_valid_dbg;
+    ADDR [`FETCH_WIDTH-1:0] if_NPC_dbg;
+    DATA [`FETCH_WIDTH-1:0] if_inst_dbg;
+    logic [`FETCH_WIDTH-1:0] if_valid_dbg;
+
+    ADDR [`FETCH_WIDTH-1:0] if_id_NPC_dbg;
+    DATA [`FETCH_WIDTH-1:0] if_id_inst_dbg;
+    logic [`FETCH_WIDTH-1:0] if_id_valid_dbg;
+
+    ADDR [`DISPATCH_WIDTH-1:0] id_s_NPC_dbg;
+    DATA [`DISPATCH_WIDTH-1:0] id_s_inst_dbg;
+    logic [`DISPATCH_WIDTH-1:0] id_s_valid_dbg;
+    
+    ADDR [`DISPATCH_WIDTH-1:0] s_ex_NPC_dbg;
+    DATA [`DISPATCH_WIDTH-1:0] s_ex_inst_dbg;
+    logic [`DISPATCH_WIDTH-1:0] s_ex_valid_dbg;
+
+    DATA [`DISPATCH_WIDTH-1:0] ex_c_inst_dbg;
 
 
     // Instantiate the Pipeline
@@ -95,18 +97,19 @@ module testbench;
         .if_NPC_dbg       (if_NPC_dbg),
         .if_inst_dbg      (if_inst_dbg),
         .if_valid_dbg     (if_valid_dbg),
+
         .if_id_NPC_dbg    (if_id_NPC_dbg),
         .if_id_inst_dbg   (if_id_inst_dbg),
         .if_id_valid_dbg  (if_id_valid_dbg),
-        .id_ex_NPC_dbg    (id_ex_NPC_dbg),
-        .id_ex_inst_dbg   (id_ex_inst_dbg),
-        .id_ex_valid_dbg  (id_ex_valid_dbg),
-        .ex_mem_NPC_dbg   (ex_mem_NPC_dbg),
-        .ex_mem_inst_dbg  (ex_mem_inst_dbg),
-        .ex_mem_valid_dbg (ex_mem_valid_dbg),
-        .mem_wb_NPC_dbg   (mem_wb_NPC_dbg),
-        .mem_wb_inst_dbg  (mem_wb_inst_dbg),
-        .mem_wb_valid_dbg (mem_wb_valid_dbg)
+
+        .id_s_NPC_dbg    (id_s_NPC_dbg),
+        .id_s_inst_dbg   (id_s_inst_dbg),
+        .id_s_valid_dbg  (id_s_valid_dbg),
+
+        .s_ex_NPC_dbg   (s_ex_NPC_dbg),
+        .s_ex_inst_dbg  (s_ex_inst_dbg),
+        .s_ex_valid_dbg (s_ex_valid_dbg),
+        .ex_c_inst_dbg (ex_c_inst_dbg)
     );
 
 
