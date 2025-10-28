@@ -3,7 +3,7 @@ module arch_map_table #(
     parameter int PHYS_REGS = 128,
     parameter int COMMIT_WIDTH = 2
 )(
-    input  logic clk,
+    input  logic clock,
     input  logic reset,     
     // =======================================================
     // ========== Lookup Interface ===========================
@@ -39,12 +39,12 @@ module arch_map_table #(
     // =======================================================
     // Commit update
     // =======================================================
-    always_ff @(posedge clk && posedge reset)begin
+    always_ff @(posedge clock or posedge reset)begin
         if(reset)begin
             for(int i =0; i< ARCH_REGS; i++)begin
                     table[i] <= i;
             end
-        end else if (restore_snapshot_i)begin
+        end else if (restore_valid_i)begin
             for(int i =0; i< ARCH_REGS; i++)begin
                 table[i] <= restore_snapshot_i[i];
             end

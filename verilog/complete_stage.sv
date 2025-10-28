@@ -6,7 +6,7 @@ module complete_stage #(
     parameter int unsigned WB_WIDTH   = 4,
     parameter int unsigned CDB_WIDTH  = 4
 )(
-    input  logic clk,
+    input  logic clock,
     input  logic reset,
 
     // FU

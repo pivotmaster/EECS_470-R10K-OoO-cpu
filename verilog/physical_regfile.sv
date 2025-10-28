@@ -5,7 +5,7 @@ module pr #(
     parameter int unsigned WRITE_PORTS = 4,
     parameter bit          BYPASS_EN    = 1
 )(
-    input logic clk,
+    input logic clock,
     input logic reset,
     //---------------- read ports (from issue stage / rename) ----------------
     input  logic [READ_PORTS-1:0]rd_en, 
@@ -19,7 +19,7 @@ module pr #(
 
     logic [PHYS_REGS-1:0][XLEN-1:0] regfile;
 
-    always_ff @(posedge clk) begin
+    always_ff @(posedge clock) begin
         if (reset) begin
             regfile <= '0;
         end else begin
