@@ -479,6 +479,16 @@ typedef struct packed {
     logic [$clog2(`PHYS_REGS)-1:0]  src2_val;  // source reg 2
 } issue_packet_t;
 
+typedef struct packed {
+    logic                         valid;
+    logic [63:0]                  value;
+    logic [$clog2(`PHYS_REGS)-1:0] dest_prf;
+    logic [$clog2(`ROB_DEPTH)-1:0] rob_idx;
+    logic                         exception;
+    logic                         mispred;
+} fu_resp_t;
+
+
 `endif // __DEF_SVH__
     logic [63:0]              value;      // result value //XLEN
 } cdb_entry_t;
