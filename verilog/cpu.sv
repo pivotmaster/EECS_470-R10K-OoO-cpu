@@ -80,6 +80,7 @@ module cpu #(
 
     // 2. I-Cache -> Fetch
     MEM_BLOCK [`FETCH_WIDTH-1:0] icache_to_fetch_data;
+    assign icache_to_fetch_data[0] = Icache_data_out;
 
     // --- Wires for I-Cache <-> Main Memory ---
     MEM_COMMAND icache_to_mem_command; // Renamed from Imem_command
@@ -312,7 +313,8 @@ module cpu #(
 
 
     // valid bit will cycle through the pipeline and come back from the wb stage
-    assign if_valid = !stall;
+    // assign if_valid = !stall;###
+    assign if_valid = 1'b1;
 
 
     //////////////////////////////////////////////////
@@ -367,10 +369,11 @@ module cpu #(
         // =========================================================
         // Fetch <-> ICache / Mem
         // =========================================================
+        .Imem_valid(Icache_valid_out), 
         .Imem_data (icache_to_fetch_data),
 
-        .Imem2proc_transaction_tag (mem2proc_transaction_tag),
-        .Imem2proc_data_tag (mem2proc_data_tag),
+        // .Imem2proc_transaction_tag (mem2proc_transaction_tag),
+        // .Imem2proc_data_tag (mem2proc_data_tag),
 
         // Outputs
         // These now go to the I-Cache, NOT main memory
