@@ -190,12 +190,36 @@ GREP = grep -E --color=auto
 # ---- Modules to Test ---- #
 
 # TODO: add more modules here
-MODULES = cpu mult rob rs decoder retire_stage complete_stage dispatch_stage fetch_stage
+MODULES = cpu 
 
 # TODO: update this if you add more header files
 ALL_HEADERS = $(CPU_HEADERS)
 
-# TODO: add extra source file dependencies below
+# All other required modules
+CPU_FILES = verilog/mult.sv \
+           verilog/rob.sv \
+           verilog/rs.sv \
+           verilog/retire_stage.sv \
+           verilog/complete_stage.sv \
+           verilog/dispatch_stage.sv \
+           verilog/fetch_stage.sv \
+           verilog/arch_map_table.sv \
+           verilog/free_list.sv \
+           verilog/cdb.sv \
+           verilog/issue_logic.sv \
+           verilog/physical_regfile.sv \
+           verilog/map_table.sv \
+		   verilog/decoder.sv \
+		   verilog/rs_single_entry.sv \
+		   verilog/rs_disp_selector.sv \
+		   verilog/issue_selector.sv \
+		   verilog/fu.sv
+
+
+
+build/cpu.simv: $(CPU_FILES)
+build/cpu.cov: $(CPU_FILES)
+synth/cpu.vg: $(CPU_FILES)
 
 MULT_FILES = verilog/sys_defs.svh
 build/mult.simv: $(MULT_FILES)

@@ -7,7 +7,7 @@
 //                                                                     //
 /////////////////////////////////////////////////////////////////////////
 
-`include "defs.svh"
+`include "def.svh"
 
 
 module cdb #(
@@ -53,6 +53,7 @@ module cdb #(
     logic [CDB_WIDTH-1:0]arb_grant;
     cdb_entry_t [CDB_WIDTH-1:0]selected_entries;
     logic cdb_stall;
+    int used;
 
     // =========================================================
     // Backpressure logic
@@ -63,7 +64,7 @@ module cdb #(
     // =========================================================
     always_comb begin
         arb_grant = '0;
-        int used = 0 ;
+        used = 0 ;
 
         for(int i = 0 ; i < CDB_WIDTH ; i++)begin
             if(cdb_packets_i[i].valid && !cdb_stall && used < CDB_WIDTH)begin

@@ -9,8 +9,11 @@
 /////////////////////////////////////////////////////////////////////////
 
 `include "sys_defs.svh"
+`include "def.svh"
 
-module cpu (
+module cpu #(
+    parameter int unsigned DISPATCH_WIDTH   = 2
+)(
     input clock, // System clock
     input reset, // System reset
 
@@ -32,7 +35,7 @@ module cpu (
 
     // IF-stage Outputs
     output ADDR [`FETCH_WIDTH-1:0] if_NPC_dbg,
-    output DATA [`FETCH_WIDTH-1:0]if_inst_dbg,
+    output DATA [`FETCH_WIDTH-1:0] if_inst_dbg,
     output logic [`FETCH_WIDTH-1:0] if_valid_dbg,
 
     output ADDR [`FETCH_WIDTH-1:0] if_id_NPC_dbg,
@@ -51,7 +54,7 @@ module cpu (
 
 
     //output ADDR  ex_c_NPC_dbg,
-    output DATA [`DISPATCH_WIDTH-1:0] ex_c_inst_dbg,
+    output DATA [`DISPATCH_WIDTH-1:0] ex_c_inst_dbg
     //output logic ex_c_valid_dbg
 );
 
@@ -63,6 +66,7 @@ module cpu (
 
     // Pipeline register enables
     logic if_id_enable, id_s_enable, s_ex_enable;
+    logic flush;
 
     // From IF stage to memory
     MEM_COMMAND Imem_command; // Command sent to memory
@@ -71,15 +75,11 @@ module cpu (
     ADDR proc2Icache_addr;
     MEM_BLOCK Icache_data_out;  //to fetch
     logic     Icache_valid_out;
-    MEM_COMMAND Imem_command; // Command sent to memory
     ADDR Imem_addr;
 
-    // 1. Fetch -> I-Cache
-    ADDR proc2Icache_addr; // From fetch stage
-    // --- Wires for Fetch <-> I-Cache ---
 
     // 2. I-Cache -> Fetch
-    MEM_BLOCK [FETCH_WIDTH-1:0] icache_to_fetch_data;
+    MEM_BLOCK [`FETCH_WIDTH-1:0] icache_to_fetch_data;
 
     // --- Wires for I-Cache <-> Main Memory ---
     MEM_COMMAND icache_to_mem_command; // Renamed from Imem_command
@@ -98,9 +98,9 @@ module cpu (
     logic [`DISPATCH_WIDTH-1:0][$clog2(`ARCH_REGS)-1:0] src2_arch;
     logic [`DISPATCH_WIDTH-1:0][$clog2(`PHYS_REGS)-1:0] dest_new_prf; //T_new
     // RS
-    logic [`DISPATCH_WIDTH-1:0] disp_rs_valid;
+    logic [DISPATCH_WIDTH-1:0] disp_rs_valid;
     logic [`DISPATCH_WIDTH-1:0] disp_rs_rd_wen;
-    rs_entry_t [`DISPATCH_WIDTH-1:0] rs_packets;
+    rs_entry_t  [DISPATCH_WIDTH-1:0] rs_packets;
     // ROB
     logic [`DISPATCH_WIDTH-1:0] disp_rob_valid;
     logic [`DISPATCH_WIDTH-1:0] disp_rob_rd_wen;
@@ -109,13 +109,13 @@ module cpu (
     logic [`DISPATCH_WIDTH-1:0][$clog2(`PHYS_REGS)-1:0] disp_rd_old_prf;
 
 // Free list
-    logic [`DISPATCH_WIDTH-1:0][$clog2(`PHYS_REGS-1):0] alloc_phys; // allocated PRF numbers
+    logic [DISPATCH_WIDTH-1:0][$clog2(`PHYS_REGS-1):0] alloc_phys; // allocated PRF numbers
     logic [`DISPATCH_WIDTH-1:0] alloc_valid; // whether each alloc succeed
     logic free_full;      // true if no free regs left
-    logic [$clog2(`PHYS_REGS):0] free_count; // number of free regs
+    logic [$clog2(DISPATCH_WIDTH+1)-1:0] free_count; // number of free regs
 
 // Arch map table
-    logic [`ARCH_REGS-1:0][$clog2(`PHYS_REGS)-1:0] snapshot, // Full snapshot of current architectural-to-physical map
+    logic [`ARCH_REGS-1:0][$clog2(`PHYS_REGS)-1:0] snapshot; // Full snapshot of current architectural-to-physical map
     logic restore_valid_i;  // Asserted when restoring the AMT from a saved snapshot
     logic [`ARCH_REGS-1:0][$clog2(`PHYS_REGS)-1:0] restore_snapshot_i; // Snapshot data to restore from
 
@@ -138,8 +138,8 @@ module cpu (
 // ROB
     logic [`DISPATCH_WIDTH-1:0] disp_ready;
     logic [`DISPATCH_WIDTH-1:0] disp_alloc;
-    logic [`DISPATCH_WIDTH-1:0][$clog2(`DEPTH)-1:0] disp_rob_idx;
-    logic [$clog2(`DEPTH+1)-1:0] free_rob_slots;
+    logic [`DISPATCH_WIDTH-1:0][$clog2(`ROB_DEPTH)-1:0] disp_rob_idx;
+    logic [$clog2(`ROB_DEPTH+1)-1:0] free_rob_slots;
     // Commit
     logic [`COMMIT_WIDTH-1:0] commit_valid;
     logic [`COMMIT_WIDTH-1:0] commit_rd_wen;
@@ -148,12 +148,12 @@ module cpu (
     logic [`COMMIT_WIDTH-1:0][$clog2(`PHYS_REGS)-1:0] commit_old_prf;
     // Branch flush
     logic flush_rob;
-    logic [$clog2(`DEPTH)-1:0] flush_upto_rob_idx;
+    logic [$clog2(`ROB_DEPTH)-1:0] flush_upto_rob_idx;
 
 // RS
     logic [$clog2(`DISPATCH_WIDTH)-1:0] rs_free_slot;      // how many slot is free? (saturate at DISPATCH_WIDTH)
     logic rs_full;
-    logic [`DISPATCH_WIDTH-1:0] disp_rs_ready; 
+    //logic [`DISPATCH_WIDTH-1:0] disp_rs_ready; 
     rs_entry_t [`RS_DEPTH-1:0] rs_entries;
     logic [`RS_DEPTH-1:0] rs_ready;
     fu_type_e fu_types [`RS_DEPTH];   
@@ -163,7 +163,7 @@ module cpu (
     logic [`DISPATCH_WIDTH-1:0][$clog2(`PHYS_REGS)-1:0] rs2_phys;
     logic [`DISPATCH_WIDTH-1:0] rs1_ready;
     logic [`DISPATCH_WIDTH-1:0] rs2_ready;
-    logic [`DISPATCH_WIDTH-1:0][$clog2(`PHYS_REGS)-1:0] disp_old_phys,
+    logic [`DISPATCH_WIDTH-1:0][$clog2(`PHYS_REGS)-1:0] disp_old_phys;
 
     //####
     logic flush_i;
@@ -179,33 +179,19 @@ module cpu (
 
     logic [`RS_DEPTH-1:0] issue_enable; // which rs slot is going to be issued
 
-    // =========================================================
-    // FU <-> Issue logic
-    // =========================================================
+    issue_packet_t alu_req  [`ALU_COUNT]; // pkts to ALU 
+    issue_packet_t mul_req  [`MUL_COUNT];
+    issue_packet_t load_req [`LOAD_COUNT];
+    issue_packet_t br_req   [`BR_COUNT];
 
-    logic [`FU_NUM-1:0] fu_fifo_wr_en;
-    issue_packet_t fu_fifo_wr_pkt [`FU_NUM];
+    assign rd_en = {alu_req[0].valid, alu_req[0].valid, mul_req[0].valid, mul_req[0].valid, load_req[0].valid, load_req[0].valid, br_req[0].valid, br_req[0].valid};
+    assign raddr = {alu_req[0].src1_val, alu_req[0].src2_val, mul_req[0].src1_val, mul_req[0].src2_val, load_req[0].src1_val, load_req[0].src2_val, br_req[0].src1_val, br_req[0].src2_val};
 
-    // =========================================================
-    // Issue logic <-> PRF
-    // =========================================================
-    logic [`XLEN-1:0] src_val_a [`ISSUE_WIDTH],
-    logic [`XLEN-1:0] src_val_b [`ISSUE_WIDTH],
-
-    logic [$clog2(`PHYS_REGS)-1:0] read_addr_a [`ISSUE_WIDTH];
-    logic [$clog2(`PHYS_REGS)-1:0] read_addr_b [`ISSUE_WIDTH];
-
-
-//FU_FIFO
-    logic [`FU_NUM-1:0] fu_fifo_full;
-    logic [`CNT_BITS-1:0] fu_free_slots [`FU_NUM];
-
-    // =========================================================
-    // FU FIFO -> FU
-    // =========================================================
-    input  logic          [`FU_NUM-1:0]        fu_rd_en,        // FU read enable per FU
-    issue_packet_t [`FU_NUM-1:0] fu_issue_pkt;  // output packets per FU
-    logic [`FU_NUM-1:0] fu_fifo_empty;    // per-FU empty flag
+// S/EX
+    issue_packet_t alu_req_reg  [`ALU_COUNT]; // pkts to ALU 
+    issue_packet_t mul_req_reg  [`MUL_COUNT];
+    issue_packet_t load_req_reg [`LOAD_COUNT];
+    issue_packet_t br_req_reg   [`BR_COUNT];
 
 
 // FU
@@ -241,7 +227,7 @@ module cpu (
     logic [`WB_WIDTH-1:0] wb_valid;
     logic [`WB_WIDTH-1:0][$clog2(`ROB_DEPTH)-1:0] wb_rob_idx;
     logic [`WB_WIDTH-1:0] wb_exception;
-    ologic [`WB_WIDTH-1:0] wb_mispred;
+    logic [`WB_WIDTH-1:0] wb_mispred;
     cdb_entry_t [`CDB_WIDTH-1:0] cdb_packets;
 
 // Retire-stage
@@ -319,21 +305,14 @@ module cpu (
     // to stall until the previous instruction has completed.
     // For project 3, start by assigning if_valid to always be 1
 
-    logic if_valid, if_flush, start_valid_on_reset, wb_valid;
+    logic if_valid, if_flush;
     logic pred_valid_i, pred_taken_i;
-    logic [$clog2(FETCH_WIDTH)-1:0] pred_lane_i;   // which instruction is branch    
-    logic [ADDR_WIDTH-1:0] pred_target_i; // predicted target PC Addr
+    logic [$clog2(`FETCH_WIDTH)-1:0] pred_lane_i;   // which instruction is branch    
+    ADDR pred_target_i; // predicted target PC Addr
 
-
-    always_ff @(posedge clock) begin
-        // Start valid on reset. Other stages (ID,EX,MEM,WB) start as invalid
-        // Using a separate always_ff is necessary since if_valid is combinational
-        // Assigning if_valid = reset doesn't work as you'd hope :/
-        start_valid_on_reset <= reset;
-    end
 
     // valid bit will cycle through the pipeline and come back from the wb stage
-    assign if_valid = start_valid_on_reset || wb_valid;
+    assign if_valid = !stall;
 
 
     //////////////////////////////////////////////////
@@ -503,36 +482,6 @@ module cpu (
 
     //////////////////////////////////////////////////
     //                                              //
-    //                    RS                        //
-    //                                              //
-    //////////////////////////////////////////////////
-
-    RS rs_0(
-        .clock (clock),
-        .reset (reset),
-        .flush(flush),
-        //Inputs
-        .disp_valid_i(disp_rs_valid),
-        .rs_packets_i(rs_packets),
-        .disp_rs_rd_wen_i(disp_rs_rd_wen),
-
-        .cdb_valid_i(cdb_valid_rs),
-        .cdb_tag_i(cdb_tag_rs),
-
-        .issue_enable_i(issue_enable),
-        
-        //Outputs
-        .free_slots_o(rs_free_slot),
-        .rs_full_o(rs_full),
-        .disp_rs_ready_o(disp_rs_ready),
-
-        .rs_entries_o(rs_entries),
-        .rs_ready_o(rs_ready),  
-        .fu_type_o(fu_types)
-    );
-
-    //////////////////////////////////////////////////
-    //                                              //
     //                    ROB                       //
     //                                              //
     //////////////////////////////////////////////////
@@ -636,7 +585,7 @@ module cpu (
         .clock (clock),
         .reset (reset),
         //Inputs    
-        .rd_en(rd_en), //####
+        .rd_en(rd_en),
         .raddr(raddr),
         .wr_en(prf_wr_en), 
         .waddr(prf_waddr),
@@ -694,6 +643,36 @@ module cpu (
 
     //////////////////////////////////////////////////
     //                                              //
+    //                    RS                        //
+    //                                              //
+    //////////////////////////////////////////////////
+
+    RS rs_0(
+        .clock (clock),
+        .reset (reset),
+        .flush(flush),
+        //Inputs
+        .disp_valid_i(disp_rs_valid),
+        .rs_packets_i(rs_packets),
+        .disp_rs_rd_wen_i(disp_rs_rd_wen),
+
+        .cdb_valid_i(cdb_valid_rs),
+        .cdb_tag_i(cdb_tag_rs),
+
+        .issue_enable_i(issue_enable),
+        
+        //Outputs
+        .free_slots_o(rs_free_slot),
+        .rs_full_o(rs_full),
+        //.disp_rs_ready_o(disp_rs_ready),
+
+        .rs_entries_o(rs_entries),
+        .rs_ready_o(rs_ready),  
+        .fu_type_o(fu_types)
+    );
+
+    //////////////////////////////////////////////////
+    //                                              //
     //            ID/S Pipeline Register           //
     //                                              //
     //////////////////////////////////////////////////
@@ -712,12 +691,13 @@ module cpu (
         end
     end
 
+
     // debug outputs
     always_comb begin
 		for(int i=0;i<`DISPATCH_WIDTH;i++) begin
-			id_s_NPC_dbg[i] = id_s_reg.NPC;
-			id_s_inst_dbg[i] = id_s_reg.inst;
-			id_s_valid_dbg[i] = id_s_reg.valid;
+			id_s_NPC_dbg[i] = id_s_reg[i].NPC;
+			id_s_inst_dbg[i] = id_s_reg[i].inst;
+			id_s_valid_dbg[i] = id_s_reg[i].valid;
 		end
 	end
 
@@ -734,47 +714,18 @@ module cpu (
         .rs_ready_i(rs_ready),
         .fu_types_i(fu_types),
 
-        .issue_enable_o(), // which rs slot is going to be issued
+        .issue_enable_o(issue_enable), // which rs slot is going to be issued
+        .alu_ready_i(alu_ready),
+        .mul_ready_i(mul_ready),
+        .load_ready_i(load_ready),
+        .br_ready_i(br_ready),
 
-        // =========================================================
-        // FU <-> Issue logic
-        // =========================================================
-        .fu_fifo_full(),
-
-        .fu_fifo_wr_en(fu_fifo_wr_pkt),
-        .fu_fifo_wr_pkt(fu_fifo_wr_pkt),
-
-        // =========================================================
-        // Issue logic <-> PRF
-        // =========================================================
-        .src_val_a(),
-        .src_val_b(),
-
-        .read_addr_a(read_addr_a),
-        .read_addr_b(read_addr_b);
-
+        .alu_req_o(alu_req), // pkts to ALU 
+        .mul_req_o(mul_req),
+        .load_req_o(load_req),
+        .br_req_o(br_req)
     );
 
-    FU_FIFO FU_FIFO_0(
-        .clock(clock),
-        .reset(reset),
-
-        // =========================================================
-        // Issue logic → FU FIFO
-        // =========================================================
-        .fu_fifo_wr_en(fu_fifo_wr_en),
-        .fu_fifo_wr_pkt(fu_fifo_wr_pkt),
-
-        .fu_fifo_full(fu_fifo_full),
-        .fu_free_slots(fu_free_slots),
-
-        // =========================================================
-        // FU FIFO -> FU
-        // =========================================================
-        input  logic          [FU_NUM-1:0]        fu_rd_en,        // FU read enable per FU
-        .fu_issue_pkt(fu_issue_pkt),  // output packets per FU
-        .fu_fifo_empty(fu_fifo_empty)    // per-FU empty flag
-    );
 
     //////////////////////////////////////////////////
     //                                              //
@@ -792,35 +743,57 @@ module cpu (
             for(int i=0;i<`DISPATCH_WIDTH;i++) begin
 			    s_ex_reg[i] <= issue_packet[i];
 		    end
+            alu_req_reg[0].valid <= alu_req[0].valid;
+            alu_req_reg[0].rob_idx <= alu_req[0].rob_idx;
+            alu_req_reg[0].imm <= alu_req[0].imm;
+            alu_req_reg[0].fu_type <= alu_req[0].fu_type;
+            alu_req_reg[0].opcode <= alu_req[0].opcode;
+            alu_req_reg[0].dest_tag <= alu_req[0].dest_tag;
+            
+            mul_req_reg[0].valid <= mul_req[0].valid;
+            mul_req_reg[0].rob_idx <= mul_req[0].rob_idx;
+            mul_req_reg[0].imm <= mul_req[0].imm;
+            mul_req_reg[0].fu_type <= mul_req[0].fu_type;
+            mul_req_reg[0].opcode <= mul_req[0].opcode;
+            mul_req_reg[0].dest_tag <= mul_req[0].dest_tag;
+
+            load_req_reg[0].valid <= load_req[0].valid;
+            load_req_reg[0].rob_idx <= load_req[0].rob_idx;
+            load_req_reg[0].imm <= load_req[0].imm;
+            load_req_reg[0].fu_type <= load_req[0].fu_type;
+            load_req_reg[0].opcode <= load_req[0].opcode;
+            load_req_reg[0].dest_tag <= load_req[0].dest_tag;
+
+            br_req_reg[0].valid <= br_req[0].valid; 
+            br_req_reg[0].rob_idx <= br_req[0].rob_idx;
+            br_req_reg[0].imm <= br_req[0].imm;
+            br_req_reg[0].fu_type <= br_req[0].fu_type;
+            br_req_reg[0].opcode <= br_req[0].opcode;
+            br_req_reg[0].dest_tag <= br_req[0].dest_tag;
         end
     end
 
     // debug outputs
     always_comb begin
 		for(int i=0;i<`DISPATCH_WIDTH;i++) begin
-			s_ex_NPC_dbg[i] = s_ex_reg.NPC;
-			s_ex_inst_dbg[i] = s_ex_reg.inst;
-			s_ex_valid_dbg[i] = s_ex_reg.valid;
+			s_ex_NPC_dbg[i] = s_ex_reg[i].NPC;
+			s_ex_inst_dbg[i] = s_ex_reg[i].inst;
+			s_ex_valid_dbg[i] = s_ex_reg[i].valid;
 		end
 	end
-
-    //////////////////////////////////////////////////
-    //                                              //
-    //                  EX-Stage                    //
-    //                                              //
-    //////////////////////////////////////////////////
 
     //////////////////////////////////////////////////
     //                                              //
     //                     FU                       //
     //                                              //
     //////////////////////////////////////////////////
+    assign {alu_req_reg[0].src1_val, alu_req_reg[0].src2_val, mul_req_reg[0].src1_val, mul_req_reg[0].src2_val, load_req_reg[0].src1_val, load_req_reg[0].src2_val, br_req_reg[0].src1_val, br_req_reg[0].src2_val} = rdata;
     fu fu_0(
         //Inputs
-        .alu_req(),
-        .mul_req(),
-        .load_req(),
-        .br_req(),
+        .alu_req(alu_req_reg),
+        .mul_req(mul_req_reg),
+        .load_req(load_req_reg),
+        .br_req(br_req_reg),
 
         //Outputs
         .alu_ready_o(alu_ready),
@@ -934,12 +907,12 @@ module cpu (
     // 1) Previous instruction wasn't a load
     // 2) Load address changed
     logic valid_load;
-    assign valid_load = ex_mem_reg.valid && ex_mem_reg.rd_mem; 
+    //assign valid_load = ex_mem_reg.valid && ex_mem_reg.rd_mem; 
     assign new_load = valid_load && !rd_mem_q;
 
     assign mem_tag_match = outstanding_mem_tag == mem2proc_data_tag;
 
-    assign Dmem_command_filtered = new_load || ex_mem_reg.wr_mem ? Dmem_command : MEM_NONE;
+//    assign Dmem_command_filtered = new_load || ex_mem_reg.wr_mem ? Dmem_command : MEM_NONE;
 
     always_ff @(posedge clock) begin
         if (reset) begin
