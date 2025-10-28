@@ -30,7 +30,19 @@ import "DPI-C" function string decode_inst(int inst);
 `define TB_MAX_CYCLES 50000000
 
 
+
 module testbench;
+
+    // // ==========================================================
+    // //  VCD DUMP SETUP (for GTKWave waveform generation)
+    // // ==========================================================
+    // initial begin
+    //     $dumpfile("cpu_test.vcd");   // 產生波形檔名
+    //     $dumpvars(0, testbench);      // dump 整個 testbench 訊號
+    // end
+    // // ==========================================================
+
+    
     // string inputs for loading memory and output files
     // run like: cd build && ./simv +MEMORY=../programs/mem/<my_program>.mem +OUTPUT=../output/<my_program>
     // this testbench will generate 4 output files based on the output
