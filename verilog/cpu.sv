@@ -158,49 +158,6 @@ module cpu (
     logic [`RS_DEPTH-1:0] rs_ready;
     fu_type_e fu_types [`RS_DEPTH];   
 
-
-// Issue
-    (
-
-
-    // =========================================================
-    // RS -> Issue Logic
-    // =========================================================
-
-
-    logic [`RS_DEPTH-1:0] issue_enable; // which rs slot is going to be issued
-
-    // =========================================================
-    // FU <-> Issue logic
-    // =========================================================
-    //input   logic          [$clog2(MAX_FIFO_DEPTH)-1:0] fu_free_slots [FU_NUM], // Remaining FIFO space for each FU
-    input   logic          [FU_NUM-1:0]                 fu_fifo_full,
-
-    logic [`FU_NUM-1:0] fu_fifo_wr_en;
-    issue_packet_t fu_fifo_wr_pkt [`FU_NUM];
-
-    // =========================================================
-    // Issue logic <-> PRF
-    // =========================================================
-    input   logic          [XLEN-1:0]                   src_val_a   [ISSUE_WIDTH],
-    input   logic          [XLEN-1:0]                   src_val_b   [ISSUE_WIDTH],
-
-    logic [$clog2(`PHYS_REGS)-1:0] read_addr_a [`ISSUE_WIDTH];
-    logic [$clog2(`PHYS_REGS)-1:0] read_addr_b [`ISSUE_WIDTH];
-
-);
-
-//FU_FIFO
-    logic [`FU_NUM-1:0] fu_fifo_full;
-    logic [`CNT_BITS-1:0] fu_free_slots [`FU_NUM];
-
-    // =========================================================
-    // FU FIFO -> FU
-    // =========================================================
-    input  logic          [`FU_NUM-1:0]        fu_rd_en,        // FU read enable per FU
-    issue_packet_t [`FU_NUM-1:0] fu_issue_pkt;  // output packets per FU
-    logic [`FU_NUM-1:0] fu_fifo_empty;    // per-FU empty flag
-
 // Map table
     logic [`DISPATCH_WIDTH-1:0][$clog2(`PHYS_REGS)-1:0] rs1_phys;
     logic [`DISPATCH_WIDTH-1:0][$clog2(`PHYS_REGS)-1:0] rs2_phys;
@@ -213,6 +170,43 @@ module cpu (
     logic snapshot_restore_i;
     logic [`ARCH_REGS-1:0][$clog2(`PHYS_REGS)-1:0] snapshot_data_i;
     logic [`ARCH_REGS-1:0][$clog2(`PHYS_REGS)-1:0] snapshot_data_o;
+
+// Issue
+
+    // =========================================================
+    // RS -> Issue Logic
+    // =========================================================
+
+    logic [`RS_DEPTH-1:0] issue_enable; // which rs slot is going to be issued
+
+    // =========================================================
+    // FU <-> Issue logic
+    // =========================================================
+
+    logic [`FU_NUM-1:0] fu_fifo_wr_en;
+    issue_packet_t fu_fifo_wr_pkt [`FU_NUM];
+
+    // =========================================================
+    // Issue logic <-> PRF
+    // =========================================================
+    logic [`XLEN-1:0] src_val_a [`ISSUE_WIDTH],
+    logic [`XLEN-1:0] src_val_b [`ISSUE_WIDTH],
+
+    logic [$clog2(`PHYS_REGS)-1:0] read_addr_a [`ISSUE_WIDTH];
+    logic [$clog2(`PHYS_REGS)-1:0] read_addr_b [`ISSUE_WIDTH];
+
+
+//FU_FIFO
+    logic [`FU_NUM-1:0] fu_fifo_full;
+    logic [`CNT_BITS-1:0] fu_free_slots [`FU_NUM];
+
+    // =========================================================
+    // FU FIFO -> FU
+    // =========================================================
+    input  logic          [`FU_NUM-1:0]        fu_rd_en,        // FU read enable per FU
+    issue_packet_t [`FU_NUM-1:0] fu_issue_pkt;  // output packets per FU
+    logic [`FU_NUM-1:0] fu_fifo_empty;    // per-FU empty flag
+
 
 // FU
     // FU → Issue
@@ -229,6 +223,14 @@ module cpu (
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0][$clog2(`ROB_DEPTH)-1:0] fu_rob_idx;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_exception;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_mispred;
+
+//EX_C_REG
+    logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_valid_reg;
+    logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0][`XLEN-1:0] fu_value_reg;
+    logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0][$clog2(`PHYS_REGS)-1:0] fu_dest_prf_reg;
+    logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0][$clog2(`ROB_DEPTH)-1:0] fu_rob_idx_reg;
+    logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_exception_reg;
+    logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_mispred_reg;
 
 // Complete-stage
     // PR
@@ -517,12 +519,12 @@ module cpu (
         .cdb_valid_i(cdb_valid_rs),
         .cdb_tag_i(cdb_tag_rs),
 
+        .issue_enable_i(issue_enable),
+        
         //Outputs
         .free_slots_o(rs_free_slot),
         .rs_full_o(rs_full),
         .disp_rs_ready_o(disp_rs_ready),
-
-        .issue_enable_i(issue_enable),
 
         .rs_entries_o(rs_entries),
         .rs_ready_o(rs_ready),  
@@ -849,6 +851,13 @@ module cpu (
                 ex_c_reg      <= 0;    // the defaults can all be zero!
             end
         end else begin
+            fu_valid_reg <= fu_valid;
+            fu_value_reg <= fu_value;
+            fu_dest_prf_reg <= fu_dest_prf;
+            fu_rob_idx_reg <= fu_rob_idx;
+            fu_exception_reg <= fu_exception;
+            fu_mispred_reg <= fu_mispred;;
+
             for(int i=0;i<`DISPATCH_WIDTH;i++) begin
                 ex_c_inst_dbg[i] <= s_ex_inst_dbg[i]; // debug output, just forwarded from ID
                 ex_c_reg[i] <= ex_packet[i];
@@ -870,12 +879,12 @@ module cpu (
         .reset(reset),
 
         // FU
-        .fu_valid_i(fu_valid),
-        .fu_value_i(fu_value),
-        .fu_dest_prf_i(fu_dest_prf),
-        .fu_rob_idx_i(fu_rob_idx),
-        .fu_exception_i(fu_exception),
-        .fu_mispred_i(fu_mispred),
+        .fu_valid_i(fu_valid_reg),
+        .fu_value_i(fu_value_reg),
+        .fu_dest_prf_i(fu_dest_prf_reg),
+        .fu_rob_idx_i(fu_rob_idx_reg),
+        .fu_exception_i(fu_exception_reg),
+        .fu_mispred_i(fu_mispred_reg),
 
         // PR
         .prf_wr_en_o(prf_wr_en),
