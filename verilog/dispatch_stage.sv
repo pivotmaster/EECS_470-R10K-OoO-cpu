@@ -17,7 +17,6 @@
 
 
 `include "def.svh"
-`include "decoder.sv"
 
 module dispatch_stage #(
     parameter int unsigned FETCH_WIDTH = 2,
@@ -43,7 +42,7 @@ module dispatch_stage #(
     // (RENAME) Dispatch <-> Free List
     // =========================================================
     input  logic       [$clog2(DISPATCH_WIDTH+1)-1:0]   free_regs_i,   // how many regsiters in Free list? (saturate at DISPATCH_WIDTH)
-    input  logic                                      empty_i,       // Whether Free list is empty
+    input  logic                                      free_full_i,       // Whether Free list is empty
     input  logic       [DISPATCH_WIDTH-1:0][$clog2(PHYS_REGS)-1:0] new_reg_i,
 
     output logic       [DISPATCH_WIDTH-1:0]           alloc_req_o,   // request sent to Free List (return new_reg_o)
@@ -61,6 +60,7 @@ module dispatch_stage #(
     output  logic      [DISPATCH_WIDTH-1:0][$clog2(ARCH_REGS)-1:0]    dest_arch_o,     //write reg   request
     output  logic      [DISPATCH_WIDTH-1:0][$clog2(ARCH_REGS)-1:0]    src1_arch_o,   //read  reg 1 request
     output  logic      [DISPATCH_WIDTH-1:0][$clog2(ARCH_REGS)-1:0]    src2_arch_o,   //read  reg 2 request
+    output  logic      [DISPATCH_WIDTH-1:0][$clog2(PHYS_REGS)-1:0]   dest_new_prf, //
 
     // =========================================================
     // Dispatch <-> RS
@@ -166,6 +166,7 @@ module dispatch_stage #(
 
                 //rs_entry
                 rs_packets_o[i].valid = 1;
+                rs_packets_o[i].fu_type = (rs_packets_o[i].disp_packet.mult) ? 2'b01 : (rs_packets_o[i].disp_packet.rd_mem) ? 2'b10 : (rs_packets_o[i].disp_packet.cond_branch|rs_packets_o[i].disp_packet.uncond_branch) ? 2'b11 : 2'b00;
                 rs_packets_o[i].rob_idx = disp_rob_idx_i;
 
                 rs_packets_o[i].dest_arch_reg = disp_packet_o[i].dest_reg_idx;
@@ -183,6 +184,9 @@ module dispatch_stage #(
                 disp_rd_arch_o[i] = disp_packet_o[i].dest_reg_idx;
                 disp_rd_old_prf_o[i] = dest_reg_old_i[i]; // Told
                 disp_rd_new_prf_o[i] = new_reg_i[i];  //from free list
+
+                // To map table
+                dest_new_prf[i] = new_reg_i[i];
                 
             end
             
