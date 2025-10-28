@@ -7,7 +7,7 @@ module FIFO #(
     parameter  int unsigned     ISSUE_WIDTH = 2,
     localparam int unsigned     CNT_BITS    = $clog2(FIFO_DEPTH+1) // DEPTH's bits
 )(
-    input  logic                clk,
+    input  logic                clock,
     input  logic                reset,
 
     // =========================================================
@@ -75,7 +75,7 @@ module FIFO #(
     end
 
     // Save update to FIFO pointers
-    always_ff @(posedge clk or posedge reset) begin
+    always_ff @(posedge clock or posedge reset) begin
         if (reset) begin
             tail    <= 0;
             head    <= 0;
@@ -90,7 +90,7 @@ module FIFO #(
     // =========================================================
     // Write (push)
     // =========================================================
-    always_ff @(posedge clk) begin
+    always_ff @(posedge clock) begin
         if (wr_valid)
             mem[tail] <= issue_packet_i;
     end
@@ -109,7 +109,7 @@ module FU_FIFO #(
     parameter int unsigned XLEN           = 64,
     localparam int unsigned CNT_BITS      = $clog2(FIFO_DEPTH+1)
 )(
-    input  logic                              clk,
+    input  logic                              clock,
     input  logic                              reset,
 
     // =========================================================
@@ -144,7 +144,7 @@ module FU_FIFO #(
         .FIFO_DEPTH(FIFO_DEPTH),
         .ISSUE_WIDTH(ISSUE_WIDTH)
     ) alu0_fifo (
-        .clk(clk),
+        .clock(clock),
         .reset(reset),
         .wr_en(fu_fifo_wr_en[0]),
         .issue_packet_i(fu_fifo_wr_pkt[0]),
@@ -160,7 +160,7 @@ module FU_FIFO #(
         .FIFO_DEPTH(FIFO_DEPTH),
         .ISSUE_WIDTH(ISSUE_WIDTH)
     ) alu1_fifo (
-        .clk(clk),
+        .clock(clock),
         .reset(reset),
         .wr_en(fu_fifo_wr_en[1]),
         .issue_packet_i(fu_fifo_wr_pkt[1]),
@@ -176,7 +176,7 @@ module FU_FIFO #(
         .FIFO_DEPTH(FIFO_DEPTH),
         .ISSUE_WIDTH(ISSUE_WIDTH)
     ) alu2_fifo (
-        .clk(clk),
+        .clock(clock),
         .reset(reset),
         .wr_en(fu_fifo_wr_en[2]),
         .issue_packet_i(fu_fifo_wr_pkt[2]),
@@ -192,7 +192,7 @@ module FU_FIFO #(
         .FIFO_DEPTH(FIFO_DEPTH),
         .ISSUE_WIDTH(ISSUE_WIDTH)
     ) mlu0_fifo (
-        .clk(clk),
+        .clock(clock),
         .reset(reset),
         .wr_en(fu_fifo_wr_en[3]),
         .issue_packet_i(fu_fifo_wr_pkt[3]),
@@ -208,7 +208,7 @@ module FU_FIFO #(
         .FIFO_DEPTH(FIFO_DEPTH),
         .ISSUE_WIDTH(ISSUE_WIDTH)
     ) load0_fifo (
-        .clk(clk),
+        .clock(clock),
         .reset(reset),
         .wr_en(fu_fifo_wr_en[4]),
         .issue_packet_i(fu_fifo_wr_pkt[4]),
@@ -224,7 +224,7 @@ module FU_FIFO #(
         .FIFO_DEPTH(FIFO_DEPTH),
         .ISSUE_WIDTH(ISSUE_WIDTH)
     ) branch0_fifo (
-        .clk(clk),
+        .clock(clock),
         .reset(reset),
         .wr_en(fu_fifo_wr_en[5]),
         .issue_packet_i(fu_fifo_wr_pkt[5]),

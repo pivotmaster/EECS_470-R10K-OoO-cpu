@@ -20,7 +20,7 @@ module RS #(
     parameter int unsigned MAX_FU_PER_TYPE = 4,  // how many Fu per each FU type
     parameter int unsigned XLEN            = 64
 )(
-    input   logic                                                  clk,
+    input   logic                                                  clock,
     input   logic                                                  reset,
     input   logic                                                  flush,
 
@@ -80,7 +80,7 @@ module RS #(
                 .PHYS_REGS(PHYS_REGS),
                 .CDB_WIDTH(CDB_WIDTH)
             ) rs_entry (
-                .clk(clk),
+                .clock(clock),
                 .reset(reset),
                 .flush(flush),
                 .disp_enable_i(disp_enable[i]),

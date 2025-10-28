@@ -3,7 +3,7 @@ module retire_stage #(
     parameter int unsigned PHYS_REGS    = 128,
     parameter int unsigned COMMIT_WIDTH = 4
 )(
-    input  logic clk,
+    input  logic clock,
     input  logic reset,
 
     // rob

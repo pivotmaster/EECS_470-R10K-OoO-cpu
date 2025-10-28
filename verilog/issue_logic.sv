@@ -16,7 +16,7 @@ module issue_logic #(
     parameter int LOAD_COUNT  = 1,
     parameter int BR_COUNT    = 1
 )(
-    input  logic                                                  clk,
+    input  logic                                                  clock,
     input  logic                                                  reset,
 
     // =========================================================
@@ -47,7 +47,7 @@ module issue_logic #(
     // Grant Issue permission to RS entry (by issue selector)
     // =========================================================
     // Select who can issue ('issue_enable')
-    logic [RS_DEPTH-1:0] issue_enable_o_next;  // internal signal
+    logic [RS_DEPTH-1:0] issue_enable_o_next, issue_enable_o_next_next;  // internal signal
 
     issue_selector #(
         .RS_DEPTH(RS_DEPTH),
@@ -61,11 +61,12 @@ module issue_logic #(
     );
 
     // Prevent issue_enable_o -> affect RS (input of issue selector) at the same cycle
-    always_ff @( posedge clk or posedge reset) begin 
+    always_ff @( posedge clock or posedge reset) begin 
+        //$display("issue_enable_o_ = %b | issue_enable_o_next = %b", issue_enable_o, issue_enable_o_next);
         if (reset) begin
             issue_enable_o <= '0;
         end else begin
-            issue_enable_o <= issue_enable_o_next;
+            issue_enable_o <= issue_enable_o_next_next;
         end
     end
 
@@ -73,12 +74,14 @@ module issue_logic #(
     // Issue logic -> FU
     // =========================================================
     // Packets that sent to the FIFOs
-    issue_packet_t issue_pkts [ISSUE_WIDTH]     ;    // packets to FIFOs
+    issue_packet_t [ISSUE_WIDTH-1:0]   issue_pkts    ;    // packets to FIFOs
     logic [ISSUE_WIDTH-1:0] issue_pkt_rs_idx; // store the idx of RS entry for each issue pkt
+        logic [1:0] fu_t;
 
     // Generate Issue Packets
     always_comb begin : issue_output
         int issue_slot = 0;
+        issue_enable_o_next_next = issue_enable_o_next;
 
         for (int j = 0; j < ISSUE_WIDTH; j++) begin
             issue_pkts[j].valid = 0;
@@ -86,15 +89,15 @@ module issue_logic #(
         end
 
         for (int i = 0; i < RS_DEPTH; i++) begin
-            if (issue_enable_o_next[i]) begin
+            if (issue_enable_o_next_next[i]) begin
                 //store rs enrty idx
                 issue_pkt_rs_idx[issue_slot] = i;
                 // create issue packet
                 issue_pkts[issue_slot].valid = 1;
                 issue_pkts[issue_slot].rob_idx  = rs_entries_i[i].rob_idx;
-                issue_pkts[issue_slot].imm      = rs_entries_i[i].imm;
+                //issue_pkts[issue_slot].imm      = rs_entries_i[i].imm;
                 issue_pkts[issue_slot].fu_type  = rs_entries_i[i].fu_type;
-                issue_pkts[issue_slot].opcode   = rs_entries_i[i].opcode;
+                //issue_pkts[issue_slot].opcode   = rs_entries_i[i].opcode;
                 issue_pkts[issue_slot].dest_tag = rs_entries_i[i].dest_tag;
                 issue_pkts[issue_slot].src1_val = rs_entries_i[i].src1_tag; // src1_val should be tag
                 issue_pkts[issue_slot].src2_val = rs_entries_i[i].src1_tag; // src2_val should be tag
@@ -103,19 +106,21 @@ module issue_logic #(
         end
 
         // Sent to FUs
+
         for (int i = 0; i < ISSUE_WIDTH; i++) begin
-            if (issue_pkts[i].fu_type == FU_ALU && alu_ready_i ) begin
-                alu_req_o  = issue_pkts[i];
-                issue_enable_o_next[issue_pkt_rs_idx[i]] = 1'b1; 
-            end else if (issue_pkts[i].fu_type == FU_MUL && mul_ready_i) begin
-                mul_req_o  = issue_pkts[i];
-                issue_enable_o_next[issue_pkt_rs_idx[i]] = 1'b1; 
-            end else if (issue_pkts[i].fu_type == FU_LOAD && load_ready_i ) begin
-                load_req_o = issue_pkts[i];
-                issue_enable_o_next[issue_pkt_rs_idx[i]] = 1'b1; 
-            end else if (issue_pkts[i].fu_type == FU_BRANCH && br_ready_i ) begin
-                branch_req_o = issue_pkts[i];
-                issue_enable_o_next[issue_pkt_rs_idx[i]] = 1'b1; 
+            fu_t = issue_pkts[i].fu_type;
+            if ((fu_t == 2'b00) && alu_ready_i[0] ) begin
+                alu_req_o[0]  = issue_pkts[i];
+                issue_enable_o_next_next[issue_pkt_rs_idx[i]] = 1'b1; 
+            end else if (issue_pkts[i].fu_type == 2'b01 && mul_ready_i[0]) begin
+                mul_req_o[0]  = issue_pkts[i];
+                issue_enable_o_next_next[issue_pkt_rs_idx[i]] = 1'b1; 
+            end else if (issue_pkts[i].fu_type == 2'b10 && load_ready_i[0] ) begin
+                load_req_o[0] = issue_pkts[i];
+                issue_enable_o_next_next[issue_pkt_rs_idx[i]] = 1'b1; 
+            end else if (issue_pkts[i].fu_type == 2'b11 && br_ready_i[0] ) begin
+                br_req_o[0] = issue_pkts[i];
+                issue_enable_o_next_next[issue_pkt_rs_idx[i]] = 1'b1; 
             end
         end
     end
