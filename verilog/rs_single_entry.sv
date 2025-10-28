@@ -11,7 +11,7 @@ module rs_single_entry #(
     parameter int unsigned CDB_WIDTH    = 2,
     parameter int unsigned FU_NUM       = 8
 )(
-    input                                                clk, reset, flush,
+    input                                                clock, reset, flush,
 
     // Dispatch interface
     input  logic                                         disp_enable_i,
@@ -86,7 +86,7 @@ module rs_single_entry #(
     end
 
     // Save the update to register
-    always_ff @(posedge clk) begin : update
+    always_ff @(posedge clock) begin : update
         if (reset) begin
             rs_entry     <= '{default:'0}; 
             empty        <= 1'b1;

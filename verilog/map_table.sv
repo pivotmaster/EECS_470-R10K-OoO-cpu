@@ -19,7 +19,7 @@ module map_table#(
     parameter int WB_WIDTH     = 4,         // Number of writeback ports
     parameter int COMMIT_WIDTH = 2          // Number of commit ports
 )(
-    input logic clk,                        // Clock signal
+    input logic clock,                        // Clock signal
     input logic reset,                      // Asynchronous reset
 
     // =======================================================
@@ -124,7 +124,7 @@ module map_table#(
     // arch reg i -> phys i, and mark valid = 1
     // (this assumes PHYS_REGS >= ARCH_REGS)
     // =======================================================
-    always_ff @(posedge clk or posedge reset)begin
+    always_ff @(posedge clock or posedge reset)begin
         if(reset)begin
             for(int i =0; i< ARCH_REGS; i++)begin
                 table[i].phys <= i;

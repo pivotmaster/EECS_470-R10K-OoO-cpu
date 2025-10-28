@@ -16,7 +16,7 @@ module free_list #(
     parameter int unsigned ARCH_REGS       = 64,
     parameter int unsigned PHYS_REGS       = 128
 )(
-    input  logic clk,
+    input  logic clock,
     input  logic reset,
 
     // =========================================================
@@ -158,7 +158,7 @@ module free_list #(
     // =========================================================
     // Initialize free list
     // =========================================================
-    always_ff @(posedge clk or posedge reset ) begin
+    always_ff @(posedge clock or posedge reset ) begin
         if (reset) begin
             head  <= '0;
             tail  <= PHYS_REGS - ARCH_REGS - 1;
