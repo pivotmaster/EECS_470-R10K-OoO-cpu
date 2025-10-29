@@ -31,7 +31,6 @@ module RS #(
     input   rs_entry_t     [DISPATCH_WIDTH-1:0]                    rs_packets_i,
     input   logic          [DISPATCH_WIDTH-1:0]                    disp_rs_rd_wen_i,     // read (I think it is whether write PRF?)
 
-    output  logic          [$clog2(DISPATCH_WIDTH+1)-1:0]          free_slots_o,      // how many slot is free? (saturate at DISPATCH_WIDTH)
     output  logic                                                  rs_full_o,
 
     // =========================================================

@@ -49,8 +49,7 @@ typedef struct packed {
     `define PHYS_REGS 128
 `endif 
 
-`ifndef __DEF_SVH__
-`define __DEF_SVH__
+
 
 
 /////////////////////////////////////////////////////////////////////////
@@ -484,3 +483,6 @@ typedef struct packed {
 } cdb_entry_t;
 
 `endif // __SYS_DEFS_SVH__
+
+`ifndef __DEF_SVH__
+`define __DEF_SVH__

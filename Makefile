@@ -190,7 +190,7 @@ GREP = grep -E --color=auto
 # ---- Modules to Test ---- #
 
 # TODO: add more modules here
-MODULES = cpu mult rob rs decoder retire_stage complete_stage dispatch_stage fetch_stage
+MODULES = rs
 
 # TODO: update this if you add more header files
 ALL_HEADERS = $(CPU_HEADERS)
@@ -203,7 +203,10 @@ build/mult.cov: $(MULT_FILES)
 synth/mult.vg: $(MULT_FILES)
 
 # TODO: add any files required for the RS here (besides test/rs_test.sv and verilog/rs.sv)
-RS_REQS = verilog/sys_defs.svh
+RS_FILES = verilog/def.svh \
+		   verilog/rs_disp_selector.sv \
+		   verilog/rs_single_entry.sv \
+
 build/rs.simv: $(RS_FILES)
 build/rs.cov: $(RS_FILES)
 synth/rs.vg: $(RS_FILES)
