@@ -11,8 +11,8 @@
 /////////////////////////////////////////////////////////////////////////
 
 module free_list #(
-    parameter int unsigned DISPATCH_WIDTH  = 2,
-    parameter int unsigned COMMIT_WIDTH    = 2,
+    parameter int unsigned DISPATCH_WIDTH  = 1,
+    parameter int unsigned COMMIT_WIDTH    = 1,
     parameter int unsigned ARCH_REGS       = 64,
     parameter int unsigned PHYS_REGS       = 128
 )(

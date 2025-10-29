@@ -19,8 +19,8 @@
 `include "def.svh"
 
 module dispatch_stage #(
-    parameter int unsigned FETCH_WIDTH = 2,
-    parameter int unsigned DISPATCH_WIDTH = 2,
+    parameter int unsigned FETCH_WIDTH = 1,
+    parameter int unsigned DISPATCH_WIDTH = 1,
     parameter int unsigned PHYS_REGS = 128,
     parameter int unsigned ARCH_REGS = 64,
     parameter int unsigned DEPTH = 64,

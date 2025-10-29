@@ -1,9 +1,9 @@
 module rob #(
     parameter int unsigned DEPTH           = 64,
     parameter int unsigned INST_W          = 16,
-    parameter int unsigned DISPATCH_WIDTH  = 2,
-    parameter int unsigned COMMIT_WIDTH    = 2,
-    parameter int unsigned WB_WIDTH        = 4,
+    parameter int unsigned DISPATCH_WIDTH  = 1,
+    parameter int unsigned COMMIT_WIDTH    = 1,
+    parameter int unsigned WB_WIDTH        = 1,
     parameter int unsigned ARCH_REGS       = 64,
     parameter int unsigned PHYS_REGS       = 128,
     parameter int unsigned XLEN            = 64

@@ -37,23 +37,23 @@
 `endif
 
 `ifndef FETCH_WIDTH
-    `define FETCH_WIDTH 2
+    `define FETCH_WIDTH 1
 `endif
 
 `ifndef CDB_WIDTH
-    `define CDB_WIDTH 2
+    `define CDB_WIDTH 1
 `endif
 
 `ifndef DISPATCH_WIDTH
-    `define DISPATCH_WIDTH 2
+    `define DISPATCH_WIDTH 1
 `endif
 
 `ifndef COMMIT_WIDTH
-    `define COMMIT_WIDTH 2
+    `define COMMIT_WIDTH 1
 `endif
 
 `ifndef WB_WIDTH
-    `define WB_WIDTH 2
+    `define WB_WIDTH 1
 `endif
 
 `ifndef ALU_COUNT
@@ -145,8 +145,8 @@ typedef logic [4:0] REG_IDX;
 // you are not allowed to change this definition for your final processor
 // the project 3 processor has a massive boost in performance just from having no mem latency
 // see if you can beat it's CPI in project 4 even with a 100ns latency!
-//`define MEM_LATENCY_IN_CYCLES  0
-`define MEM_LATENCY_IN_CYCLES (100.0/`CLOCK_PERIOD+0.49999)
+`define MEM_LATENCY_IN_CYCLES  0
+// `define MEM_LATENCY_IN_CYCLES (100.0/`CLOCK_PERIOD+0.49999)
 // the 0.49999 is to force ceiling(100/period). The default behavior for
 // float to integer conversion is rounding to nearest
 
