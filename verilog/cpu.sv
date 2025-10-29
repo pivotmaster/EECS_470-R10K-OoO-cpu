@@ -283,18 +283,19 @@ module cpu #(
     // note that there is no latency in project 3
     // but there will be a 100ns latency in project 4
 
-    always_comb begin
-        if (Dmem_command != MEM_NONE) begin  // read or write DATA from memory
-            proc2mem_command = Dmem_command_filtered;
-            proc2mem_size    = Dmem_size;
-            proc2mem_addr    = Dmem_addr;
-        end else begin                      // read an INSTRUCTION from memory
-            proc2mem_command = Imem_command;
-            proc2mem_addr    = Imem_addr;
-            proc2mem_size    = DOUBLE;      // instructions load a full memory line (64 bits)
-        end
-        proc2mem_data = Dmem_store_data;
-    end
+    // always_comb begin
+    //     if (Dmem_command != MEM_NONE) begin  // read or write DATA from memory
+    //         proc2mem_command = Dmem_command_filtered;
+    //         proc2mem_size    = Dmem_size;
+    //         proc2mem_addr    = Dmem_addr;
+    //     end else begin                      // read an INSTRUCTION from memory
+    //         proc2mem_command = Imem_command;
+    //         proc2mem_addr    = Imem_addr;
+    //         proc2mem_size    = DOUBLE;      // instructions load a full memory line (64 bits)
+    //     end
+    //     proc2mem_data = Dmem_store_data;
+    // end
+    assign proc2mem_size = DOUBLE;
 
     //////////////////////////////////////////////////
     //                                              //
@@ -313,8 +314,11 @@ module cpu #(
 
 
     // valid bit will cycle through the pipeline and come back from the wb stage
-    // assign if_valid = !stall;###
-    assign if_valid = 1'b1;
+    // assign if_valid = !stall;
+    assign if_valid = 1'b1; //###
+    assign if_flush = 1'b0; //###
+    assign pred_taken_i = 1'b0; //###
+    assign pred_valid_i = 1'b0; //###
 
 
     //////////////////////////////////////////////////
@@ -322,29 +326,29 @@ module cpu #(
     //                  I-cache                     //
     //                                              //
     //////////////////////////////////////////////////
-    icache icache_0(
-        .clock (clock),
-        .reset (reset),
+    // icache icache_0(
+    //     .clock (clock),
+    //     .reset (reset),
 
-        // Inputs
+    //     // Inputs
 
-        // From memory
-        .Imem2proc_transaction_tag(mem2proc_transaction_tag), 
-        .Imem2proc_data(mem2proc_data),
-        .Imem2proc_data_tag(mem2proc_data_tag),
+    //     // From memory
+    //     .Imem2proc_transaction_tag(mem2proc_transaction_tag), 
+    //     .Imem2proc_data(mem2proc_data),
+    //     .Imem2proc_data_tag(mem2proc_data_tag),
 
-        // From fetch stage
-        .proc2Icache_addr(proc2Icache_addr),
+    //     // From fetch stage
+    //     .proc2Icache_addr(proc2Icache_addr),
 
-        // Outputs
-        // To memory
-        .proc2Imem_command(Imem_command),
-        .proc2Imem_addr(Imem_addr),
+    //     // Outputs
+    //     // To memory
+    //     .proc2Imem_command(Imem_command),
+    //     .proc2Imem_addr(Imem_addr),
 
 
-        .Icache_data_out(Icache_data_out),
-        .Icache_valid_out(Icache_valid_out) // When valid is high
-    );
+    //     .Icache_data_out(Icache_data_out),
+    //     .Icache_valid_out(Icache_valid_out) // When valid is high
+    // );
 
     //////////////////////////////////////////////////
     //                                              //
@@ -370,15 +374,15 @@ module cpu #(
         // Fetch <-> ICache / Mem
         // =========================================================
         .Imem_valid(Icache_valid_out), 
-        .Imem_data (icache_to_fetch_data),
+        .Imem_data (mem2proc_data),
 
         // .Imem2proc_transaction_tag (mem2proc_transaction_tag),
         // .Imem2proc_data_tag (mem2proc_data_tag),
 
         // Outputs
         // These now go to the I-Cache, NOT main memory
-        .Imem_command (icache_to_mem_command),  // <-- MODIFIED (Was: Imem_command)
-        .Imem_addr (proc2Icache_addr), 
+        .Imem_command (proc2mem_command),  // <-- MODIFIED (Was: Imem_command)
+        .Imem_addr (proc2mem_addr), 
 
         .correct_pc_target_o(correct_pc_target_o), 
         .if_packet_o (if_packet)
