@@ -124,6 +124,14 @@ module map_table#(
     // arch reg i -> phys i, and mark valid = 1
     // (this assumes PHYS_REGS >= ARCH_REGS)
     // =======================================================
+    always_comb begin
+        for(int i =0 ; i < DISPATCH_WIDTH ; i++)begin
+            if(disp_valid_i[i]) begin
+                disp_old_phys_o[i] = table[disp_arch_i[i]].phys;
+            end
+        end
+    end
+    
     always_ff @(posedge clock or posedge reset)begin
         if(reset)begin
             for(int i =0; i< ARCH_REGS; i++)begin
@@ -137,7 +145,7 @@ module map_table#(
             // ===================================================
             for(int i =0 ; i < DISPATCH_WIDTH ; i++)begin
                 if(disp_valid_i[i])begin
-                    disp_old_phys_o[i] <= table[disp_arch_i[i]].phys;
+                    // disp_old_phys_o[i] <= table[disp_arch_i[i]].phys;
                     table[disp_arch_i[i]].phys <= disp_new_phys_i[i];
                     table[disp_arch_i[i]].valid <= 1'b0; 
                 end
