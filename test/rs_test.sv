@@ -16,7 +16,6 @@ module RS_tb;
   logic [DISPATCH_WIDTH-1:0] disp_valid_i;
   rs_entry_t [DISPATCH_WIDTH-1:0] rs_packets_i;
   logic [DISPATCH_WIDTH-1:0] disp_rs_rd_wen_i;
-  logic [$clog2(DISPATCH_WIDTH+1)-1:0] free_slots_o;
   logic rs_full_o;
   logic [CDB_WIDTH-1:0] cdb_valid_i;
   logic [CDB_WIDTH-1:0][$clog2(PHYS_REGS)-1:0] cdb_tag_i;
@@ -45,7 +44,6 @@ module RS_tb;
     .disp_valid_i(disp_valid_i),
     .rs_packets_i(rs_packets_i),
     .disp_rs_rd_wen_i(disp_rs_rd_wen_i),
-    .free_slots_o(free_slots_o),
     .rs_full_o(rs_full_o),
     .cdb_valid_i(cdb_valid_i),
     .cdb_tag_i(cdb_tag_i),
