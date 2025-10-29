@@ -91,6 +91,7 @@ module cpu #(
 
 // Dispactch
     //Free list
+    logic [`DISPATCH_WIDTH-1:0] disp_free_space;
     logic [`DISPATCH_WIDTH-1:0] alloc_req;
     // Map Table
     logic [`DISPATCH_WIDTH-1:0] rename_valid;
@@ -103,6 +104,7 @@ module cpu #(
     logic [`DISPATCH_WIDTH-1:0] disp_rs_rd_wen;
     rs_entry_t  [DISPATCH_WIDTH-1:0] rs_packets;
     // ROB
+    logic [`DISPATCH_WIDTH-1:0] disp_rob_space;
     logic [`DISPATCH_WIDTH-1:0] disp_rob_valid;
     logic [`DISPATCH_WIDTH-1:0] disp_rob_rd_wen;
     logic [`DISPATCH_WIDTH-1:0][$clog2(`ARCH_REGS)-1:0] disp_rd_arch;
@@ -403,7 +405,8 @@ module cpu #(
     //                                              //
     //////////////////////////////////////////////////
 
-    assign if_id_enable = !stall;
+    // assign if_id_enable = !stall;
+    assign if_id_enable = 1'b1;//###
 
     always_ff @(posedge clock) begin
         if (reset) begin
@@ -434,14 +437,16 @@ module cpu #(
     //               Dispatch-Stage                 //
     //                                              //
     //////////////////////////////////////////////////
-
+    assign disp_rob_space = (free_rob_slots > `DISPATCH_WIDTH) ? `DISPATCH_WIDTH : free_rob_slots[`DISPATCH_WIDTH-1:0]; 
+    // assign disp_free_space = (free_count > `DISPATCH_WIDTH) ? `DISPATCH_WIDTH : free_count[`DISPATCH_WIDTH-1:0];
+    assign disp_free_space = 1'b1; //###
     dispatch_stage dispatch_stage_0(
         .clock (clock),
         .reset (reset),
 
         .if_packet_i(if_id_reg),
         //free list inputs
-        .free_regs_i(free_count),
+        .free_regs_i(disp_free_space),
         .free_full_i(free_full),
         .new_reg_i(alloc_phys),
 
@@ -472,7 +477,7 @@ module cpu #(
         .rs_packets_o(rs_packets),
 
         //rob inputs
-        .free_rob_slots_i(free_rob_slots),
+        .free_rob_slots_i(disp_rob_space),
         .disp_rob_ready_i(disp_ready),
         .disp_rob_idx_i(disp_rob_idx),
 
@@ -549,15 +554,21 @@ module cpu #(
         .disp_arch_i(dest_arch),
         .disp_new_phys_i(dest_new_prf),
         .disp_old_phys_o(disp_old_phys),
+        //###
 
-
-        .wb_valid_i(cdb_valid_mp),//
-        .wb_phys_i(cdb_phy_tag_mp),//
+        // .wb_valid_i(cdb_valid_mp),//
+        // .wb_phys_i(cdb_phy_tag_mp),//
+        .wb_valid_i('0),//
+        .wb_phys_i('0),//
         //####
-        .flush_i(flush_i),
-        .snapshot_restore_i(snapshot_restore_i),
-        .snapshot_data_i(snapshot_data_i),
-        .snapshot_data_o(snapshot_data_o)
+        // .flush_i(flush_i),
+        // .snapshot_restore_i(snapshot_restore_i),
+        // .snapshot_data_i(snapshot_data_i),
+        // .snapshot_data_o(snapshot_data_o)
+        .flush_i('0),
+        .snapshot_restore_i('0),
+        .snapshot_data_i('0),
+        .snapshot_data_o('0)
     );
 
     //////////////////////////////////////////////////
@@ -684,7 +695,8 @@ module cpu #(
     //                                              //
     //////////////////////////////////////////////////
 
-    assign id_s_enable = !stall;
+    // assign id_s_enable = !stall;
+    assign id_s_enable = 1'b1;
 
     always_ff @(posedge clock) begin
         if (reset) begin
@@ -739,7 +751,8 @@ module cpu #(
     //            S/EX Pipeline Register           //
     //                                              //
     //////////////////////////////////////////////////
-    assign s_ex_enable = !stall;
+    // assign s_ex_enable = !stall;
+    assign s_ex_enable = 1'b1;
 
     always_ff @(posedge clock) begin
         if (reset) begin
