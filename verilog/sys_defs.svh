@@ -41,19 +41,19 @@
 `endif
 
 `ifndef CDB_WIDTH
-    `define CDB_WIDTH 2
+    `define CDB_WIDTH 1
 `endif
 
 `ifndef DISPATCH_WIDTH
-    `define DISPATCH_WIDTH 2
+    `define DISPATCH_WIDTH 1
 `endif
 
 `ifndef COMMIT_WIDTH
-    `define COMMIT_WIDTH 2
+    `define COMMIT_WIDTH 1
 `endif
 
 `ifndef WB_WIDTH
-    `define WB_WIDTH 2
+    `define WB_WIDTH 1
 `endif
 
 `ifndef ALU_COUNT

@@ -345,9 +345,14 @@ module testbench;
             $display("[FETCH] PC=%h INST=%h", verisimpleV.if_NPC_dbg[0], verisimpleV.if_inst_dbg[0]);
     end
 
+    always @(posedge clock) begin
+        $display("[DISPATCH] free_rob, rs, free, org_free_slots = %0d %0d %0d %0d", verisimpleV.dispatch_stage_0.free_rob_slots_i, verisimpleV.dispatch_stage_0.free_rs_slots_i, verisimpleV.dispatch_stage_0.free_regs_i, verisimpleV.free_count);
+        // $display("[DISPATCH] phy_new = %0d", verisimpleV.dispatch_stage_0.)
+    end
+
     //###
     always_ff @(negedge clock) begin
-        if(proc2mem_addr == 220) begin
+        if(proc2mem_addr >= 32'd220) begin
             $display("forced finished");
             $finish;
         end
