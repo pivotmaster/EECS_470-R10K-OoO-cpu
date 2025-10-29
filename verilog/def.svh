@@ -6,7 +6,7 @@
 // =========================================================
 
 `ifndef FETCH_WIDTH
-    `define FETCH_WIDTH 2
+    `define FETCH_WIDTH 1
 `endif
 
 `ifndef XLEN
