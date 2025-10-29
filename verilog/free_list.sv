@@ -26,7 +26,7 @@ module free_list #(
     output logic [DISPATCH_WIDTH-1:0][$clog2(PHYS_REGS)-1:0] alloc_phys_o, // allocated PRF numbers
     output logic [DISPATCH_WIDTH-1:0]                        alloc_valid_o, // whether each alloc succeed
     output logic                                             full_o,       // true if no free regs left
-    output logic [$clog2(PHYS_REGS):0]                       free_count_o, // number of free regs
+    output logic [$clog2(PHYS_REGS+1)-1:0]                       free_count_o, // number of free regs
     // output logic [DISPATCH_WIDTH-1:0]                       new_reg_o,
     // output logic [$clog2(DISPATCH_WIDTH)-1:0]               free_regs_o,   // how many regsiters are free? (saturate at DISPATCH_WIDTH)
     // output logic                                            empty_o,

@@ -115,7 +115,7 @@ module cpu #(
     logic [DISPATCH_WIDTH-1:0][$clog2(`PHYS_REGS-1):0] alloc_phys; // allocated PRF numbers
     logic [`DISPATCH_WIDTH-1:0] alloc_valid; // whether each alloc succeed
     logic free_full;      // true if no free regs left
-    logic [$clog2(DISPATCH_WIDTH+1)-1:0] free_count; // number of free regs
+    logic [$clog2(`PHYS_REGS+1)-1:0] free_count; // number of free regs
 
 // Arch map table
     logic [`ARCH_REGS-1:0][$clog2(`PHYS_REGS)-1:0] snapshot; // Full snapshot of current architectural-to-physical map
@@ -438,8 +438,8 @@ module cpu #(
     //                                              //
     //////////////////////////////////////////////////
     assign disp_rob_space = (free_rob_slots > `DISPATCH_WIDTH) ? `DISPATCH_WIDTH : free_rob_slots[`DISPATCH_WIDTH-1:0]; 
-    // assign disp_free_space = (free_count > `DISPATCH_WIDTH) ? `DISPATCH_WIDTH : free_count[`DISPATCH_WIDTH-1:0];
-    assign disp_free_space = 1'b1; //###
+    assign disp_free_space = (free_count > `DISPATCH_WIDTH) ? `DISPATCH_WIDTH : free_count[`DISPATCH_WIDTH-1:0];
+    // assign disp_free_space = 1'b1; //###
     dispatch_stage dispatch_stage_0(
         .clock (clock),
         .reset (reset),
@@ -515,21 +515,32 @@ module cpu #(
         .disp_enable_space_o(free_rob_slots),
 
         // Writeback
-        .wb_valid_i(wb_valid),
-        .wb_rob_idx_i(wb_rob_idx),
-        .wb_exception_i(wb_exception),
-        .wb_mispred_i(wb_exception),
+        // .wb_valid_i(wb_valid),
+        // .wb_rob_idx_i(wb_rob_idx),
+        // .wb_exception_i(wb_exception),
+        // .wb_mispred_i(wb_exception),
+        .wb_valid_i('0),
+        .wb_rob_idx_i('0),
+        .wb_exception_i('0),
+        .wb_mispred_i('0),
 
         // Commit
-        .commit_valid_o(commit_valid),
-        .commit_rd_wen_o(commit_rd_wen),
-        .commit_rd_arch_o(commit_rd_arch),
-        .commit_new_prf_o(commit_new_prf),
-        .commit_old_prf_o(commit_old_prf),
+        // .commit_valid_o(commit_valid),
+        // .commit_rd_wen_o(commit_rd_wen),
+        // .commit_rd_arch_o(commit_rd_arch),
+        // .commit_new_prf_o(commit_new_prf),
+        // .commit_old_prf_o(commit_old_prf),
+        .commit_valid_o('0),
+        .commit_rd_wen_o('0),
+        .commit_rd_arch_o('0),
+        .commit_new_prf_o('0),
+        .commit_old_prf_o('0),
 
         // Branch flush
-        .flush_o(flush_rob),
-        .flush_upto_rob_idx_o(flush_upto_rob_idx)
+        // .flush_o(flush_rob),
+        // .flush_upto_rob_idx_o(flush_upto_rob_idx)
+        .flush_o('0),
+        .flush_upto_rob_idx_o('0)
     );
 
     //////////////////////////////////////////////////
