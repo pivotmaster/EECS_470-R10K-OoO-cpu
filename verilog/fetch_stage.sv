@@ -11,7 +11,7 @@
 `include "sys_defs.svh"
 
 module stage_if #(
-    parameter int unsigned           FETCH_WIDTH  = 2,
+    parameter int unsigned           FETCH_WIDTH  = 1,
     parameter int unsigned           ADDR_WIDTH   = 32
 
 )(

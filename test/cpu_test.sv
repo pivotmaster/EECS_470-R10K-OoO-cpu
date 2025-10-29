@@ -114,10 +114,12 @@ module testbench;
 
 
     // Instantiate the Data Memory
+    MEM_COMMAND debug_proc2mem_command;//###
+    assign debug_proc2mem_command = MEM_LOAD;//###
     mem memory (
         // Inputs
         .clock            (clock),
-        .proc2mem_command (proc2mem_command),
+        .proc2mem_command (debug_proc2mem_command),//###
         .proc2mem_addr    (proc2mem_addr),
         .proc2mem_data    (proc2mem_data),
 `ifndef CACHE_MODE
@@ -341,6 +343,14 @@ module testbench;
     always @(posedge clock) begin
         if (verisimpleV.if_valid_dbg[0])
             $display("[FETCH] PC=%h INST=%h", verisimpleV.if_NPC_dbg[0], verisimpleV.if_inst_dbg[0]);
+    end
+
+    //###
+    always_ff @(negedge clock) begin
+        if(proc2mem_addr == 220) begin
+            $display("forced finished");
+            $finish;
+        end
     end
 
 
