@@ -167,19 +167,28 @@ module RS #(
         end
     endtask
 
-  task automatic show_rs_output(int cyc);
-    $display("RS Entries:[cycle]=%d", cyc);
+  task automatic show_rs_output();
     for (int i = 0; i < RS_DEPTH; i++) begin
-      $display("Entry %0d: valid=%b, rob_idx=%0d, fu_type=%0d, dest_tag=%0d, src1_tag=%0d(%b), src2_tag=%0d(%b)", 
-        i, rs_entries_o[i].valid, rs_entries_o[i].rob_idx, rs_entries_o[i].fu_type, 
-        rs_entries_o[i].dest_tag, rs_entries_o[i].src1_tag, rs_entries_o[i].src1_ready,
-        rs_entries_o[i].src2_tag, rs_entries_o[i].src2_ready);
+    $display("Entry %0d: ready=%b, valid=%b, alu_func=%0d, rob_idx=%0d, fu_type=%0d, dest_reg_idx=%0d, dest_tag=%0d, src1_tag=%0d(%b), src2_tag=%0d(%b)", 
+                i, rs_ready_o[i], rs_entries_o[i].valid, rs_entries_o[i].disp_packet.alu_func, rs_entries_o[i].rob_idx, rs_entries_o[i].disp_packet.fu_type, 
+                rs_entries_o[i].disp_packet.dest_reg_idx , rs_entries_o[i].dest_tag, rs_entries_o[i].src1_tag, rs_entries_o[i].src1_ready,
+                rs_entries_o[i].src2_tag, rs_entries_o[i].src2_ready);
     end
-    for (int j = 0; j < RS_DEPTH; j++) begin
-        $write("rs_ready: %b", rs_ready_o[j]);
+  endtask
+
+  task automatic show_disp_instr();
+
+    for (int i = 0; i < RS_DEPTH; i++) begin
+        if (disp_enable[i]) begin
+             
+        $display("Entry %0d: ready=%b, valid=%b, alu_func=%0d, rob_idx=%0d, fu_type=%0d, dest_reg_idx=%0d, dest_tag=%0d, src1_tag=%0d(%b), src2_tag=%0d(%b)", 
+                i, rs_ready_o[i], rs_entries_o[i].valid, rs_entries_o[i].disp_packet.alu_func, rs_entries_o[i].rob_idx, rs_entries_o[i].disp_packet.fu_type, 
+                rs_entries_o[i].disp_packet.dest_reg_idx , rs_entries_o[i].dest_tag, rs_entries_o[i].src1_tag, rs_entries_o[i].src1_ready,
+                rs_entries_o[i].src2_tag, rs_entries_o[i].src2_ready);
+         $display("");
     end
-    $write("\n");
-    $display("fu_type: %p", fu_type_o);
+    end
+  
   endtask
 
   int cycle_count;
@@ -190,7 +199,8 @@ module RS #(
       cycle_count <= cycle_count + 1;
       //test_grant_vector(cycle_count);
      // test_dispatch_enable(cycle_count);
-      show_rs_output(cycle_count);
+      //show_rs_output();
+      //show_disp_instr();
     
   end
 

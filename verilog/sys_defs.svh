@@ -456,7 +456,7 @@ typedef struct packed {
 
 
 typedef struct packed {
-    INST inst;
+    INST inst; //INST.i.imm
     ADDR PC;
     ADDR NPC; // PC + 4
 
@@ -476,20 +476,22 @@ typedef struct packed {
     logic    halt;          // Is this a halt?
     logic    illegal;       // Is this instruction illegal?
     logic    csr_op;        // Is this a CSR operation? (we only used this as a cheap way to get return code)
+    logic    fu_type;
 
     logic    valid;
 } DISP_PACKET;
 
 typedef struct packed {
-    logic                          valid;     // = busy
+    logic                           valid;     // = busy
     logic [$clog2(`ROB_DEPTH)-1:0]  rob_idx;
-    logic [1:0]     fu_type; 
+    logic [1:0]                     fu_type; 
     logic [$clog2(`ARCH_REGS)-1:0]  dest_arch_reg; // for cdb update map table
     logic [$clog2(`PHYS_REGS)-1:0]  dest_tag;  // write reg
     logic [$clog2(`PHYS_REGS)-1:0]  src1_tag;  // source reg 1      
     logic [$clog2(`PHYS_REGS)-1:0]  src2_tag;  // source reg 2
     logic                          src1_ready; // is value of source reg 1 ready?
     logic                          src2_ready; // is value of source reg 2 ready?
+    
     DISP_PACKET                   disp_packet; //decoder_o 
 } rs_entry_t;
 

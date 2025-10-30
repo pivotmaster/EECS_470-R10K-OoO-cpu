@@ -35,14 +35,16 @@
 
 
 typedef struct packed {
-    logic                          valid;     // = busy
-    logic [$clog2(`ROB_DEPTH)-1:0]  rob_idx;
-    logic [31:0]                   imm;
-    logic [$clog2(`FU_NUM)-1:0]     fu_type;   
-    logic [$clog2(`OPCODE_N)-1:0]   opcode;
-    logic [$clog2(`PHYS_REGS)-1:0]  dest_tag;  // write reg
-    logic [$clog2(`PHYS_REGS)-1:0]  src1_val;  // source reg 1      
-    logic [$clog2(`PHYS_REGS)-1:0]  src2_val;  // source reg 2
+    logic                          valid;    
+    fu_type_e                      fu_type;       // functional unit type
+    logic [3:0]                    opcode;        // operation code
+    logic [$clog2(`PHYS_REGS)-1:0] dest_tag;      // destination physical reg tag
+    logic [`XLEN-1:0]               src1_val;      // actual operand value 1
+    logic [`XLEN-1:0]               src2_val;      // actual operand value 2
+    logic                           src2_valid;      // if src2_valid = 1 用rs2 ;  if src2_valid = 0 用imm
+    logic [`XLEN-1:0]               imm;
+    logic [$clog2(`ROB_DEPTH)-1:0] rob_idx;       // reorder buffer index
+    DISP_PACKET                    disp_packet; //decoder_o 
 } issue_packet_t;
 
 `ifndef ROB_DEPTH
@@ -480,14 +482,14 @@ typedef struct packed {
 
 
 typedef struct packed {
-    logic                          valid;     // = busy
-    logic [$clog2(`ROB_DEPTH)-1:0]  rob_idx;
-    logic [31:0]                   imm;
-    logic [$clog2(`FU_NUM)-1:0]     fu_type;   
-    logic [$clog2(`OPCODE_N)-1:0]   opcode;
-    logic [$clog2(`PHYS_REGS)-1:0]  dest_tag;  // write reg
-    logic [$clog2(`PHYS_REGS)-1:0]  src1_val;  // source reg 1      
-    logic [$clog2(`PHYS_REGS)-1:0]  src2_val;  // source reg 2
+    logic                          valid;    
+    fu_type_e                      fu_type;       // functional unit type
+    logic [3:0]                    opcode;        // operation code
+    logic [$clog2(`PHYS_REGS)-1:0] dest_tag;      // destination physical reg tag
+    logic [XLEN-1:0]               src1_val;      // actual operand value 1
+    logic [XLEN-1:0]               src2_val;      // actual operand value 2
+    logic [$clog2(`ROB_DEPTH)-1:0] rob_idx;       // reorder buffer index
+    DISP_PACKET                    disp_packet; //decoder_o 
 } issue_packet_t;
 
 typedef struct packed {
