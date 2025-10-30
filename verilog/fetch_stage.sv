@@ -11,7 +11,7 @@
 `include "sys_defs.svh"
 
 module stage_if #(
-    parameter int unsigned           FETCH_WIDTH  = 2,
+    parameter int unsigned           FETCH_WIDTH  = 1,
     parameter int unsigned           ADDR_WIDTH   = 32
 
 )(
@@ -33,9 +33,8 @@ module stage_if #(
     // Problem : fetch one line (from ICache) per cycle (might not enough for N-way)
     // Possible Solution: dual-line fetch (two fetch requests per cycle)?
     // =========================================================
+    input [FETCH_WIDTH-1:0]                Imem_valid,
     input  MEM_BLOCK [FETCH_WIDTH-1:0]     Imem_data,      // data coming back from Instruction memory
-    input  MEM_TAG                         Imem2proc_transaction_tag,        // Should be zero unless there is a response
-    input  MEM_TAG                         Imem2proc_data_tag,
     output MEM_COMMAND                     Imem_command, // Command sent to memory
     output ADDR                            Imem_addr, // address sent to Instruction memory
 

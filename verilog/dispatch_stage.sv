@@ -19,8 +19,8 @@
 `include "def.svh"
 
 module dispatch_stage #(
-    parameter int unsigned FETCH_WIDTH = 2,
-    parameter int unsigned DISPATCH_WIDTH = 2,
+    parameter int unsigned FETCH_WIDTH = 1,
+    parameter int unsigned DISPATCH_WIDTH = 1,
     parameter int unsigned PHYS_REGS = 128,
     parameter int unsigned ARCH_REGS = 64,
     parameter int unsigned DEPTH = 64,
@@ -142,7 +142,8 @@ module dispatch_stage #(
             .uncond_branch (disp_packet_o[i].uncond_branch),
             .csr_op        (disp_packet_o[i].csr_op),
             .halt          (disp_packet_o[i].halt),
-            .illegal       (disp_packet_o[i].illegal)
+            .illegal       (disp_packet_o[i].illegal),
+            .fu_type       (disp_packet_o[i].fu_type)
         );
     end
 
@@ -195,6 +196,29 @@ module dispatch_stage #(
 
     end
 
+/*
+  // =========================================================
+  // DEBUG
+  // =========================================================
+  integer cycle_count;
+  always_ff @(posedge clock) begin
+    if (reset)
+      cycle_count <= 0;
+    else
+      cycle_count <= cycle_count + 1;
+
+    for (int i = 0; i < DISPATCH_WIDTH; i++) begin
+      if (disp_rs_valid_o[i]) begin
+        $display("[Cycle=%0d] Dispatch %0d | ROB_idx=%0d | Dest=%0d | Src1=%0d (%b) | Src2=%0d (%b)",
+                 cycle_count, i,
+                 rs_packets_o[i].rob_idx,
+                 rs_packets_o[i].dest_tag,
+                 rs_packets_o[i].src1_tag, rs_packets_o[i].src1_ready,
+                 rs_packets_o[i].src2_tag, rs_packets_o[i].src2_ready);
+      end
+    end
+  end
+*/
 
 endmodule
 
