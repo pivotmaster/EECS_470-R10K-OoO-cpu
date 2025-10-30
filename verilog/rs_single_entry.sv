@@ -7,6 +7,7 @@
 `include "def.svh"
 
 module rs_single_entry #(
+    parameter int ENTRY_ID = 0,
     parameter int unsigned PHYS_REGS    = 128,
     parameter int unsigned CDB_WIDTH    = 2,
     parameter int unsigned FU_NUM       = 8
@@ -40,6 +41,7 @@ module rs_single_entry #(
     logic           src1_hit, src2_hit;
     logic           empty, empty_next;
     rs_entry_t      rs_entry, rs_entry_next; // reg
+    logic rs_busy, rs_busy_next;
 
     // =========================================================
     // CDB Wakeup
@@ -65,23 +67,24 @@ module rs_single_entry #(
     always_comb begin : update_rs_entry
         rs_entry_next = rs_entry;
         empty_next    = empty;
+        rs_busy_next = rs_busy;
 
-        if (flush) begin
-            rs_entry_next = '{default:'0};
-            empty_next    = 1'b1;
-        end else if (disp_enable_i && empty) begin
+        if (disp_enable_i && empty) begin
             rs_entry_next = rs_packets_i;
             empty_next    = 1'b0;
+            rs_busy_next  = 1'b1; 
         end else begin
+            /* TODO:CDB CLOSE
             // CDB wake up
             rs_entry_next.src1_ready = rs_entry.src1_ready | src1_hit;
             rs_entry_next.src2_ready = rs_entry.src2_ready | src2_hit;
-
+*/
             // Clear RS entry after issue
-            if (issue_i && ready_o) begin
+            if ( issue_i&& ready_o) begin
                 empty_next = 1'b1;
-                rs_entry_next.valid = 1'b0;
+                rs_busy_next = 1'b0;
             end
+            
         end
     end
 
@@ -90,13 +93,11 @@ module rs_single_entry #(
         if (reset) begin
             rs_entry     <= '{default:'0}; 
             empty        <= 1'b1;
-        end else
-        if (flush) begin
-            rs_entry     <= '{default:'0}; 
-            empty        <= 1'b1;
+            rs_busy     <= 1'b0;
         end else begin
             rs_entry     <= rs_entry_next;
             empty        <= empty_next;
+            rs_busy     <= rs_busy_next;
         end
     end
 
@@ -107,9 +108,39 @@ module rs_single_entry #(
     assign empty_o   = empty;
 
     // Output to issue logic 
-    assign ready_o   = (rs_entry.src1_ready || src1_hit) &&  (rs_entry.src2_ready || src2_hit);
+    //TODO:CLOSE CDB
+    // assign ready_o   = (rs_entry.src1_ready || src1_hit) &&  (rs_entry.src2_ready || src2_hit);
+    //TODO: should let rs_busy as output (determine if it is able to issue)
+    assign ready_o   = (rs_entry.src1_ready) &&  (rs_entry.src2_ready) && (!rs_busy_next || rs_busy);
     assign fu_type_o = rs_entry.fu_type; 
     assign rs_single_entry_o = rs_entry ;
+
+    // =========================================================
+    // DEBUG
+    // =========================================================
+    /*
+    integer cycle_count;
+
+
+    always_ff @(posedge clock) begin
+    if (reset)  
+        cycle_count <= 0;
+    else begin
+        cycle_count <= cycle_count + 1; 
+        if (ENTRY_ID >0) begin
+            $display("i = %d, ready_o = %0b", ENTRY_ID,ready_o);
+           
+            $display("%0d", disp_enable_i);
+            $display("[Cycle=%0d] %m ROB_idx=%0d | Dest=%0d | Src1=%0d (%b) | Src2=%0d (%b)",
+                        cycle_count, 
+                        rs_single_entry_o.rob_idx,
+                        rs_single_entry_o.dest_tag,
+                        rs_single_entry_o.src1_tag, rs_single_entry_o.src1_ready,
+                        rs_single_entry_o.src2_tag, rs_single_entry_o.src2_ready);
+        end               
+    end
+    end
+    */
 
 endmodule
 

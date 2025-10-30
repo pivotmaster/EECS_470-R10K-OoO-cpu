@@ -180,7 +180,7 @@ module cpu #(
     // RS -> Issue Logic
     // =========================================================
 
-    logic [`RS_DEPTH-1:0] issue_enable; // which rs slot is going to be issued
+    logic [`RS_DEPTH-1:0] issue_enable ; // which rs slot is going to be issued
 
     issue_packet_t alu_req  [`ALU_COUNT]; // pkts to ALU 
     issue_packet_t mul_req  [`MUL_COUNT];
