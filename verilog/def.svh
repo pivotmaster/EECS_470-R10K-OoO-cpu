@@ -188,15 +188,7 @@ typedef enum logic [1:0] {
     OPA_IS_ZERO
 } ALU_OPA_SELECT;
 
-// ALU opB input mux selects
-typedef enum logic [2:0] {
-    OPB_IS_RS2,
-    OPB_IS_I_IMM,
-    OPB_IS_S_IMM,
-    OPB_IS_B_IMM,
-    OPB_IS_U_IMM,
-    OPB_IS_J_IMM
-} ALU_OPB_SELECT;
+
 
 // Which ALU operation to perform
 typedef enum logic [3:0] {
