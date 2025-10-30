@@ -1,5 +1,6 @@
 `timescale 1ns/1ps
 `include "def.svh"
+`include "ISA.svh"
 
 module issue_logic #(
     parameter int unsigned RS_DEPTH        = 64, //RS entry numbers
@@ -49,7 +50,8 @@ module issue_logic #(
     // Select who can issue ('issue_enable')
     logic [RS_DEPTH-1:0] issue_sel_out;
     logic [RS_DEPTH-1:0] issue_enable_o_next; // internal signal
-    assign issue_enable_o_next = issue_sel_out;
+    assign issue_enable_o = issue_sel_out;
+    
 
     issue_selector #(
         .RS_DEPTH(RS_DEPTH),
@@ -70,6 +72,7 @@ module issue_logic #(
     );
 
     // Prevent issue_enable_o -> affect RS (input of issue selector) at the same cycle
+    /*
     always_ff @( posedge clock or posedge reset) begin 
         //$display("issue_enable_o_ = %b | issue_enable_o_next = %b", issue_enable_o, issue_enable_o_next);
         if (reset) begin
@@ -78,7 +81,8 @@ module issue_logic #(
             issue_enable_o <= issue_enable_o_next;
         end
     end
-
+    */
+    
     // =========================================================
     // Issue logic -> FU
     // =========================================================
@@ -117,11 +121,11 @@ module issue_logic #(
                 // src2 value
                 case (rs_entries_i[i].disp_packet.opb_select)
                     OPB_IS_RS2:   src2_mux = rs_entries_i[i].src2_tag;
-                    OPB_IS_I_IMM: src2_mux = rs_entries_i[i].disp_packet.inst.i.imm;
-                    // OPB_IS_S_IMM: src2_mux = `RV32_signext_Simm(id_ex_reg.inst);
-                    // OPB_IS_B_IMM: src2_mux = `RV32_signext_Bimm(id_ex_reg.inst);
-                    OPB_IS_U_IMM: src2_mux = rs_entries_i[i].disp_packet.inst.u.imm;
-                    //OPB_IS_J_IMM: src2_mux = `RV32_signext_Jimm(id_ex_reg.inst);
+                    OPB_IS_I_IMM: src2_mux = `RV32_signext_Iimm(rs_entries_i[i].disp_packet.inst);
+                    OPB_IS_S_IMM: src2_mux = `RV32_signext_Simm(rs_entries_i[i].disp_packet.inst);
+                    OPB_IS_B_IMM: src2_mux = `RV32_signext_Bimm(rs_entries_i[i].disp_packet.inst);
+                    OPB_IS_U_IMM: src2_mux = `RV32_signext_Uimm(rs_entries_i[i].disp_packet.inst);
+                    OPB_IS_J_IMM: src2_mux = `RV32_signext_Jimm(rs_entries_i[i].disp_packet.inst);
                     default:      src2_mux = 32'hfacefeed; // face feed
                 endcase
 
@@ -135,7 +139,7 @@ module issue_logic #(
                     //OPB_IS_J_IMM: src2_mux = 0;
                     default:      src2_valid = 1; // face feed
                 endcase
-
+                 //$display("imm = %d", src2_mux);
                 issue_pkts[issue_slot].opcode =  rs_entries_i[i].disp_packet.alu_func; // 4 bit opcode for ALU(add/ sub...)
                 issue_pkts[issue_slot].src1_val  = src1_mux;
                 issue_pkts[issue_slot].src2_val  = src2_mux;
@@ -167,12 +171,12 @@ end
   // DEBUG
   // =========================================================
   
-    task automatic show_rs_input(int cyc);
+    task automatic show_rs_input();
         //$display("[cycle]:", cyc);
         for (int i = 0; i < RS_DEPTH; i++) begin
           //$display(  "opcode: %d", rs_entries_i[i].disp_packet.alu_func);
-        $display("Entry %0d: ready=%b, valid=%b, alu_func=%0d, rob_idx=%0d, fu_type=%0d, dest_reg_idx=%0d, dest_tag=%0d, src1_tag=%0d(%b), src2_tag=%0d(%b)", 
-            i, rs_ready_i[i], rs_entries_i[i].valid, rs_entries_i[i].disp_packet.alu_func, rs_entries_i[i].rob_idx, rs_entries_i[i].disp_packet.fu_type, 
+        $display("Entry %0d: opb_select=%0d, i_imm = %0d, u_imm =%0d, ready=%b, valid=%b, alu_func=%0d, rob_idx=%0d, fu_type=%0d, dest_reg_idx=%0d, dest_tag=%0d, src1_tag=%0d(%b), src2_tag=%0d(%b)", 
+            i, rs_entries_i[i].disp_packet.opb_select, rs_entries_i[i].disp_packet.inst.i.imm, rs_entries_i[i].disp_packet.inst.u.imm, rs_ready_i[i], rs_entries_i[i].valid, rs_entries_i[i].disp_packet.alu_func, rs_entries_i[i].rob_idx, rs_entries_i[i].disp_packet.fu_type, 
             rs_entries_i[i].disp_packet.dest_reg_idx , rs_entries_i[i].dest_tag, rs_entries_i[i].src1_tag, rs_entries_i[i].src1_ready,
             rs_entries_i[i].src2_tag, rs_entries_i[i].src2_ready);
         end
@@ -280,7 +284,7 @@ endtask
       $display("// ---------------- CYCLE = %d ---------------- //",cycle_count);
       //test_reqs();
       //test_grant_vector(cycle_count);
-      show_rs_input(cycle_count);
+      //show_rs_input();
       
       //show_issue_packets(cycle_count);
       //test_issue_selector(cycle_count);
