@@ -37,23 +37,23 @@
 `endif
 
 `ifndef FETCH_WIDTH
-    `define FETCH_WIDTH 2
+    `define FETCH_WIDTH 1
 `endif
 
 `ifndef CDB_WIDTH
-    `define CDB_WIDTH 2
+    `define CDB_WIDTH 1
 `endif
 
 `ifndef DISPATCH_WIDTH
-    `define DISPATCH_WIDTH 2
+    `define DISPATCH_WIDTH 1
 `endif
 
 `ifndef COMMIT_WIDTH
-    `define COMMIT_WIDTH 2
+    `define COMMIT_WIDTH 1
 `endif
 
 `ifndef WB_WIDTH
-    `define WB_WIDTH 2
+    `define WB_WIDTH 1
 `endif
 
 `ifndef ALU_COUNT
@@ -145,8 +145,8 @@ typedef logic [4:0] REG_IDX;
 // you are not allowed to change this definition for your final processor
 // the project 3 processor has a massive boost in performance just from having no mem latency
 // see if you can beat it's CPI in project 4 even with a 100ns latency!
-//`define MEM_LATENCY_IN_CYCLES  0
-`define MEM_LATENCY_IN_CYCLES (100.0/`CLOCK_PERIOD+0.49999)
+`define MEM_LATENCY_IN_CYCLES  0
+// `define MEM_LATENCY_IN_CYCLES (100.0/`CLOCK_PERIOD+0.49999)
 // the 0.49999 is to force ceiling(100/period). The default behavior for
 // float to integer conversion is rounding to nearest
 
@@ -316,13 +316,13 @@ typedef enum logic [1:0] {
 } ALU_OPA_SELECT;
 
 // ALU opB input mux selects
-typedef enum logic [3:0] {
-    OPB_IS_RS2    = 4'h0,
-    OPB_IS_I_IMM  = 4'h1,
-    OPB_IS_S_IMM  = 4'h2,
-    OPB_IS_B_IMM  = 4'h3,
-    OPB_IS_U_IMM  = 4'h4,
-    OPB_IS_J_IMM  = 4'h5
+typedef enum logic [2:0] {
+    OPB_IS_RS2    = 3'h0,
+    OPB_IS_I_IMM  = 3'h1,
+    OPB_IS_S_IMM  = 3'h2,
+    OPB_IS_B_IMM  = 3'h3,
+    OPB_IS_U_IMM  = 3'h4,
+    OPB_IS_J_IMM  = 3'h5
 } ALU_OPB_SELECT;
 
 // ALU function code
@@ -456,7 +456,7 @@ typedef struct packed {
 
 
 typedef struct packed {
-    INST inst;
+    INST inst; //INST.i.imm
     ADDR PC;
     ADDR NPC; // PC + 4
 
@@ -476,20 +476,22 @@ typedef struct packed {
     logic    halt;          // Is this a halt?
     logic    illegal;       // Is this instruction illegal?
     logic    csr_op;        // Is this a CSR operation? (we only used this as a cheap way to get return code)
+    logic    fu_type;
 
     logic    valid;
 } DISP_PACKET;
 
 typedef struct packed {
-    logic                          valid;     // = busy
+    logic                           valid;     // = busy
     logic [$clog2(`ROB_DEPTH)-1:0]  rob_idx;
-    logic [1:0]     fu_type; 
+    logic [1:0]                     fu_type; 
     logic [$clog2(`ARCH_REGS)-1:0]  dest_arch_reg; // for cdb update map table
     logic [$clog2(`PHYS_REGS)-1:0]  dest_tag;  // write reg
     logic [$clog2(`PHYS_REGS)-1:0]  src1_tag;  // source reg 1      
     logic [$clog2(`PHYS_REGS)-1:0]  src2_tag;  // source reg 2
     logic                          src1_ready; // is value of source reg 1 ready?
     logic                          src2_ready; // is value of source reg 2 ready?
+    
     DISP_PACKET                   disp_packet; //decoder_o 
 } rs_entry_t;
 
