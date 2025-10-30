@@ -190,7 +190,11 @@ GREP = grep -E --color=auto
 # ---- Modules to Test ---- #
 
 # TODO: add more modules here
+<<<<<<< HEAD
 MODULES = cpu 
+=======
+MODULES = free_list
+>>>>>>> e410bc9 (update)
 
 # TODO: update this if you add more header files
 ALL_HEADERS = $(CPU_HEADERS)
