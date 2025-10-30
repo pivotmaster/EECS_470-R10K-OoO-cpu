@@ -142,7 +142,8 @@ module dispatch_stage #(
             .uncond_branch (disp_packet_o[i].uncond_branch),
             .csr_op        (disp_packet_o[i].csr_op),
             .halt          (disp_packet_o[i].halt),
-            .illegal       (disp_packet_o[i].illegal)
+            .illegal       (disp_packet_o[i].illegal),
+            .fu_type       (disp_packet_o[i].fu_type)
         );
     end
 

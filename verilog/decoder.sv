@@ -20,8 +20,16 @@ module decoder (
     output logic          mult, rd_mem, wr_mem, cond_branch, uncond_branch,
     output logic          csr_op, // used for CSR operations, we only use this as a cheap way to get the return code out
     output logic          halt,   // non-zero on a halt
-    output logic          illegal // non-zero on an illegal instruction
+    output logic          illegal, // non-zero on an illegal instruction
+    output fu_type_e      fu_type
 );
+
+    always_comb begin
+        fu_type = (mult)             ? FU_MUL   :
+                (rd_mem)           ? FU_LOAD  :
+                (cond_branch | uncond_branch) ? FU_BRANCH :
+                                                FU_ALU;
+    end
 
     // Note: I recommend using an IDE's code folding feature on this block
     always_comb begin
