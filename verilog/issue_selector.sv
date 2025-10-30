@@ -1,55 +1,93 @@
-// =========================================================
-// FU #0 = ALU0
-// FU #1 = ALU1
-// FU #2 = ALU2
-// FU #3 = MUL
-// FU #4 = LOAD
-// FU #5 = BRANCH
-// =========================================================
-`include "def.svh"
 
+`include "def.svh"
 module issue_selector #(
     parameter int unsigned RS_DEPTH    = 64,
-    parameter int unsigned FU_NUM      = 6,
-    parameter int unsigned ISSUE_WIDTH = 4
+    parameter int unsigned ISSUE_WIDTH = 4,
+    parameter int ALU_COUNT   = 1,
+    parameter int MUL_COUNT   = 1,
+    parameter int LOAD_COUNT  = 1,
+    parameter int BR_COUNT    = 1
 )(
-    input  logic [FU_NUM-1:0]         fu_fifo_full,
-    input  logic [RS_DEPTH-1:0]       rs_ready_vec,
-    input  fu_type_e                  fu_types [RS_DEPTH],
-    output logic [RS_DEPTH-1:0]       issue_rs_entry
+    input logic   alu_ready_i  [ALU_COUNT],
+    input logic   mul_ready_i  [MUL_COUNT],
+    input logic   load_ready_i [LOAD_COUNT],
+    input logic   br_ready_i   [BR_COUNT],
+
+    input  logic [RS_DEPTH-1:0]   rs_ready_vec,
+    input  fu_type_e              fu_types [RS_DEPTH],
+
+    output logic [RS_DEPTH-1:0]   issue_rs_entry
 );
+        int issue_cnt;
+        int alu_cnt;
+        int mul_cnt;
+        int load_cnt;
+        int br_cnt;
 
-    // internal combinational function
-    function automatic logic [RS_DEPTH-1:0] select_comb(
-        input logic [FU_NUM-1:0]      fu_full,
-        input logic [RS_DEPTH-1:0]    ready_vec,
-        input fu_type_e               types [RS_DEPTH]
-    );
-        logic [RS_DEPTH-1:0] issue_vec = '0;
-        logic [FU_NUM-1:0]   tmp_fu_full = fu_full;
-        int issue_cnt = 0;
 
-        for (int i = 0; i < RS_DEPTH; i++) begin
-            if (issue_cnt >= ISSUE_WIDTH) break;
-            if (ready_vec[i]) begin
-                case (types[i])
-                    FU_ALU: begin
-                        if (!tmp_fu_full[0]) begin issue_vec[i]=1; tmp_fu_full[0]=1; issue_cnt++; end
-                        else if (!tmp_fu_full[1]) begin issue_vec[i]=1; tmp_fu_full[1]=1; issue_cnt++; end
-                        else if (!tmp_fu_full[2]) begin issue_vec[i]=1; tmp_fu_full[2]=1; issue_cnt++; end
-                    end
-                    FU_MUL:    if (!tmp_fu_full[3]) begin issue_vec[i]=1; tmp_fu_full[3]=1; issue_cnt++; end
-                    FU_LOAD:   if (!tmp_fu_full[4]) begin issue_vec[i]=1; tmp_fu_full[4]=1; issue_cnt++; end
-                    FU_BRANCH: if (!tmp_fu_full[5]) begin issue_vec[i]=1; tmp_fu_full[5]=1; issue_cnt++; end
-                    default: ;
-                endcase
+        always_comb begin
+            issue_cnt = 0;
+            alu_cnt  = 0;
+            mul_cnt  = 0;
+            load_cnt = 0;
+            br_cnt   = 0;
+            issue_rs_entry = '0;
+            /*
+            $write("rs_ready_vec = ");
+            for (int i = 0; i < RS_DEPTH; i++) begin
+                $write("%b",rs_ready_vec[i]);
+            end
+            $display("");
+            $write("fu_types = ");
+            
+            for (int i = 0; i < RS_DEPTH; i++) begin
+                $write("%p/ ",fu_types[i]);
+            end
+            $display("");
+            */
+            //$display("issue_cnt=%d | alu_cnt = %d |  alu_ready=%b",issue_cnt,alu_cnt,alu_ready_i[0]);
+            for (int i = 0; i < RS_DEPTH; i++) begin
+                if (issue_cnt >= ISSUE_WIDTH) break;
+                if (rs_ready_vec[i]) begin
+                    case (fu_types[i])
+                        FU_ALU: begin
+                            if ((alu_cnt==0) && alu_ready_i[0]) begin
+                                issue_rs_entry[i] = 1;
+                                alu_cnt++;
+                                issue_cnt++;
+                                /*
+                                $display("RS_entry = %d", i);
+                                for (int j = 0; j < RS_DEPTH; j++) begin
+                                    $write("%b", issue_rs_entry[j]);
+                                end
+                                $write("\n");
+                                */
+                            end
+                        end
+                        FU_MUL: begin
+                            if ((load_cnt==0) && mul_ready_i[0]) begin
+                                issue_rs_entry[i] = 1;
+                                mul_cnt++;
+                                issue_cnt++;
+                            end
+                        end
+                        FU_LOAD: begin
+                            if ((mul_cnt==0) && load_ready_i[0]) begin
+                                issue_rs_entry[i] = 1;
+                                load_cnt++;
+                                issue_cnt++;
+                            end
+                        end
+                        FU_BRANCH: begin
+                            if ((br_cnt ==0) && br_ready_i[0]) begin
+                                issue_rs_entry[i] = 1;
+                                br_cnt++;
+                                issue_cnt++;
+                            end
+                        end
+                        default: ;
+                    endcase
+                end
             end
         end
-        return issue_vec;
-    endfunction
-
-    // continuous assignment → single delta evaluate
-    assign issue_rs_entry = select_comb(fu_fifo_full, rs_ready_vec, fu_types);
-
 endmodule
-
