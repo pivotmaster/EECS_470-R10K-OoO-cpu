@@ -59,7 +59,6 @@ module RS #(
     logic         [RS_DEPTH-1:0]             rs_empty;
 
     // Issue signal
-    rs_entry_t    [RS_DEPTH-1:0]             rs_entries;
     logic         [RS_DEPTH-1:0]             rs_ready;  
     logic         [$clog2(FU_NUM)-1:0]       fu_types [RS_DEPTH];
 
@@ -77,6 +76,7 @@ module RS #(
     generate 
         for (i=0; i < RS_DEPTH; i++) begin    
             rs_single_entry  #(
+                .ENTRY_ID(i),
                 .PHYS_REGS(PHYS_REGS),
                 .CDB_WIDTH(CDB_WIDTH)
             ) rs_entry (
@@ -143,6 +143,56 @@ module RS #(
     // assign results to output port
     assign rs_full_o    = rs_full;
     assign free_slots_o = free_slots;
+
+  // =========================================================
+  // DEBUG
+  // =========================================================
+    task automatic test_grant_vector(int cyc);
+        for (int i = 0; i < DISPATCH_WIDTH; i++) begin
+            $write("[cycle] = %d, disp_grant_vec[%0d]", cyc, i);
+            for (int j = 0; j < RS_DEPTH; j++) begin
+                $write("%b", disp_grant_vec[i][j]);
+            end
+            $write("\n");
+        end
+    endtask
+
+    task automatic test_dispatch_enable(int cyc);
+        for (int i = 0; i < DISPATCH_WIDTH; i++) begin
+            $write("[cycle] = %d, disp_enable[%0d]",cyc, i);
+            for (int k = 0; k < RS_DEPTH; k++) begin
+                $write("%b", disp_enable[k]);
+            end
+            $write("\n");
+        end
+    endtask
+
+  task automatic show_rs_output(int cyc);
+    $display("RS Entries:[cycle]=%d", cyc);
+    for (int i = 0; i < RS_DEPTH; i++) begin
+      $display("Entry %0d: valid=%b, rob_idx=%0d, fu_type=%0d, dest_tag=%0d, src1_tag=%0d(%b), src2_tag=%0d(%b)", 
+        i, rs_entries_o[i].valid, rs_entries_o[i].rob_idx, rs_entries_o[i].fu_type, 
+        rs_entries_o[i].dest_tag, rs_entries_o[i].src1_tag, rs_entries_o[i].src1_ready,
+        rs_entries_o[i].src2_tag, rs_entries_o[i].src2_ready);
+    end
+    for (int j = 0; j < RS_DEPTH; j++) begin
+        $write("rs_ready: %b", rs_ready_o[j]);
+    end
+    $write("\n");
+    $display("fu_type: %p", fu_type_o);
+  endtask
+
+  int cycle_count;
+  always_ff @(posedge clock) begin
+    if (reset)  
+        cycle_count <= 0;
+    else
+      cycle_count <= cycle_count + 1;
+      //test_grant_vector(cycle_count);
+     // test_dispatch_enable(cycle_count);
+      show_rs_output(cycle_count);
+    
+  end
 
 endmodule
 
