@@ -769,6 +769,8 @@ module cpu #(
             alu_req_reg[0].fu_type <= alu_req[0].fu_type;
             alu_req_reg[0].opcode <= alu_req[0].opcode;
             alu_req_reg[0].dest_tag <= alu_req[0].dest_tag;
+            alu_req_reg[0].src2_valid <= alu_req[0].src2_valid;
+            alu_req_reg[0].disp_packet <= alu_req[0].disp_packet;
             
             mul_req_reg[0].valid <= mul_req[0].valid;
             mul_req_reg[0].rob_idx <= mul_req[0].rob_idx;
@@ -776,6 +778,8 @@ module cpu #(
             mul_req_reg[0].fu_type <= mul_req[0].fu_type;
             mul_req_reg[0].opcode <= mul_req[0].opcode;
             mul_req_reg[0].dest_tag <= mul_req[0].dest_tag;
+            mul_req_reg[0].src2_valid <= mul_req[0].src2_valid;
+            mul_req_reg[0].disp_packet <= mul_req[0].disp_packet;
 
             load_req_reg[0].valid <= load_req[0].valid;
             load_req_reg[0].rob_idx <= load_req[0].rob_idx;
@@ -783,6 +787,8 @@ module cpu #(
             load_req_reg[0].fu_type <= load_req[0].fu_type;
             load_req_reg[0].opcode <= load_req[0].opcode;
             load_req_reg[0].dest_tag <= load_req[0].dest_tag;
+            load_req_reg[0].src2_valid <= load_req[0].src2_valid;
+            load_req_reg[0].disp_packet <= load_req[0].disp_packet;
 
             br_req_reg[0].valid <= br_req[0].valid; 
             br_req_reg[0].rob_idx <= br_req[0].rob_idx;
@@ -790,6 +796,8 @@ module cpu #(
             br_req_reg[0].fu_type <= br_req[0].fu_type;
             br_req_reg[0].opcode <= br_req[0].opcode;
             br_req_reg[0].dest_tag <= br_req[0].dest_tag;
+            br_req_reg[0].src2_valid <= br_req[0].src2_valid;
+            br_req_reg[0].disp_packet <= br_req[0].disp_packet;
         end
     end
 

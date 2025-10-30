@@ -166,6 +166,7 @@ typedef enum logic [2:0] {
 // ---- Instruction Typedef ---- //
 ///////////////////////////////////
 
+
 // from the RISC-V ISA spec
 typedef union packed {
     logic [31:0] inst;

@@ -69,7 +69,7 @@ module rs_single_entry #(
         empty_next    = empty;
         rs_busy_next = rs_busy;
 
-        if (disp_enable_i && empty) begin
+        if (disp_enable_i && empty &&rs_packets_i.valid) begin
             rs_entry_next = rs_packets_i;
             empty_next    = 1'b0;
             rs_busy_next  = 1'b1; 
@@ -111,8 +111,8 @@ module rs_single_entry #(
     //TODO:CLOSE CDB
     // assign ready_o   = (rs_entry.src1_ready || src1_hit) &&  (rs_entry.src2_ready || src2_hit);
     //TODO: should let rs_busy as output (determine if it is able to issue)
-    assign ready_o   = (rs_entry.src1_ready) &&  (rs_entry.src2_ready) && (!rs_busy_next || rs_busy);
-    assign fu_type_o = rs_entry.fu_type; 
+    assign ready_o   = (rs_entry.src1_ready) &&  (rs_entry.src2_ready) && (!empty);
+    assign fu_type_o = rs_entry.disp_packet.fu_type; 
     assign rs_single_entry_o = rs_entry ;
 
     // =========================================================
