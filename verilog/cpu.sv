@@ -99,6 +99,7 @@ module cpu #(
     logic [`DISPATCH_WIDTH-1:0][$clog2(`ARCH_REGS)-1:0] src1_arch;
     logic [`DISPATCH_WIDTH-1:0][$clog2(`ARCH_REGS)-1:0] src2_arch;
     logic [`DISPATCH_WIDTH-1:0][$clog2(`PHYS_REGS)-1:0] dest_new_prf; //T_new
+    logic [`DISPATCH_WIDTH-1:0] is_branch;
     // RS
     logic [DISPATCH_WIDTH-1:0] disp_rs_valid;
     logic [`DISPATCH_WIDTH-1:0] disp_rs_rd_wen;
@@ -480,6 +481,7 @@ module cpu #(
         .src1_arch_o(src1_arch),
         .src2_arch_o(src2_arch),
         .dest_new_prf(dest_new_prf),
+        .is_branch_o(is_branch),
 
         //rs inputs
         .free_rs_slots_i(rs_free_slot),
@@ -579,6 +581,7 @@ module cpu #(
         // .snapshot_restore_i(snapshot_restore_i),
         // .snapshot_data_i(snapshot_data_i),
         // .snapshot_data_o(snapshot_data_o)
+        .is_branch_instr_i(is_branch),
         .flush_i('0),
         .snapshot_restore_i('0),
         .snapshot_data_i('0),
@@ -701,6 +704,9 @@ module cpu #(
         .rs_entries_o(rs_entries),
         .rs_ready_o(rs_ready),  
         .fu_type_o(fu_types)
+
+        .br_misrpedict_i(), //####
+        .branch_success_predict()
     );
 
     //////////////////////////////////////////////////
