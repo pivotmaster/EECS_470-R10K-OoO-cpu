@@ -165,25 +165,26 @@ module branch_fu #(
 );
   logic take;
   always_comb begin
-    unique case (req_i.opcode[2:0])
-      3'b000: take = ($signed(req_i.src1_val) == $signed(req_i.src2_val));
-      3'b001: take = ($signed(req_i.src1_val) != $signed(req_i.src2_val));
-      3'b100: take = ($signed(req_i.src1_val) <  $signed(req_i.src2_val));
-      3'b101: take = ($signed(req_i.src1_val) >= $signed(req_i.src2_val));
-      3'b110: take = (req_i.src1_val <  req_i.src2_val);
-      3'b111: take = (req_i.src1_val >= req_i.src2_val);
-      default: take = 1'b0;
-    endcase
-  end
+          case (req_i.disp_packet.inst.b.funct3)
+              3'b000:  take = signed'(req_i.src1_val) == signed'(req_i.src2_val); // BEQ
+              3'b001:  take = signed'(req_i.src1_val) != signed'(req_i.src2_val); // BNE
+              3'b100:  take = signed'(req_i.src1_val) <  signed'(req_i.src2_val); // BLT
+              3'b101:  take = signed'(req_i.src1_val) >= signed'(req_i.src2_val); // BGE
+              3'b110:  take = req_i.src1_val < req_i.src2_val;                    // BLTU
+              3'b111:  take = req_i.src1_val >= req_i.src2_val;                   // BGEU
+              default: take = `FALSE;
+          endcase
+      end
 
   assign ready_o = 1'b1;
+
   always_comb begin
     resp_o.valid     = req_i.valid;
     resp_o.value     = {{(XLEN-1){1'b0}}, take};
     resp_o.dest_prf  = req_i.dest_tag;
     resp_o.rob_idx   = req_i.rob_idx;
     resp_o.exception = 1'b0;
-    resp_o.mispred   = 1'b0;
+    resp_o.mispred   = take;
   end
 endmodule
 

@@ -48,6 +48,12 @@ module RS #(
     output  rs_entry_t     [RS_DEPTH-1:0]                          rs_entries_o,
     output  logic          [RS_DEPTH-1:0]                          rs_ready_o,  
     output  fu_type_e                                              fu_type_o [RS_DEPTH]    
+
+    // =========================================================
+    // Branch mispredict recovery (flush)
+    // =========================================================
+    input   logic                                                  br_misrpedict_i,
+    input   logic                                                  branch_success_predict,
 ); 
 
     // =========================================================
@@ -65,10 +71,48 @@ module RS #(
     // Dispatch_grant_rs_slot
     logic [DISPATCH_WIDTH-1:0][RS_DEPTH-1:0] disp_grant_vec;
 
+    // Br tag
+    logic br_mis_tag, br_mis_tag_next;
+    logic br_mis_tag_single;
+    logic clear_br_tag;
+
     // Output 
     int free_slots;
     bit rs_full;
 
+
+    // Find Branch instruction
+    //TODO: need to consider multiple dispatch width (ex: 1, 2 instruction independent, 3 = branch , 4 = branch dependent)
+    always_comb begin
+        for (int i = 0; i < DISPATCH_WIDTH; i++) begin
+            if (rs_packets_i[i].disp_packet.fu_type == FU_BRANCH) begin
+                br_mis_tag_next = 1'b1;
+            end else if (branch_success_predict) begin
+                br_mis_tag_next = 1'b0;
+            end else begin
+                br_mis_tag_next = br_mis_tag;
+            end
+        end
+    end
+
+    always_comb begin 
+        if (branch_success_predict) begin
+            clear_br_tag = 1'b1;
+        end else begin
+            clear_br_tag = 1'b0;
+        end 
+        
+    end
+
+    always_ff @(posedge clock) begin
+        if (reset) begin
+            br_mis_tag <= 0;
+        end else begin
+            br_mis_tag <= br_mis_tag_next;
+        end
+    end
+
+    assign br_mis_tag_single = (br_mis_tag || br_mis_tag_next);
     // =========================================================
     // Whole RS table
     // =========================================================
@@ -83,6 +127,9 @@ module RS #(
                 .clock(clock),
                 .reset(reset),
                 .flush(flush),
+                .br_misrpedict_i(br_misrpedict_i),
+                .br_tag(br_mis_tag_single),
+                .clear_br_tag(clear_br_tag),
                 .disp_enable_i(disp_enable[i]),
                 .rs_packets_i(rs_packets[i]),
                 .empty_o(rs_empty[i]),
@@ -167,56 +214,57 @@ module RS #(
         end
     endtask
 
-//   task automatic show_rs_output();
-//     for (int i = 0; i < RS_DEPTH; i++) begin
-//         if (!rs_empty[i]) begin
-//         $display("Entry %0d: i_imm = %0h, u_imm =%0h, opb_select=%0d, ready=%b, valid=%b, alu_func=%0d, rob_idx=%0d, fu_type=%0d, dest_reg_idx=%0d, dest_tag=%0d, src1_tag=%0d(%b), src2_tag=%0d(%b)", 
-//                     i, rs_entries_o[i].disp_packet.inst.i.imm, rs_entries_o[i].disp_packet.inst.u.imm, rs_entries_o[i].disp_packet.opb_select, rs_ready_o[i], rs_entries_o[i].valid, rs_entries_o[i].disp_packet.alu_func, rs_entries_o[i].rob_idx, rs_entries_o[i].disp_packet.fu_type, 
-//                     rs_entries_o[i].disp_packet.dest_reg_idx , rs_entries_o[i].dest_tag, rs_entries_o[i].src1_tag, rs_entries_o[i].src1_ready,
-//                     rs_entries_o[i].src2_tag, rs_entries_o[i].src2_ready);
-//         end else begin
-//             $display("Entry %0d:",i);
-//         end
-//     end
-//   endtask
+  task automatic show_rs_output();
+    for (int i = 0; i < RS_DEPTH; i++) begin
+        if (!rs_empty[i]) begin
+        $display("Entry %0d: i_imm = %0h, u_imm =%0h, opb_select=%0d, ready=%b, valid=%b, alu_func=%0d, rob_idx=%0d, fu_type=%0d, dest_reg_idx=%0d, dest_tag=%0d, src1_tag=%0d(%b), src2_tag=%0d(%b)", 
+                    i, rs_entries_o[i].disp_packet.inst.i.imm, rs_entries_o[i].disp_packet.inst.u.imm, rs_entries_o[i].disp_packet.opb_select, rs_ready_o[i], rs_entries_o[i].valid, rs_entries_o[i].disp_packet.alu_func, rs_entries_o[i].rob_idx, rs_entries_o[i].disp_packet.fu_type, 
+                    rs_entries_o[i].disp_packet.dest_reg_idx , rs_entries_o[i].dest_tag, rs_entries_o[i].src1_tag, rs_entries_o[i].src1_ready,
+                    rs_entries_o[i].src2_tag, rs_entries_o[i].src2_ready);
+        end else begin
+            $display("Entry %0d:",i);
+        end
+    end
+  endtask
   
-//   task automatic show_rs_input();
-//     for (int i = 0; i < RS_DEPTH; i++) begin
-//         if (!rs_empty[i]) begin
-//             $display("Entry %0d: i_imm = %0h, u_imm =%0h, ready=%b, valid=%b, alu_func=%0d, rob_idx=%0d, fu_type=%0d, dest_reg_idx=%0d, dest_tag=%0d, src1_tag=%0d(%b), src2_tag=%0d(%b)", 
-//                         i, rs_packets_i[i].disp_packet.inst.i.imm, rs_packets_i[i].disp_packet.inst.u.imm, rs_packets_i[i], rs_entries_o[i].valid, rs_packets_i[i].disp_packet.alu_func, rs_packets_i[i].rob_idx, rs_packets_i[i].disp_packet.fu_type, 
-//                         rs_packets_i[i].disp_packet.dest_reg_idx , rs_packets_i[i].dest_tag, rs_packets_i[i].src1_tag, rs_packets_i[i].src1_ready,
-//                         rs_packets_i[i].src2_tag, rs_packets_i[i].src2_ready);
-//         end else begin
-//             $display("Entry %0d:",i);
-//         end
-//     end
-//   endtask
+  task automatic show_rs_input();
+    for (int i = 0; i < RS_DEPTH; i++) begin
+        if (!rs_empty[i]) begin
+            $display("Entry %0d: i_imm = %0h, u_imm =%0h, ready=%b, valid=%b, alu_func=%0d, rob_idx=%0d, fu_type=%0d, dest_reg_idx=%0d, dest_tag=%0d, src1_tag=%0d(%b), src2_tag=%0d(%b)", 
+                        i, rs_packets_i[i].disp_packet.inst.i.imm, rs_packets_i[i].disp_packet.inst.u.imm, rs_packets_i[i], rs_entries_o[i].valid, rs_packets_i[i].disp_packet.alu_func, rs_packets_i[i].rob_idx, rs_packets_i[i].disp_packet.fu_type, 
+                        rs_packets_i[i].disp_packet.dest_reg_idx , rs_packets_i[i].dest_tag, rs_packets_i[i].src1_tag, rs_packets_i[i].src1_ready,
+                        rs_packets_i[i].src2_tag, rs_packets_i[i].src2_ready);
+        end else begin
+            $display("Entry %0d:",i);
+        end
+    end
+  endtask
 
-//   task automatic show_disp_instr();
+  task automatic show_disp_instr();
 
-//     for (int i = 0; i < RS_DEPTH; i++) begin
-//         if (disp_enable[i]) begin
+    for (int i = 0; i < RS_DEPTH; i++) begin
+        if (disp_enable[i]) begin
              
-//         $display("Entry %0d: ready=%b, valid=%b, alu_func=%0d, rob_idx=%0d, fu_type=%0d, dest_reg_idx=%0d, dest_tag=%0d, src1_tag=%0d(%b), src2_tag=%0d(%b)", 
-//                 i, rs_ready_o[i], rs_entries_o[i].valid, rs_entries_o[i].disp_packet.alu_func, rs_entries_o[i].rob_idx, rs_entries_o[i].disp_packet.fu_type, 
-//                 rs_entries_o[i].disp_packet.dest_reg_idx , rs_entries_o[i].dest_tag, rs_entries_o[i].src1_tag, rs_entries_o[i].src1_ready,
-//                 rs_entries_o[i].src2_tag, rs_entries_o[i].src2_ready);
-//          $display("");
-//     end
-//     end
+        $display("Entry %0d: ready=%b, valid=%b, alu_func=%0d, rob_idx=%0d, fu_type=%0d, dest_reg_idx=%0d, dest_tag=%0d, src1_tag=%0d(%b), src2_tag=%0d(%b)", 
+                i, rs_ready_o[i], rs_entries_o[i].valid, rs_entries_o[i].disp_packet.alu_func, rs_entries_o[i].rob_idx, rs_entries_o[i].disp_packet.fu_type, 
+                rs_entries_o[i].disp_packet.dest_reg_idx , rs_entries_o[i].dest_tag, rs_entries_o[i].src1_tag, rs_entries_o[i].src1_ready,
+                rs_entries_o[i].src2_tag, rs_entries_o[i].src2_ready);
+         $display("");
+    end
+    end
   
-//   endtask
+  endtask
 
   int cycle_count;
   always_ff @(posedge clock) begin
     if (reset)  
         cycle_count <= 0;
     else
+    $display("======== cycle %0d ========", cycle_count);
       cycle_count <= cycle_count + 1;
       //test_grant_vector(cycle_count);
      // test_dispatch_enable(cycle_count);
-    //   show_rs_output();
+     show_rs_output();
       //show_disp_instr();
     
   end
