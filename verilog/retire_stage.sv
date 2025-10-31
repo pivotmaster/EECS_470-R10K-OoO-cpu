@@ -62,10 +62,10 @@ module retire_stage #(
         end
     end
 
-    always_ff @(posedge clock) begin
-        for (int i=0; i < COMMIT_WIDTH; i++) begin
-            $display("free_valid_o=%d, commit_old_prf_i:%d | free_reg_o:%d",free_valid_o[i] ,commit_old_prf_i[i], free_reg_o[i]);
-        end
-    end
+    // always_ff @(posedge clock) begin
+    //     for (int i=0; i < COMMIT_WIDTH; i++) begin
+    //         $display("free_valid_o=%d, commit_old_prf_i:%d | free_reg_o:%d",free_valid_o[i] ,commit_old_prf_i[i], free_reg_o[i]);
+    //     end
+    // end
 
 endmodule

@@ -60,7 +60,7 @@ module complete_stage #(
 
                 
             end
-            $display("complete stage i, out, in = %0d, %0d, %0d", i, cdb_o[i].value, fu_value_i[i]);
+            //$display("complete stage i, out, in = %0d, %0d, %0d", i, cdb_o[i].value, fu_value_i[i]);
         end
     end
 
