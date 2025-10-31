@@ -11,11 +11,11 @@
 
 
 module cdb #(
-    parameter int unsigned CDB_WIDTH  = 2,
+    parameter int unsigned CDB_WIDTH  = 4,
     parameter int unsigned PHYS_REGS  = 128,
     parameter int unsigned ARCH_REGS  = 32,
     parameter int unsigned ROB_DEPTH  = 64,
-    parameter int unsigned XLEN       = 64
+    parameter int unsigned XLEN       = 32
 )(
     input  logic clock,
     input  logic reset,
@@ -47,6 +47,24 @@ module cdb #(
 
 );
 
+
+always_ff @(posedge clock) begin
+    if (!reset) begin
+        for (int i = 0; i < CDB_WIDTH; i++) begin
+            if (cdb_packets_i[i].valid) begin
+                $display("[CDB %0t] lane=%0d | arch=%0d | phys=%0d | value=0x%0h | cdb out valid, tag=%0d, %0d",
+                         $time,
+                         i,
+                         cdb_packets_i[i].dest_arch,
+                         cdb_packets_i[i].phys_tag,
+                         cdb_packets_i[i].value,
+                         cdb_valid_mp_o[i], 
+                         cdb_tag_rs_o[i]);
+            end
+        end
+    end
+end
+
     // =========================================================
     // Internal signals
     // =========================================================
@@ -58,7 +76,8 @@ module cdb #(
     // =========================================================
     // Backpressure logic
     // =========================================================
-    assign cdb_stall = !(rs_ready_i && map_ready_i);
+    // assign cdb_stall = !(rs_ready_i && map_ready_i);
+    assign cdb_stall = '0;//###
     // =========================================================
     // Arbitration (simple priority)
     // =========================================================
@@ -67,7 +86,7 @@ module cdb #(
         used = 0 ;
 
         for(int i = 0 ; i < CDB_WIDTH ; i++)begin
-            if(cdb_packets_i[i].valid && !cdb_stall && used < CDB_WIDTH)begin
+            if(cdb_packets_i[i].valid && !cdb_stall && (used < CDB_WIDTH))begin
                 arb_grant[i] = 1'b1;
                 used++;
             end
@@ -91,23 +110,24 @@ module cdb #(
     // Output register stage (timing alignment)
     // =========================================================
 
-    always_ff @(posedge clock or posedge reset)begin
-        if(reset)begin
-            cdb_valid_rs_o      <= '0;
-            cdb_valid_mp_o      <= '0;
-            cdb_tag_rs_o        <= '0;
-            cdb_phy_tag_mp_o    <= '0;
-            cdb_dest_arch_mp_o  <= '0;
-        end else if (!cdb_stall)begin
-        for (int k = 0; k < CDB_WIDTH; k++) begin
-                cdb_valid_rs_o[k]      <= selected_entries[k].valid;
-                cdb_valid_mp_o[k]      <= selected_entries[k].valid;
-                cdb_tag_rs_o[k]        <= selected_entries[k].phys_tag;
-                cdb_phy_tag_mp_o[k]    <= selected_entries[k].phys_tag;
-                cdb_dest_arch_mp_o[k]  <= selected_entries[k].dest_arch;
+    always_comb begin
+        cdb_valid_rs_o      = '0;
+        cdb_valid_mp_o      = '0;
+        cdb_tag_rs_o        = '0;
+        cdb_phy_tag_mp_o    = '0;
+        cdb_dest_arch_mp_o  = '0;
+        if (!cdb_stall)begin
+            for (int k = 0; k < CDB_WIDTH; k++) begin
+                cdb_valid_rs_o[k]      = selected_entries[k].valid;
+                cdb_valid_mp_o[k]      = selected_entries[k].valid;
+                cdb_tag_rs_o[k]        = selected_entries[k].phys_tag;
+                cdb_phy_tag_mp_o[k]    = selected_entries[k].phys_tag;
+                cdb_dest_arch_mp_o[k]  = selected_entries[k].dest_arch;
             end
         end
     end 
+
+
 
 
 endmodule

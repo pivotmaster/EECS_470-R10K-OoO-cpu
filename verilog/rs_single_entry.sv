@@ -74,11 +74,11 @@ module rs_single_entry #(
             empty_next    = 1'b0;
             rs_busy_next  = 1'b1; 
         end else begin
-            /* TODO:CDB CLOSE
+            
             // CDB wake up
             rs_entry_next.src1_ready = rs_entry.src1_ready | src1_hit;
             rs_entry_next.src2_ready = rs_entry.src2_ready | src2_hit;
-*/
+
             // Clear RS entry after issue
             if ( issue_i&& ready_o) begin
                 empty_next = 1'b1;

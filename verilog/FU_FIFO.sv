@@ -106,7 +106,7 @@ module FU_FIFO #(
     parameter int unsigned ISSUE_WIDTH    = 2,
     parameter int unsigned FU_NUM         = 6,
     parameter int unsigned FIFO_DEPTH     = 4,
-    parameter int unsigned XLEN           = 64,
+    parameter int unsigned XLEN           = 32,
     localparam int unsigned CNT_BITS      = $clog2(FIFO_DEPTH+1)
 )(
     input  logic                              clock,

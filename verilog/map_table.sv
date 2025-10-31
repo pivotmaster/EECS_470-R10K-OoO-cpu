@@ -211,4 +211,10 @@ module map_table#(
         end
     endgenerate
 
+
+    always_ff @(negedge clock) begin
+        // for(int i = 0 ; )
+        $display("table[1],valid = %0b, table[1].value  = %d \n", table[1].valid, table[1].phys);
+    end
+
 endmodule

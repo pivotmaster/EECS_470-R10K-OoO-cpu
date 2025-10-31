@@ -1,7 +1,7 @@
 module retire_stage #(
     parameter int unsigned ARCH_REGS    = 64,
     parameter int unsigned PHYS_REGS    = 128,
-    parameter int unsigned COMMIT_WIDTH = 4
+    parameter int unsigned COMMIT_WIDTH = 1
 )(
     input  logic clock,
     input  logic reset,
@@ -38,7 +38,9 @@ module retire_stage #(
         free_reg_o         = '0;
 
         for (int i = 0; i < COMMIT_WIDTH; i++) begin
-            fire = commit_valid_i[i] & commit_rd_wen_i[i] & ~flush_i;
+            fire = commit_valid_i[i] & commit_rd_wen_i[i];
+
+           // fire = commit_valid_i[i] & commit_rd_wen_i[i] & ~flush_i;
 
             if (fire) begin
                 amt_commit_valid_o[i] = 1'b1;
@@ -57,6 +59,12 @@ module retire_stage #(
         retire_cnt_o = '0;
         for (int i = 0; i < COMMIT_WIDTH; i++) begin
             retire_cnt_o += (commit_valid_i[i] & commit_rd_wen_i[i] & ~flush_i);
+        end
+    end
+
+    always_ff @(posedge clock) begin
+        for (int i=0; i < COMMIT_WIDTH; i++) begin
+            $display("free_valid_o=%d, commit_old_prf_i:%d | free_reg_o:%d",free_valid_o[i] ,commit_old_prf_i[i], free_reg_o[i]);
         end
     end
 
