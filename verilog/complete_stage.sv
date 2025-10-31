@@ -1,6 +1,6 @@
 `include "def.svh"
 module complete_stage #(
-    parameter int unsigned XLEN       = 64,
+    parameter int unsigned XLEN       = 32,
     parameter int unsigned PHYS_REGS  = 128,
     parameter int unsigned ROB_DEPTH  = 64,
     parameter int unsigned WB_WIDTH   = 4,
@@ -40,7 +40,7 @@ module complete_stage #(
         wb_rob_idx_o  = '0;
         wb_exception_o = '0;
         wb_mispred_o   = '0;
-        cdb_o          = '{default:'0};
+        cdb_o          = '0;
 
         for (int i = 0; i < WB_WIDTH; i++) begin
             if (fu_valid_i[i]) begin
@@ -53,13 +53,14 @@ module complete_stage #(
                 wb_exception_o[i] = fu_exception_i[i];
                 wb_mispred_o[i]   = fu_mispred_i[i];
 
-                if (i < CDB_WIDTH) begin
-                    cdb_o[i].valid     = 1'b1;
-                    cdb_o[i].dest_arch = '0;
-                    cdb_o[i].phys_tag  = fu_dest_prf_i[i];
-                    cdb_o[i].value     = fu_value_i[i];
-                end
+                cdb_o[i].valid     = 1'b1;
+                cdb_o[i].dest_arch = '0;
+                cdb_o[i].phys_tag  = fu_dest_prf_i[i];
+                cdb_o[i].value     = fu_value_i[i];
+
+                
             end
+            $display("complete stage i, out, in = %0d, %0d, %0d", i, cdb_o[i].value, fu_value_i[i]);
         end
     end
 

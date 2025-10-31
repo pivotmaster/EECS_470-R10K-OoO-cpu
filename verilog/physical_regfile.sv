@@ -1,8 +1,8 @@
 module pr #(
     parameter int unsigned PHYS_REGS = 128,
-    parameter int unsigned XLEN      = 64,
-    parameter int unsigned READ_PORTS = 4,
-    parameter int unsigned WRITE_PORTS = 4,
+    parameter int unsigned XLEN      = 32,
+    parameter int unsigned READ_PORTS = 8,
+    parameter int unsigned WRITE_PORTS = 8,
     parameter bit          BYPASS_EN    = 1
 )(
     input logic clock,
@@ -18,6 +18,33 @@ module pr #(
 );
 
     logic [PHYS_REGS-1:0][XLEN-1:0] regfile;
+    
+/*
+    always @(negedge clock) begin
+    if (!reset) begin
+        $display("====================================================");
+        $display("[PR DEBUG @ %0t]", $time);
+
+        // Write ports
+        for (int i = 0; i < WRITE_PORTS; i++) begin
+            if (wr_en[i])
+                $display("WRITE[%0d]: addr=%0d data=0x%0h", i, waddr[i], wdata[i]);
+        end
+
+        // Read ports
+        for (int i = 0; i < READ_PORTS; i++) begin
+            if (rd_en[i])
+                $display("READ[%0d]: addr=%0d data=0x%0h", i, raddr[i], rdata_o[i]);
+        end
+
+        // Optional: key registers
+        //$display("REGS[0]=0x%0h [1]=0x%0h [2]=0x%0h [3]=0x%0h [65]=0x%0h",
+            //     regfile[0], regfile[1], regfile[2], regfile[3], regfile[65]);
+
+        $display("====================================================\n");
+    end
+end
+*/
 
     always_ff @(posedge clock) begin
         if (reset) begin

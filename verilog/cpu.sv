@@ -187,14 +187,28 @@ module cpu #(
     issue_packet_t load_req [`LOAD_COUNT];
     issue_packet_t br_req   [`BR_COUNT];
 
-    assign rd_en = {alu_req[0].valid, alu_req[0].valid, mul_req[0].valid, mul_req[0].valid, load_req[0].valid, load_req[0].valid, br_req[0].valid, br_req[0].valid};
-    assign raddr = {alu_req[0].src1_val, alu_req[0].src2_val, mul_req[0].src1_val, mul_req[0].src2_val, load_req[0].src1_val, load_req[0].src2_val, br_req[0].src1_val, br_req[0].src2_val};
+    assign rd_en = '1;
+    always_ff @(posedge clock) begin //###
+        raddr[0] <= alu_req[0].src1_val; 
+        raddr[1] <= alu_req[0].src2_val; 
+        raddr[2] <= mul_req[0].src1_val; 
+        raddr[3] <= mul_req[0].src2_val; 
+        raddr[4] <= load_req[0].src1_val; 
+        raddr[5] <= load_req[0].src2_val; 
+        raddr[6] <= br_req[0].src1_val; 
+        raddr[7] <= br_req[0].src2_val;
+    end
 
 // S/EX
     issue_packet_t alu_req_reg  [`ALU_COUNT]; // pkts to ALU 
     issue_packet_t mul_req_reg  [`MUL_COUNT];
     issue_packet_t load_req_reg [`LOAD_COUNT];
     issue_packet_t br_req_reg   [`BR_COUNT];
+
+    issue_packet_t alu_req_reg_org  [`ALU_COUNT]; // pkts to ALU 
+    issue_packet_t mul_req_reg_org  [`MUL_COUNT];
+    issue_packet_t load_req_reg_org [`LOAD_COUNT];
+    issue_packet_t br_req_reg_org   [`BR_COUNT];
 
 
 // FU
@@ -556,10 +570,10 @@ module cpu #(
         .disp_old_phys_o(disp_old_phys),
         //###
 
-        // .wb_valid_i(cdb_valid_mp),//
-        // .wb_phys_i(cdb_phy_tag_mp),//
-        .wb_valid_i('0),//
-        .wb_phys_i('0),//
+        .wb_valid_i(cdb_valid_mp),//
+        .wb_phys_i(cdb_phy_tag_mp),//
+        // .wb_valid_i('0),//
+        // .wb_phys_i('0),//
         //####
         // .flush_i(flush_i),
         // .snapshot_restore_i(snapshot_restore_i),
@@ -763,6 +777,12 @@ module cpu #(
             for(int i=0;i<`DISPATCH_WIDTH;i++) begin
 			    s_ex_reg[i] <= issue_packet[i];
 		    end
+
+            alu_req_reg_org[0] <= alu_req[0];
+            mul_req_reg_org[0] <= mul_req[0];
+            load_req_reg_org[0] <= load_req[0];
+            br_req_reg_org[0]  <= br_req[0];
+
             alu_req_reg[0].valid <= alu_req[0].valid;
             alu_req_reg[0].rob_idx <= alu_req[0].rob_idx;
             alu_req_reg[0].imm <= alu_req[0].imm;
@@ -815,7 +835,20 @@ module cpu #(
     //                     FU                       //
     //                                              //
     //////////////////////////////////////////////////
-    assign {alu_req_reg[0].src1_val, alu_req_reg[0].src2_val, mul_req_reg[0].src1_val, mul_req_reg[0].src2_val, load_req_reg[0].src1_val, load_req_reg[0].src2_val, br_req_reg[0].src1_val, br_req_reg[0].src2_val} = rdata;
+    always_ff @(negedge clock) begin
+        $display("rob=%d | dast_tag=%d | src1_val =%h | src2_val %h", alu_req_reg[0].rob_idx, alu_req_reg[0].dest_tag, alu_req_reg[0].src1_val, alu_req_reg[0].src2_val);
+        $display("MUL: rob=%d | dast_tag=%d | src1_val =%h | src2_val %h | res %h", mul_req_reg[0].rob_idx, mul_req_reg[0].dest_tag, mul_req_reg[0].src1_val, mul_req_reg[0].src2_val, fu_resp_bus[1].value);
+    end
+    
+    assign alu_req_reg[0].src1_val = rdata[0];
+    assign alu_req_reg[0].src2_val = alu_req_reg_org[0].src2_valid ? rdata[1] : alu_req_reg_org[0].src2_val; 
+    assign mul_req_reg[0].src1_val = rdata[2];
+    assign mul_req_reg[0].src2_val = mul_req_reg_org[0].src2_valid ? rdata[3] : mul_req_reg_org[0].src2_val;
+    assign load_req_reg[0].src1_val = rdata[4];
+    assign load_req_reg[0].src2_val = load_req_reg_org[0].src2_valid ? rdata[5] : load_req_reg_org[0].src2_val;
+    assign br_req_reg[0].src1_val = rdata[6];
+    assign br_req_reg[0].src2_val = br_req_reg_org[0].src2_valid ? rdata[7] : br_req_reg_org[0].src2_val;
+    
     fu fu_0(
         //Inputs
         .alu_req(alu_req_reg),
@@ -857,7 +890,8 @@ module cpu #(
             fu_dest_prf_reg <= fu_dest_prf;
             fu_rob_idx_reg <= fu_rob_idx;
             fu_exception_reg <= fu_exception;
-            fu_mispred_reg <= fu_mispred;;
+            fu_mispred_reg <= fu_mispred;
+
 
             for(int i=0;i<`DISPATCH_WIDTH;i++) begin
                 ex_c_inst_dbg[i] <= s_ex_inst_dbg[i]; // debug output, just forwarded from ID
@@ -901,7 +935,10 @@ module cpu #(
         // cdb
         .cdb_o(cdb_packets)
     );
-
+    always_ff @(negedge clock) begin
+        $display("Complete input: CDB_alu_value=%d | CDB_mul_value=%d", fu_value_reg[0], fu_value_reg[1]);
+        $display("Complete: CDB_alu_value=%d | CDB_mul_value=%d", cdb_packets[0].value, cdb_packets[1].value);
+    end
     //////////////////////////////////////////////////
     //                                              //
     //                  retire                      //

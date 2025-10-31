@@ -25,7 +25,7 @@
 `define CDB_SZ `N // This MUST match your superscalar width
 
 `ifndef XLEN
-  `define XLEN            64      // 64-bit processor width
+  `define XLEN            32      // 64-bit processor width
 `endif
 
 `ifndef OPCODE_N
@@ -41,7 +41,7 @@
 `endif
 
 `ifndef CDB_WIDTH
-    `define CDB_WIDTH 1
+    `define CDB_WIDTH 4
 `endif
 
 `ifndef DISPATCH_WIDTH
@@ -53,7 +53,7 @@
 `endif
 
 `ifndef WB_WIDTH
-    `define WB_WIDTH 1
+    `define WB_WIDTH 4
 `endif
 
 `ifndef ALU_COUNT
@@ -506,7 +506,7 @@ typedef enum logic [1:0] {
 
 typedef struct packed {
     logic                         valid;
-    logic [63:0]                  value;
+    logic [`XLEN-1:0]                  value;
     logic [$clog2(`PHYS_REGS)-1:0] dest_prf;
     logic [$clog2(`ROB_DEPTH)-1:0] rob_idx;
     logic                         exception;

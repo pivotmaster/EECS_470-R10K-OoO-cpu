@@ -392,7 +392,7 @@ module testbench;
 */
     //###
     always_ff @(negedge clock) begin
-        if(proc2mem_addr >= 32'd220) begin
+        if(proc2mem_addr >= 32'd880) begin
             $display("forced finished");
             $finish;
         end
