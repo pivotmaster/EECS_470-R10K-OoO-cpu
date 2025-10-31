@@ -171,16 +171,16 @@ end
   // DEBUG
   // =========================================================
   
-    task automatic show_rs_input();
-        //$display("[cycle]:", cyc);
-        for (int i = 0; i < RS_DEPTH; i++) begin
-          //$display(  "opcode: %d", rs_entries_i[i].disp_packet.alu_func);
-        $display("Entry %0d: opb_select=%0d, i_imm = %0d, u_imm =%0d, ready=%b, valid=%b, alu_func=%0d, rob_idx=%0d, fu_type=%0d, dest_reg_idx=%0d, dest_tag=%0d, src1_tag=%0d(%b), src2_tag=%0d(%b)", 
-            i, rs_entries_i[i].disp_packet.opb_select, rs_entries_i[i].disp_packet.inst.i.imm, rs_entries_i[i].disp_packet.inst.u.imm, rs_ready_i[i], rs_entries_i[i].valid, rs_entries_i[i].disp_packet.alu_func, rs_entries_i[i].rob_idx, rs_entries_i[i].disp_packet.fu_type, 
-            rs_entries_i[i].disp_packet.dest_reg_idx , rs_entries_i[i].dest_tag, rs_entries_i[i].src1_tag, rs_entries_i[i].src1_ready,
-            rs_entries_i[i].src2_tag, rs_entries_i[i].src2_ready);
-        end
-    endtask
+    // task automatic show_rs_input();
+    //     //$display("[cycle]:", cyc);
+    //     for (int i = 0; i < RS_DEPTH; i++) begin
+    //       //$display(  "opcode: %d", rs_entries_i[i].disp_packet.alu_func);
+    //     $display("Entry %0d: opb_select=%0d, i_imm = %0d, u_imm =%0d, ready=%b, valid=%b, alu_func=%0d, rob_idx=%0d, fu_type=%0d, dest_reg_idx=%0d, dest_tag=%0d, src1_tag=%0d(%b), src2_tag=%0d(%b)", 
+    //         i, rs_entries_i[i].disp_packet.opb_select, rs_entries_i[i].disp_packet.inst.i.imm, rs_entries_i[i].disp_packet.inst.u.imm, rs_ready_i[i], rs_entries_i[i].valid, rs_entries_i[i].disp_packet.alu_func, rs_entries_i[i].rob_idx, rs_entries_i[i].disp_packet.fu_type, 
+    //         rs_entries_i[i].disp_packet.dest_reg_idx , rs_entries_i[i].dest_tag, rs_entries_i[i].src1_tag, rs_entries_i[i].src1_ready,
+    //         rs_entries_i[i].src2_tag, rs_entries_i[i].src2_ready);
+    //     end
+    // endtask
 
     task automatic test_grant_vector(int cyc);
             //$display("[cycle]:", cyc);
@@ -191,13 +191,13 @@ end
         
     endtask
 
-    task automatic test_reqs();
-        //$display("cycle= %d",cyc);
-        // ---------------- ALU ----------------
-        $display("ALU_REQ[0]: valid=%b | rob=%0d | fu=%p | opcode=%0d | dest_tag=%0d", 
-                alu_req_o[0].valid, alu_req_o[0].rob_idx, alu_req_o[0].fu_type, alu_req_o[0].opcode, alu_req_o[0].dest_tag);
-        $display("            imm=%h | src1_val=%h | src2_val=%h", 
-                alu_req_o[0].imm, alu_req_o[0].src1_val, alu_req_o[0].src2_val);
+    // task automatic test_reqs();
+    //     //$display("cycle= %d",cyc);
+    //     // ---------------- ALU ----------------
+    //     $display("ALU_REQ[0]: valid=%b | rob=%0d | fu=%p | opcode=%0d | dest_tag=%0d", 
+    //             alu_req_o[0].valid, alu_req_o[0].rob_idx, alu_req_o[0].fu_type, alu_req_o[0].opcode, alu_req_o[0].dest_tag);
+    //     $display("            imm=%h | src1_val=%h | src2_val=%h", 
+    //             alu_req_o[0].imm, alu_req_o[0].src1_val, alu_req_o[0].src2_val);
         /*
         // ---------------- MUL ----------------
         $display("MUL_REQ[0]: valid=%b | rob=%0d | fu=%p | opcode=%0d | dest_tag=%0d", 
@@ -217,7 +217,7 @@ end
         $display("           imm=%h | src1_val=%h | src2_val=%h", 
                 br_req_o[0].imm, br_req_o[0].src1_val, br_req_o[0].src2_val);
         */
-    endtask
+    // endtask
 
 task automatic show_issue_output;
     // ---- ALU requests ----
@@ -281,14 +281,14 @@ endtask
         cycle_count <= 0;
     else
       cycle_count <= cycle_count + 1;
-      $display("// ---------------- CYCLE = %d ---------------- //",cycle_count);
+    //   $display("// ---------------- CYCLE = %d ---------------- //",cycle_count);
       //test_reqs();
       //test_grant_vector(cycle_count);
       //show_rs_input();
       
       //show_issue_packets(cycle_count);
       //test_issue_selector(cycle_count);
-      show_issue_output();
+    //   show_issue_output();
       
     
   end

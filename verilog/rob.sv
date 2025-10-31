@@ -112,10 +112,7 @@ module rob #(
             end
 
             for (int i = 0; i < DEPTH; i++) begin
-                rob_table[i].valid     <= 1'b0;
-                rob_table[i].ready     <= 1'b0;
-                rob_table[i].exception <= 1'b0;
-                rob_table[i].mispred   <= 1'b0;
+                rob_table[i]     <= '0;
             end
 
         end else begin
@@ -179,9 +176,11 @@ module rob #(
         end
 
     end
-    always_ff @(negedge clock)begin
-       // $display("head = %0d  , tail = %0d\n" , head, tail);
-       $display("disp_rob_idx_o=%d | commit_old_prf_o: %d", disp_rob_idx_o[0], commit_old_prf_o[0]);
-    end
+    // always_ff @(negedge clock)begin
+    //    // $display("head = %0d  , tail = %0d\n" , head, tail);
+    //    for (int i=0; i < COMMIT_WIDTH; i++) begin
+    //    $display("commit_valid_o%d |commit_rd_arch_o=%d | commit_old_prf_o: %d | rob_table=%d | head=%d", commit_valid_o[i], commit_rd_arch_o[0], commit_old_prf_o[0], rob_table[head + i].old_prf[i], head);
+    // end
+    // end
 
 endmodule
