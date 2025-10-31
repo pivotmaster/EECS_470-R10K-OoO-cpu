@@ -130,6 +130,9 @@ module map_table#(
                 table[i].phys <= i;
                 table[i].valid <= 1'b1;
             end
+            for(int i =0; i< DISPATCH_WIDTH; i++)begin
+                disp_old_phys_o[i] <= '0;
+            end
         end else begin
             // ===================================================
             //    Dispatch rename (speculative): for each dispatch slot,
@@ -214,7 +217,7 @@ module map_table#(
 
     always_ff @(negedge clock) begin
         // for(int i = 0 ; )
-        $display("table[1],valid = %0b, table[1].value  = %d \n", table[1].valid, table[1].phys);
+        // $display("table[1],valid = %0b, table[1].value  = %d \n", table[1].valid, table[1].phys);
     end
 
 endmodule

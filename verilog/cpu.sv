@@ -835,10 +835,12 @@ module cpu #(
     //                     FU                       //
     //                                              //
     //////////////////////////////////////////////////
+   /*
     always_ff @(negedge clock) begin
         $display("rob=%d | dast_tag=%d | src1_val =%h | src2_val %h", alu_req_reg[0].rob_idx, alu_req_reg[0].dest_tag, alu_req_reg[0].src1_val, alu_req_reg[0].src2_val);
         $display("MUL: rob=%d | dast_tag=%d | src1_val =%h | src2_val %h | res %h", mul_req_reg[0].rob_idx, mul_req_reg[0].dest_tag, mul_req_reg[0].src1_val, mul_req_reg[0].src2_val, fu_resp_bus[1].value);
     end
+    */
     
     assign alu_req_reg[0].src1_val = rdata[0];
     assign alu_req_reg[0].src2_val = alu_req_reg_org[0].src2_valid ? rdata[1] : alu_req_reg_org[0].src2_val; 
@@ -935,10 +937,14 @@ module cpu #(
         // cdb
         .cdb_o(cdb_packets)
     );
+
+    /*
     always_ff @(negedge clock) begin
         $display("Complete input: CDB_alu_value=%d | CDB_mul_value=%d", fu_value_reg[0], fu_value_reg[1]);
         $display("Complete: CDB_alu_value=%d | CDB_mul_value=%d", cdb_packets[0].value, cdb_packets[1].value);
     end
+    */
+    
     //////////////////////////////////////////////////
     //                                              //
     //                  retire                      //
