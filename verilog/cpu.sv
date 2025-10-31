@@ -99,6 +99,7 @@ module cpu #(
     logic [`DISPATCH_WIDTH-1:0][$clog2(`ARCH_REGS)-1:0] src1_arch;
     logic [`DISPATCH_WIDTH-1:0][$clog2(`ARCH_REGS)-1:0] src2_arch;
     logic [`DISPATCH_WIDTH-1:0][$clog2(`PHYS_REGS)-1:0] dest_new_prf; //T_new
+    logic [`DISPATCH_WIDTH-1:0] is_branch;
     // RS
     logic [DISPATCH_WIDTH-1:0] disp_rs_valid;
     logic [`DISPATCH_WIDTH-1:0] disp_rs_rd_wen;
@@ -480,6 +481,7 @@ module cpu #(
         .src1_arch_o(src1_arch),
         .src2_arch_o(src2_arch),
         .dest_new_prf(dest_new_prf),
+        .is_branch_o(is_branch),
 
         //rs inputs
         .free_rs_slots_i(rs_free_slot),
@@ -567,6 +569,7 @@ module cpu #(
         .disp_valid_i(rename_valid),
         .disp_arch_i(dest_arch),
         .disp_new_phys_i(dest_new_prf),
+        .is_branch_i(is_branch),
         .disp_old_phys_o(disp_old_phys),
         //###
 
