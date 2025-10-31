@@ -88,7 +88,6 @@ module stage_if #(
     assign Imem_addr    = {PC_reg[ADDR_WIDTH-1:3], 3'b0};
 
     // Fire load when we are allowed to fetch (not flushing this cycle)
-    // You可以依你專案定義改 BUS_* 符號
     assign Imem_command = (reset || if_flush || !if_valid)
                           ? MEM_NONE
                           : MEM_LOAD;
@@ -137,7 +136,7 @@ module stage_if #(
                 end
             end
 
-            // 封包輸出
+            // Packet output
             assign if_packet_o[k].PC    = this_pc;
             assign if_packet_o[k].NPC   = this_pc + 32'd4;
             assign if_packet_o[k].inst  = this_valid ? this_inst : `NOP;

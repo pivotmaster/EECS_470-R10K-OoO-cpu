@@ -11,7 +11,7 @@ module issue_logic #(
     parameter int unsigned OPCODE_N        = 8,  //number of opcodes
     parameter int unsigned FU_NUM          = 6,  // how many different FU
     parameter int unsigned MAX_FIFO_DEPTH  = 4,  // Remaining FIFO space for each FU
-    parameter int unsigned XLEN            = 64,
+    parameter int unsigned XLEN            = 32,
     parameter int ALU_COUNT   = 1,
     parameter int MUL_COUNT   = 1,
     parameter int LOAD_COUNT  = 1,
