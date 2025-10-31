@@ -569,7 +569,6 @@ module cpu #(
         .disp_valid_i(rename_valid),
         .disp_arch_i(dest_arch),
         .disp_new_phys_i(dest_new_prf),
-        .is_branch_i(is_branch),
         .disp_old_phys_o(disp_old_phys),
         //###
 
@@ -582,6 +581,7 @@ module cpu #(
         // .snapshot_restore_i(snapshot_restore_i),
         // .snapshot_data_i(snapshot_data_i),
         // .snapshot_data_o(snapshot_data_o)
+        .is_branch_instr_i(is_branch),
         .flush_i('0),
         .snapshot_restore_i('0),
         .snapshot_data_i('0),
@@ -704,6 +704,9 @@ module cpu #(
         .rs_entries_o(rs_entries),
         .rs_ready_o(rs_ready),  
         .fu_type_o(fu_types)
+
+        .br_misrpedict_i(), //####
+        .branch_success_predict()
     );
 
     //////////////////////////////////////////////////
