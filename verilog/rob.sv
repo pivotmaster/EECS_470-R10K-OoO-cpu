@@ -6,7 +6,7 @@ module rob #(
     parameter int unsigned WB_WIDTH        = 1,
     parameter int unsigned ARCH_REGS       = 64,
     parameter int unsigned PHYS_REGS       = 128,
-    parameter int unsigned XLEN            = 64
+    parameter int unsigned XLEN            = 32
 )(
     input  logic clock,
     input  logic reset,
@@ -107,6 +107,10 @@ module rob #(
             flush_o <= 1'b0;
             flush_upto_rob_idx_o <= '0;
 
+            for(int i = 0 ; i< COMMIT_WIDTH; i++)begin
+                commit_old_prf_o[i] <= '0;
+            end
+
             for (int i = 0; i < DEPTH; i++) begin
                 rob_table[i].valid     <= 1'b0;
                 rob_table[i].ready     <= 1'b0;
@@ -173,6 +177,11 @@ module rob #(
             count <= count + $countones(disp_alloc_o) - $countones(retire_en);
             tail  <= next_tail;
         end
+
+    end
+    always_ff @(negedge clock)begin
+       // $display("head = %0d  , tail = %0d\n" , head, tail);
+       $display("disp_rob_idx_o=%d | commit_old_prf_o: %d", disp_rob_idx_o[0], commit_old_prf_o[0]);
     end
 
 endmodule
