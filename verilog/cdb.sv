@@ -47,7 +47,7 @@ module cdb #(
 
 );
 
-/*
+
 always_ff @(posedge clock) begin
     if (!reset) begin
         for (int i = 0; i < CDB_WIDTH; i++) begin
@@ -64,7 +64,7 @@ always_ff @(posedge clock) begin
         end
     end
 end
-*/
+
 
     // =========================================================
     // Internal signals
