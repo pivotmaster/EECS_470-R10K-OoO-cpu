@@ -205,8 +205,8 @@ module free_list #(
             // end
         end
     end 
-    /*
 
+/*
     always_ff @(negedge clock)begin 
         $display("free_phys = %0d , free_valid = %d\n", free_phys_i , free_valid_i);
         $display("head: %d , tail: %d\n" , head, tail);
@@ -214,6 +214,7 @@ module free_list #(
             $display("free_fifo[%d] = %0d\n", i, free_fifo[i]);
         end
     end
-    */
+
+*/
 
 endmodule
