@@ -161,7 +161,7 @@ module dispatch_stage #(
             dest_arch_o[i] = disp_packet_o[i].dest_reg_idx;  // from decoder
             rename_valid_o[i] = if_packet_i[i].valid & disp_rs_rd_wen_o[i] & (i < disp_n); // only if instruction is valid
             alloc_req_o[i] = if_packet_i[i].valid & disp_rs_rd_wen_o[i] & (i < disp_n);
-            is_branch[i] = (disp_packet_o[i].cond_branch | disp_packet_o[i].uncond_branch);
+            is_branch_o[i] = (disp_packet_o[i].cond_branch | disp_packet_o[i].uncond_branch);
 
             // To RS
             if(i < disp_n)begin

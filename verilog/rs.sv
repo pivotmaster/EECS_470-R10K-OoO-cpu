@@ -47,13 +47,13 @@ module RS #(
 
     output  rs_entry_t     [RS_DEPTH-1:0]                          rs_entries_o,
     output  logic          [RS_DEPTH-1:0]                          rs_ready_o,  
-    output  fu_type_e                                              fu_type_o [RS_DEPTH]    
+    output  fu_type_e                                              fu_type_o [RS_DEPTH],    
 
     // =========================================================
     // Branch mispredict recovery (flush)
     // =========================================================
     input   logic                                                  br_misrpedict_i,
-    input   logic                                                  branch_success_predict,
+    input   logic                                                  branch_success_predict
 ); 
 
     // =========================================================
@@ -127,13 +127,16 @@ module RS #(
                 .clock(clock),
                 .reset(reset),
                 .flush(flush),
-                .br_misrpedict_i(br_misrpedict_i),
-                .br_tag(br_mis_tag_single),
-                .clear_br_tag(clear_br_tag),
+
                 .disp_enable_i(disp_enable[i]),
                 .rs_packets_i(rs_packets[i]),
                 .empty_o(rs_empty[i]),
                 .issue_i(issue_enable_i[i]),
+
+                .br_mis_tag_single_i(br_mis_tag_single),
+                .br_mispredict_i(br_misrpedict_i),
+                .clear_br_tag_i(clear_br_tag),
+
                 .rs_single_entry_o(rs_entries_o[i]),
                 .fu_type_o(fu_type_o[i]),
                 .ready_o(rs_ready_o[i]),

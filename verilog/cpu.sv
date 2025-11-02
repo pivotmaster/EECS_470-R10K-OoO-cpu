@@ -289,6 +289,8 @@ module cpu #(
     MEM_TAG     outstanding_mem_tag;    // tag load is waiting in
     MEM_COMMAND Dmem_command_filtered;  // removes redundant loads
 
+
+    logic br_misrpedict, branch_success_predict;
     //////////////////////////////////////////////////
     //                                              //
     //                Memory Outputs                //
@@ -534,7 +536,7 @@ module cpu #(
         .wb_valid_i(wb_valid),
         .wb_rob_idx_i(wb_rob_idx),
         .wb_exception_i(wb_exception),
-        .wb_mispred_i(wb_exception),
+        .wb_mispred_i(wb_mispred),
 
         // Commit
         .commit_valid_o(commit_valid),
@@ -682,6 +684,7 @@ module cpu #(
     //                                              //
     //////////////////////////////////////////////////
 
+
     RS rs_0(
         .clock (clock),
         .reset (reset),
@@ -703,10 +706,10 @@ module cpu #(
 
         .rs_entries_o(rs_entries),
         .rs_ready_o(rs_ready),  
-        .fu_type_o(fu_types)
+        .fu_type_o(fu_types),
 
-        .br_misrpedict_i(), //####
-        .branch_success_predict()
+        .br_misrpedict_i(br_misrpedict), //####
+        .branch_success_predict(branch_success_predict)
     );
 
     //////////////////////////////////////////////////
@@ -944,6 +947,11 @@ module cpu #(
         .cdb_o(cdb_packets)
     );
 
+    always_comb begin
+        br_misrpedict |= wb_mispred;
+    end
+    assign branch_success_predict = !br_misrpedict;
+    //assign  |= wb_exception;
     /*
     always_ff @(negedge clock) begin
         $display("Complete input: CDB_alu_value=%d | CDB_mul_value=%d", fu_value_reg[0], fu_value_reg[1]);
