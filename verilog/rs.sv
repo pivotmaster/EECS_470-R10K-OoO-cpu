@@ -83,6 +83,7 @@ module RS #(
 
     // Find Branch instruction
     //TODO: need to consider multiple dispatch width (ex: 1, 2 instruction independent, 3 = branch , 4 = branch dependent)
+    // 將brachh指令後的指令標記(br_mis_tag = 1) if (branch_success_predict) 清掉tag
     always_comb begin
         for (int i = 0; i < DISPATCH_WIDTH; i++) begin
             if (rs_packets_i[i].disp_packet.fu_type == FU_BRANCH) begin
@@ -128,7 +129,7 @@ module RS #(
                 .reset(reset),
                 .flush(flush),
                 .br_misrpedict_i(br_misrpedict_i),
-                .br_tag(br_mis_tag_single),
+                .br_tag(br_mis_tag_single), // indicate whether this entry is after branch instruction
                 .clear_br_tag(clear_br_tag),
                 .disp_enable_i(disp_enable[i]),
                 .rs_packets_i(rs_packets[i]),

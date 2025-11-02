@@ -83,7 +83,7 @@ module rs_single_entry #(
         br_mis_tag_next = br_mis_tag;
 
         // Branch mispredict recovery
-        if ((br_mispredict_i && (br_mis_tag || br_mis_tag_next) && !empty)) begin
+        if ((br_mispredict_i && (br_mis_tag || br_mis_tag_next) && !empty)) begin // !empty = 有效指令
             empty_next    = 1'b1;
             rs_busy_next  = 1'b0;
             rs_entry_next = '{default:'0}; 
