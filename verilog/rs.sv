@@ -22,7 +22,6 @@ module RS #(
 )(
     input   logic                                                  clock,
     input   logic                                                  reset,
-    input   logic                                                  flush,
 
     // =========================================================
     // Dispatch <-> RS
@@ -47,13 +46,14 @@ module RS #(
 
     output  rs_entry_t     [RS_DEPTH-1:0]                          rs_entries_o,
     output  logic          [RS_DEPTH-1:0]                          rs_ready_o,  
-    output  fu_type_e                                              fu_type_o [RS_DEPTH]    
+    output  fu_type_e                                              fu_type_o [RS_DEPTH],    
 
     // =========================================================
     // Branch mispredict recovery (flush)
-    // =========================================================
-    input   logic                                                  br_misrpedict_i,
-    input   logic                                                  branch_success_predict,
+    // =========================================================  
+    input   logic                                                  is_branch_i, // is valid
+    input   logic                                                  br_mispredict_i,
+    input   logic                                                  branch_success_predict
 ); 
 
     // =========================================================
@@ -84,6 +84,7 @@ module RS #(
     // Find Branch instruction
     //TODO: need to consider multiple dispatch width (ex: 1, 2 instruction independent, 3 = branch , 4 = branch dependent)
     // 將brachh指令後的指令標記(br_mis_tag = 1) if (branch_success_predict) 清掉tag
+    
     always_comb begin
         for (int i = 0; i < DISPATCH_WIDTH; i++) begin
             if (rs_packets_i[i].disp_packet.fu_type == FU_BRANCH) begin
@@ -114,6 +115,9 @@ module RS #(
     end
 
     assign br_mis_tag_single = (br_mis_tag || br_mis_tag_next);
+    assign br_mispredict = (is_branch_i) ? br_mispredict_i : 0;
+    assign clear_instr = (is_branch_i && br_mispredict_i);
+
     // =========================================================
     // Whole RS table
     // =========================================================
@@ -127,14 +131,15 @@ module RS #(
             ) rs_entry (
                 .clock(clock),
                 .reset(reset),
-                .flush(flush),
-                .br_misrpedict_i(br_misrpedict_i),
-                .br_tag(br_mis_tag_single), // indicate whether this entry is after branch instruction
-                .clear_br_tag(clear_br_tag),
                 .disp_enable_i(disp_enable[i]),
                 .rs_packets_i(rs_packets[i]),
                 .empty_o(rs_empty[i]),
                 .issue_i(issue_enable_i[i]),
+
+                .br_mis_tag_single_i(br_mis_tag_single),
+                .clear_br_tag_i(clear_br_tag),
+                .clear_wrong_instr_i(clear_instr),
+
                 .rs_single_entry_o(rs_entries_o[i]),
                 .fu_type_o(fu_type_o[i]),
                 .ready_o(rs_ready_o[i]),
@@ -256,6 +261,10 @@ module RS #(
   
   endtask
 
+  task automatic show_br_tag();
+    $display("is_branch_i = %d, br_mispredict_i = %d, branch_success_predict = %d, br_mis_tag=%b, br_mis_tag_single=%b, clear_wrong_instr_i", is_branch_i, br_mispredict_i, branch_success_predict, br_mis_tag, br_mis_tag_single, clear_instr);
+  endtask
+
   int cycle_count;
   always_ff @(posedge clock) begin
     if (reset)  
@@ -266,8 +275,15 @@ module RS #(
       //test_grant_vector(cycle_count);
      // test_dispatch_enable(cycle_count);
      show_rs_output();
+     show_br_tag();
       //show_disp_instr();
     
+  end
+  integer fd_rs;
+  initial begin
+
+    $dumpfile("rs_wave.vcd");
+    $dumpvars(0, RS);     
   end
 
 endmodule

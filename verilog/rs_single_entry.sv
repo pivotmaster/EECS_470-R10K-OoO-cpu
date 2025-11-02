@@ -12,7 +12,7 @@ module rs_single_entry #(
     parameter int unsigned CDB_WIDTH    = 2,
     parameter int unsigned FU_NUM       = 8
 )(
-    input                                                clock, reset, flush,
+    input                                                clock, reset,
 
     // Dispatch interface
     input  logic                                         disp_enable_i,
@@ -24,8 +24,8 @@ module rs_single_entry #(
 
     // BR mispredict recovery 
     input  logic                                         br_mis_tag_single_i, // from RS control module
-    input  logic                                         br_mispredict_i, // from RS control module
     input  logic                                         clear_br_tag_i, // from RS control module
+    input logic                                          clear_wrong_instr_i, // from RS control module
 
     output rs_entry_t                                    rs_single_entry_o,
     output logic [$clog2(FU_NUM)-1:0]                    fu_type_o,
@@ -83,11 +83,13 @@ module rs_single_entry #(
         br_mis_tag_next = br_mis_tag;
 
         // Branch mispredict recovery
-        if ((br_mispredict_i && (br_mis_tag || br_mis_tag_next) && !empty)) begin // !empty = 有效指令
+        if (clear_wrong_instr_i && !empty) begin // !empty = 有效指令
             empty_next    = 1'b1;
             rs_busy_next  = 1'b0;
             rs_entry_next = '{default:'0}; 
-        end else if (disp_enable_i && empty &&rs_packets_i.valid) begin
+        end else 
+        
+        if (disp_enable_i && empty &&rs_packets_i.valid) begin
             rs_entry_next = rs_packets_i;
             empty_next    = 1'b0;
             rs_busy_next  = 1'b1; 
@@ -140,29 +142,46 @@ module rs_single_entry #(
     // =========================================================
     // DEBUG
     // =========================================================
-    /*
-    integer cycle_count;
 
-
-    always_ff @(posedge clock) begin
-    if (reset)  
-        cycle_count <= 0;
-    else begin
-        cycle_count <= cycle_count + 1; 
-        if (ENTRY_ID >0) begin
-            $display("i = %d, ready_o = %0b", ENTRY_ID,ready_o);
-           
-            $display("%0d", disp_enable_i);
-            $display("[Cycle=%0d] %m ROB_idx=%0d | Dest=%0d | Src1=%0d (%b) | Src2=%0d (%b)",
-                        cycle_count, 
-                        rs_single_entry_o.rob_idx,
-                        rs_single_entry_o.dest_tag,
+    task automatic dump_entry();
+    $display("RS_SINGLE_ENTRY[%0d] empty=%0b | busy=%0b | br_mis_tag=%0b | ROB_idx=%0d | Dest=%0d | Src1=%0d (%b) | Src2=%0d (%b)",
+            ENTRY_ID, 
+            empty, rs_busy, br_mis_tag,
+            br_mis_tag_single_i, rs_single_entry_o.rob_idx, rs_single_entry_o.dest_tag,
                         rs_single_entry_o.src1_tag, rs_single_entry_o.src1_ready,
-                        rs_single_entry_o.src2_tag, rs_single_entry_o.src2_ready);
-        end               
-    end
-    end
-    */
+                        rs_single_entry_o.src2_tag, rs_single_entry_o.src2_ready
+);
+    endtask
+
+    // always_ff @( clock ) begin 
+    //     $display(clear_wrong_instr_i && !empty);
+    //     $display("clear_wrong_instr_i=%b | !empty=%b (%b)",clear_wrong_instr_i , !empty, (clear_wrong_instr_i && !empty));
+    // end
+
+    // integer cycle_count;
+
+
+    // always_ff @(posedge clock) begin
+    // if (reset)  
+    //     cycle_count <= 0;
+    // else begin
+    //     cycle_count <= cycle_count + 1; 
+    //     if (ENTRY_ID >0) begin
+    //        // $display("i = %d, ready_o = %0b", ENTRY_ID,ready_o);
+    //        if (!empty) dump_entry();
+    //        else $display("RS_SINGLE_ENTRY[%0d] empty=%0b", ENTRY_ID, empty);
+           
+    //         // $display("%0d", disp_enable_i);
+    //         // $display("[Cycle=%0d] %m ROB_idx=%0d | Dest=%0d | Src1=%0d (%b) | Src2=%0d (%b)",
+    //         //             cycle_count, 
+    //         //             rs_single_entry_o.rob_idx,
+    //         //             rs_single_entry_o.dest_tag,
+    //         //             rs_single_entry_o.src1_tag, rs_single_entry_o.src1_ready,
+    //         //             rs_single_entry_o.src2_tag, rs_single_entry_o.src2_ready);
+    //     end               
+    // end
+    // end
+    
 
 endmodule
 

@@ -35,8 +35,14 @@ module free_list #(
     // Commit -> free list: release old physical registers
     // =========================================================
     input  logic [COMMIT_WIDTH-1:0]                         free_valid_i,  //not all instructions will release reg (ex:store)
-    input  logic [COMMIT_WIDTH-1:0][$clog2(PHYS_REGS)-1:0]  free_phys_i
+    input  logic [COMMIT_WIDTH-1:0][$clog2(PHYS_REGS)-1:0]  free_phys_i,
     // output logic [$clog2(PHYS_REGS)-1:0] free_fifo_debug [PHYS_REGS-1:0];    
+
+    // =========================================================
+    // branch -> free list
+    // =========================================================
+    input  logic [DISPATCH_WIDTH-1:0]                         snapshot_restore_i,
+    input  logic [DISPATCH_WIDTH-1:0]                         is_branch_instr_i
 );
 
     // =========================================================
@@ -48,6 +54,14 @@ module free_list #(
 
     logic [$clog2(PHYS_REGS)-1:0] next_head, next_tail;
     logic [$clog2(PHYS_REGS):0]     next_count;
+
+    // =========================================================
+    // snapshot registers
+    // =========================================================
+    logic [$clog2(PHYS_REGS)-1:0] snapshot_head     [DISPATCH_WIDTH-1:0];
+    logic [$clog2(PHYS_REGS)-1:0] snapshot_tail     [DISPATCH_WIDTH-1:0];
+    logic [$clog2(PHYS_REGS):0]   snapshot_count    [DISPATCH_WIDTH-1:0];
+    logic [$clog2(PHYS_REGS)-1:0] snapshot_fifo     [DISPATCH_WIDTH-1:0][PHYS_REGS-ARCH_REGS-1:0];
 
     // Used to track simultaneous transactions
     int N_alloc; // Actual number of successful allocations (0 to DISPATCH_WIDTH)
@@ -100,8 +114,7 @@ module free_list #(
 
     /////////////////////////////////////////////////////////////////////////
     always_comb begin
-        
-        // --- 1. 計算 N_free (釋放的數量) ---
+        // --- 1. caculate # of N_free  ---
         N_free = 0;
         for (int j = 0; j < COMMIT_WIDTH; j++) begin
             if (free_valid_i[j]) begin
@@ -187,6 +200,31 @@ module free_list #(
                     // count <= count + 1;
                 end
             end
+            
+            for (int i = 0 ; i < DISPATCH_WIDTH ; i++)begin
+                if(is_branch_instr_i[i])begin
+                    snapshot_head[i]  <= head;
+                    snapshot_tail[i]  <= tail;
+                    snapshot_count[i] <= count;
+                    for (int j = 0; j < (PHYS_REGS - ARCH_REGS) ; j++)begin
+                        snapshot_fifo[i][j] <= free_fifo[j]; 
+                    end
+                end
+            end
+
+            for(int i = 0 ; i < DISPATCH_WIDTH ;i++)begin
+                if(snapshot_restore_i[i])begin
+                    head <= snapshot_head[i];
+                    tail <= snapshot_tail[i];
+                    count <= snapshot_count[i];
+                    for (int j = 0; j < (PHYS_REGS - ARCH_REGS); j++) begin
+                        free_fifo[j] <= snapshot_fifo[i][j];
+                end
+                end
+            end
+            end
+
+
 
             // =====================================================
             // Allocation (Dispatch)
@@ -204,7 +242,6 @@ module free_list #(
             //     end
             // end
         end
-    end 
 
 /*
     always_ff @(negedge clock)begin 

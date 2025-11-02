@@ -99,6 +99,7 @@ module cpu #(
     logic [`DISPATCH_WIDTH-1:0][$clog2(`ARCH_REGS)-1:0] src1_arch;
     logic [`DISPATCH_WIDTH-1:0][$clog2(`ARCH_REGS)-1:0] src2_arch;
     logic [`DISPATCH_WIDTH-1:0][$clog2(`PHYS_REGS)-1:0] dest_new_prf; //T_new
+    logic [`DISPATCH_WIDTH-1:0] is_branch;
     // RS
     logic [DISPATCH_WIDTH-1:0] disp_rs_valid;
     logic [`DISPATCH_WIDTH-1:0] disp_rs_rd_wen;
@@ -156,6 +157,7 @@ module cpu #(
 // RS
     logic [$clog2(`DISPATCH_WIDTH)-1:0] rs_free_slot;      // how many slot is free? (saturate at DISPATCH_WIDTH)
     logic rs_full;
+    logic is_branch_i; //for rs
     //logic [`DISPATCH_WIDTH-1:0] disp_rs_ready; 
     rs_entry_t [`RS_DEPTH-1:0] rs_entries;
     logic [`RS_DEPTH-1:0] rs_ready;
@@ -288,6 +290,8 @@ module cpu #(
     MEM_TAG     outstanding_mem_tag;    // tag load is waiting in
     MEM_COMMAND Dmem_command_filtered;  // removes redundant loads
 
+
+    logic br_mispredict, branch_success_predict;
     //////////////////////////////////////////////////
     //                                              //
     //                Memory Outputs                //
@@ -480,6 +484,7 @@ module cpu #(
         .src1_arch_o(src1_arch),
         .src2_arch_o(src2_arch),
         .dest_new_prf(dest_new_prf),
+        .is_branch_o(is_branch),
 
         //rs inputs
         .free_rs_slots_i(rs_free_slot),
@@ -532,7 +537,7 @@ module cpu #(
         .wb_valid_i(wb_valid),
         .wb_rob_idx_i(wb_rob_idx),
         .wb_exception_i(wb_exception),
-        .wb_mispred_i(wb_exception),
+        .wb_mispred_i(wb_mispred),
 
         // Commit
         .commit_valid_o(commit_valid),
@@ -579,6 +584,7 @@ module cpu #(
         // .snapshot_restore_i(snapshot_restore_i),
         // .snapshot_data_i(snapshot_data_i),
         // .snapshot_data_o(snapshot_data_o)
+        .is_branch_instr_i(is_branch),
         .flush_i('0),
         .snapshot_restore_i('0),
         .snapshot_data_i('0),
@@ -679,10 +685,10 @@ module cpu #(
     //                                              //
     //////////////////////////////////////////////////
 
+
     RS rs_0(
         .clock (clock),
         .reset (reset),
-        .flush(flush),
         //Inputs
         .disp_valid_i(disp_rs_valid),
         .rs_packets_i(rs_packets),
@@ -700,7 +706,11 @@ module cpu #(
 
         .rs_entries_o(rs_entries),
         .rs_ready_o(rs_ready),  
-        .fu_type_o(fu_types)
+        .fu_type_o(fu_types),
+
+        .is_branch_i(is_branch_i),
+        .br_mispredict_i(br_mispredict), //####
+        .branch_success_predict(branch_success_predict)
     );
 
     //////////////////////////////////////////////////
@@ -931,13 +941,26 @@ module cpu #(
         // rob
         .wb_valid_o(wb_valid),
         .wb_rob_idx_o(wb_rob_idx),
-        .wb_exception_o(wb_exception),
+        .wb_exception_o(wb_exception), // = is branch
         .wb_mispred_o(wb_mispred),
 
         // cdb
         .cdb_o(cdb_packets)
     );
 
+    always_comb begin
+        // br_mispredict  = | wb_mispred;
+        br_mispredict  = 1; //暫時改成1
+        is_branch_i    = | wb_exception;
+    end
+
+    assign branch_success_predict = !br_mispredict;
+
+    // always_ff @(negedge clock) begin
+    //     $display("br_mispredict=%b | is_branch_i=%b | wb_mispred=%b | wb_exception=%b", br_mispredict, is_branch_i, wb_mispred, wb_exception);
+    // end
+
+    //assign  |= wb_exception;
     /*
     always_ff @(negedge clock) begin
         $display("Complete input: CDB_alu_value=%d | CDB_mul_value=%d", fu_value_reg[0], fu_value_reg[1]);

@@ -183,7 +183,7 @@ module branch_fu #(
     resp_o.value     = {{(XLEN-1){1'b0}}, take};
     resp_o.dest_prf  = req_i.dest_tag;
     resp_o.rob_idx   = req_i.rob_idx;
-    resp_o.exception = 1'b0;
+    resp_o.exception = 1'b1; // TODO: is branch
     resp_o.mispred   = take;
   end
 endmodule

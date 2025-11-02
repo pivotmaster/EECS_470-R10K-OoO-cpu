@@ -60,12 +60,13 @@ module dispatch_stage #(
     output  logic      [DISPATCH_WIDTH-1:0][$clog2(ARCH_REGS)-1:0]    dest_arch_o,     //write reg   request
     output  logic      [DISPATCH_WIDTH-1:0][$clog2(ARCH_REGS)-1:0]    src1_arch_o,   //read  reg 1 request
     output  logic      [DISPATCH_WIDTH-1:0][$clog2(ARCH_REGS)-1:0]    src2_arch_o,   //read  reg 2 request
-    output  logic      [DISPATCH_WIDTH-1:0][$clog2(PHYS_REGS)-1:0]   dest_new_prf, //
+    output  logic      [DISPATCH_WIDTH-1:0][$clog2(PHYS_REGS)-1:0]    dest_new_prf, //
+    output  logic      [DISPATCH_WIDTH-1:0]                           is_branch_o,
 
     // =========================================================
     // Dispatch <-> RS
     // =========================================================
-    input  logic       [$clog2(DISPATCH_WIDTH+1)-1:0]                   free_rs_slots_i,      // how many free slots in rs
+    input  logic       [$clog2(DISPATCH_WIDTH+1)-1:0]                 free_rs_slots_i,      // how many free slots in rs
     input  logic                                                      rs_full_i,   
     
     output logic       [DISPATCH_WIDTH-1:0]                           disp_rs_valid_o,
@@ -160,6 +161,7 @@ module dispatch_stage #(
             dest_arch_o[i] = disp_packet_o[i].dest_reg_idx;  // from decoder
             rename_valid_o[i] = if_packet_i[i].valid & disp_rs_rd_wen_o[i] & (i < disp_n); // only if instruction is valid
             alloc_req_o[i] = if_packet_i[i].valid & disp_rs_rd_wen_o[i] & (i < disp_n);
+            is_branch_o[i] = (disp_packet_o[i].cond_branch | disp_packet_o[i].uncond_branch);
 
             // To RS
             if(i < disp_n)begin

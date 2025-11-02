@@ -64,6 +64,12 @@ module complete_stage #(
         end
     end
 
+  integer fd_cm;
+  initial begin
+
+    $dumpfile("complete_stage_wave.vcd");
+    $dumpvars(0, complete_stage);     
+  end
 
 endmodule
 

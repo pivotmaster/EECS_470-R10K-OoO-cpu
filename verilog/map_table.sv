@@ -101,7 +101,8 @@ module map_table#(
     //   snapshot_data_o     : current table snapshot for saving
     //
     input  logic                                              flush_i,
-    input  logic                                              snapshot_restore_i,
+    input  logic [DISPATCH_WIDTH-1:0]                         snapshot_restore_i,
+    input  logic [DISPATCH_WIDTH-1:0]                         is_branch_instr_i,
     input  logic [ARCH_REGS-1:0][$clog2(PHYS_REGS)-1:0]       snapshot_data_i,
     output logic [ARCH_REGS-1:0][$clog2(PHYS_REGS)-1:0]       snapshot_data_o
 );
@@ -119,6 +120,7 @@ module map_table#(
 
     // Full mapping table (Architectural Register → Physical Register)
     map_entry_t table [ARCH_REGS-1:0];
+    map_entry_t snapshot_table [DISPATCH_WIDTH-1:0][ARCH_REGS-1:0];
     // =======================================================
     // Reset / Init: on reset, create identity mapping:
     // arch reg i -> phys i, and mark valid = 1
@@ -129,8 +131,21 @@ module map_table#(
             for(int i =0; i< ARCH_REGS; i++)begin
                 table[i].phys <= i;
                 table[i].valid <= 1'b1;
+
+                // snapshot_table[i].phys <= i;
+                // snapshot_table[i].valid <= 1'b1;
             end
-            for(int i =0; i< DISPATCH_WIDTH; i++)begin
+
+
+            // =============reset for snapshot table ================
+            for(int i =0 ; i< DISPATCH_WIDTH ; i++)begin
+                for(int j = 0 ; j < ARCH_REGS ; j++)begin
+                    snapshot_table[i][j].phys <= i;
+                    snapshot_table[i][j].valid <= 1'b1;
+                end
+            end
+
+            for(int i = 0; i < DISPATCH_WIDTH; i++)begin
                 disp_old_phys_o[i] <= '0;
             end
         end else begin
@@ -138,7 +153,7 @@ module map_table#(
             //    Dispatch rename (speculative): for each dispatch slot,
             //    install new mapping and mark value as NOT ready (valid=0).
             // ===================================================
-            for(int i =0 ; i < DISPATCH_WIDTH ; i++)begin
+            for(int i = 0 ; i < DISPATCH_WIDTH ; i++)begin
                 if(disp_valid_i[i])begin
                     disp_old_phys_o[i] <= table[disp_arch_i[i]].phys;
                     table[disp_arch_i[i]].phys <= disp_new_phys_i[i];
@@ -168,10 +183,21 @@ module map_table#(
             // We also mark valid = 1 for restored (AMT state is committed).
             // ===================================================
 
-            if(snapshot_restore_i) begin
-                for(int i =0; i < ARCH_REGS ; i++)begin
-                    table[i].phys <= snapshot_data_i[i];
-                    table[i].valid <= 1'b1;
+            for(int i = 0 ; i < DISPATCH_WIDTH ; i++)begin
+                if(snapshot_restore_i[i]) begin
+                    for(int j =0; j < ARCH_REGS ; j++)begin
+                        table[j].phys <= snapshot_table[i][j].phys;
+                        table[j].valid <= snapshot_table[i][j].valid;
+                    end
+                end
+            end
+
+            for(int i = 0 ; i < DISPATCH_WIDTH ; i++)begin
+                if(is_branch_instr_i[i])begin
+                    for(int j = 0 ; j < ARCH_REGS ; j++)begin
+                        snapshot_table[i][j].phys <= table[j].phys;
+                        snapshot_table[i][j].valid <= table[j].valid;
+                    end
                 end
             end
 
@@ -199,7 +225,7 @@ module map_table#(
             assign rs1_valid_o[i] = table[rs1_arch_i[i]].valid;
             //rs2 outputs
             assign rs2_phys_o[i] = table[rs2_arch_i[i]].phys;
-            assign rs2_valid_o[i] = table[rs2_arch_i].valid;
+            assign rs2_valid_o[i] = table[rs2_arch_i[i]].valid;
         end
     endgenerate
 
@@ -215,9 +241,9 @@ module map_table#(
     endgenerate
 
 
-    always_ff @(negedge clock) begin
-        // for(int i = 0 ; )
-        // $display("table[1],valid = %0b, table[1].value  = %d \n", table[1].valid, table[1].phys);
-    end
+    // always_ff @(negedge clock) begin
+    //     for(int i = 0 ; )
+    //     $display("table[1],valid = %0b, table[1].value  = %d \n", table[1].valid, table[1].phys);
+    // end
 
 endmodule
