@@ -140,8 +140,8 @@ module map_table#(
             // =============reset for snapshot table ================
             for(int i =0 ; i< DISPATCH_WIDTH ; i++)begin
                 for(int j = 0 ; j < ARCH_REGS ; j++)begin
-                    snapshot_table[i].phys <= i;
-                    snapshot_table[i].valid <= 1'b1;
+                    snapshot_table[i][j].phys <= i;
+                    snapshot_table[i][j].valid <= 1'b1;
                 end
             end
 
@@ -195,8 +195,8 @@ module map_table#(
             for(int i = 0 ; i < DISPATCH_WIDTH ; i++)begin
                 if(is_branch_instr_i[i])begin
                     for(int j = 0 ; j < ARCH_REGS ; j++)begin
-                        snapshot_table[i][j].phys <= table[i].phys;
-                        snapshot_table[i][j].valid <= table[i].valid;
+                        snapshot_table[i][j].phys <= table[j].phys;
+                        snapshot_table[i][j].valid <= table[j].valid;
                     end
                 end
             end
@@ -225,7 +225,7 @@ module map_table#(
             assign rs1_valid_o[i] = table[rs1_arch_i[i]].valid;
             //rs2 outputs
             assign rs2_phys_o[i] = table[rs2_arch_i[i]].phys;
-            assign rs2_valid_o[i] = table[rs2_arch_i].valid;
+            assign rs2_valid_o[i] = table[rs2_arch_i[i]].valid;
         end
     endgenerate
 
