@@ -183,4 +183,47 @@ module rob #(
     // end
     // end
 
+    // =========================================================
+    // For GUI Debugger
+    // =========================================================
+    integer rob_trace_fd;
+
+    initial begin
+        rob_trace_fd = $fopen("rob_trace.json", "w");
+        if (rob_trace_fd == 0)
+            $fatal("Failed to open rob_trace.json!");
+    end
+
+    task automatic dump_rob_state(int cycle);
+        $fwrite(rob_trace_fd, "{ \"cycle\": %0d, \"ROB\": [", cycle);
+        for (int i = 0; i < DEPTH; i++) begin
+            if (rob_table[i].valid) begin
+                automatic rob_entry_t e = rob_table[i];
+                $fwrite(rob_trace_fd,
+                    "{\"idx\":%0d, \"valid\":%0d, \"ready\":%0d, \"rd_wen\":%0d,\"rd_arch\":%0d, \"new_prf\":%0d, \"old_prf\":%0d,\"exception\":%0d, \"mispred\":%0d}",
+                    i, e.valid, e.ready, e.rd_wen, e.rd_arch,
+                    e.new_prf, e.old_prf, e.exception, e.mispred);
+            end else begin
+                $fwrite(rob_trace_fd, "{\"idx\":%0d, \"valid\":0}", i);
+            end
+
+            if (i != DEPTH - 1)
+                $fwrite(rob_trace_fd, ",");
+        end
+        $fwrite(rob_trace_fd, "]}\n");
+        $fflush(rob_trace_fd); 
+    endtask
+
+
+    int cycle_count;
+    always_ff @(posedge clock) begin
+        if (reset) begin
+            cycle_count <= 0;
+        end else begin
+            cycle_count <= cycle_count + 1;
+            dump_rob_state(cycle_count);
+        end
+    end
+
+
 endmodule
