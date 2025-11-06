@@ -9,8 +9,8 @@
 module rs_single_entry #(
     parameter int ENTRY_ID = 0,
     parameter int unsigned PHYS_REGS    = 128,
-    parameter int unsigned CDB_WIDTH    = 2,
-    parameter int unsigned FU_NUM       = 8
+    parameter int unsigned CDB_WIDTH    = 4,
+    parameter int unsigned FU_NUM       = 4
 )(
     input                                                clock, reset, flush,
 
@@ -21,11 +21,6 @@ module rs_single_entry #(
 
     // Issue interface
     input  logic                                         issue_i, 
-
-    // BR mispredict recovery 
-    input  logic                                         br_mis_tag_single_i, // from RS control module
-    input  logic                                         br_mispredict_i, // from RS control module
-    input  logic                                         clear_br_tag_i, // from RS control module
 
     output rs_entry_t                                    rs_single_entry_o,
     output logic [$clog2(FU_NUM)-1:0]                    fu_type_o,
@@ -47,13 +42,6 @@ module rs_single_entry #(
     logic           empty, empty_next;
     rs_entry_t      rs_entry, rs_entry_next; // reg
     logic rs_busy, rs_busy_next;
-    logic br_mis_tag, br_mis_tag_next;
-
-    // internal Register (store branch tag)
-
-    // =========================================================
-    // Branch mispredict recovery (flush)
-    // =========================================================
 
     // =========================================================
     // CDB Wakeup
@@ -80,19 +68,13 @@ module rs_single_entry #(
         rs_entry_next = rs_entry;
         empty_next    = empty;
         rs_busy_next = rs_busy;
-        br_mis_tag_next = br_mis_tag;
 
-        // Branch mispredict recovery
-        if ((br_mispredict_i && (br_mis_tag || br_mis_tag_next) && !empty)) begin
-            empty_next    = 1'b1;
-            rs_busy_next  = 1'b0;
-            rs_entry_next = '{default:'0}; 
-        end else if (disp_enable_i && empty &&rs_packets_i.valid) begin
+        if (disp_enable_i && empty &&rs_packets_i.valid) begin
             rs_entry_next = rs_packets_i;
             empty_next    = 1'b0;
             rs_busy_next  = 1'b1; 
-            br_mis_tag_next = br_mis_tag_single_i;
         end else begin
+            
             // CDB wake up
             rs_entry_next.src1_ready = rs_entry.src1_ready | src1_hit;
             rs_entry_next.src2_ready = rs_entry.src2_ready | src2_hit;
@@ -112,14 +94,10 @@ module rs_single_entry #(
             rs_entry     <= '{default:'0}; 
             empty        <= 1'b1;
             rs_busy     <= 1'b0;
-            br_mis_tag <= 1'b0;
-        end else if (clear_br_tag_i) begin
-            br_mis_tag <= 1'b0;
         end else begin
             rs_entry     <= rs_entry_next;
             empty        <= empty_next;
             rs_busy     <= rs_busy_next;
-            br_mis_tag <= br_mis_tag_next;
         end
     end
 

@@ -3,7 +3,7 @@ module rob #(
     parameter int unsigned INST_W          = 16,
     parameter int unsigned DISPATCH_WIDTH  = 1,
     parameter int unsigned COMMIT_WIDTH    = 1,
-    parameter int unsigned WB_WIDTH        = 1,
+    parameter int unsigned WB_WIDTH        = 4,
     parameter int unsigned ARCH_REGS       = 64,
     parameter int unsigned PHYS_REGS       = 128,
     parameter int unsigned XLEN            = 32
@@ -91,8 +91,8 @@ module rob #(
     always_comb begin
         retire_en = '0;
         for (int i = 0; i < COMMIT_WIDTH; i++) begin
-            if (!empty && rob_table[(head + i) % DEPTH].valid && rob_table[(head + i) % DEPTH].ready 
-                && ((i == 0) || retire_en[i-1])) begin
+            // if (!empty && rob_table[(head + i) % DEPTH].valid && rob_table[(head + i) % DEPTH].ready && ((i == 0) || retire_en[i-1])) begin ### ?not sure the valid part
+            if (!empty && rob_table[(head + i) % DEPTH].ready && ((i == 0) || retire_en[i-1])) begin
                 retire_en[i] = 1'b1;
             end
         end
@@ -112,7 +112,11 @@ module rob #(
             end
 
             for (int i = 0; i < DEPTH; i++) begin
-                rob_table[i]     <= '0;
+            //     rob_table[i].valid     <= 1'b0;
+            //     rob_table[i].ready     <= 1'b0;
+            //     rob_table[i].exception <= 1'b0;
+            //     rob_table[i].mispred   <= 1'b0;
+                rob_table[i] <= '0;
             end
 
         end else begin
@@ -154,8 +158,8 @@ module rob #(
                     if (rob_table[head].mispred || rob_table[head].exception) begin
                         flush_o              <= 1'b1;
                         flush_upto_rob_idx_o <= head;
-                        head   <= '0;
-                        tail   <= '0;
+                        head   <= '0;//###
+                        tail   <= '0;//###
                         count  <= '0;
                         for (int j = 0; j < DEPTH; j++) begin
                             rob_table[j].valid <= 1'b0;
@@ -178,9 +182,7 @@ module rob #(
     end
     // always_ff @(negedge clock)begin
     //    // $display("head = %0d  , tail = %0d\n" , head, tail);
-    //    for (int i=0; i < COMMIT_WIDTH; i++) begin
-    //    $display("commit_valid_o%d |commit_rd_arch_o=%d | commit_old_prf_o: %d | rob_table=%d | head=%d", commit_valid_o[i], commit_rd_arch_o[0], commit_old_prf_o[0], rob_table[head + i].old_prf[i], head);
-    // end
+    //    $display("disp_rob_idx_o=%d | commit_old_prf_o: %d", disp_rob_idx_o[0], commit_old_prf_o[0]);
     // end
 
 endmodule

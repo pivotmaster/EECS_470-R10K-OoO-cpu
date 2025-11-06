@@ -12,7 +12,7 @@
 `include "def.svh"
 
 module cpu #(
-    parameter int unsigned DISPATCH_WIDTH   = 2
+    parameter int unsigned DISPATCH_WIDTH   = 1
 )(
     input clock, // System clock
     input reset, // System reset
@@ -88,7 +88,8 @@ module cpu #(
 
     // Outputs from IF-Stage and IF/ID Pipeline Register
     IF_ID_PACKET [`FETCH_WIDTH-1:0] if_packet, if_id_reg;
-
+// Fetch
+    logic take_branch;
 // Dispactch
     //Free list
     logic [`DISPATCH_WIDTH-1:0] disp_free_space;
@@ -99,11 +100,10 @@ module cpu #(
     logic [`DISPATCH_WIDTH-1:0][$clog2(`ARCH_REGS)-1:0] src1_arch;
     logic [`DISPATCH_WIDTH-1:0][$clog2(`ARCH_REGS)-1:0] src2_arch;
     logic [`DISPATCH_WIDTH-1:0][$clog2(`PHYS_REGS)-1:0] dest_new_prf; //T_new
-    logic [`DISPATCH_WIDTH-1:0] is_branch;
     // RS
-    logic [DISPATCH_WIDTH-1:0] disp_rs_valid;
+    logic [`DISPATCH_WIDTH-1:0] disp_rs_valid;
     logic [`DISPATCH_WIDTH-1:0] disp_rs_rd_wen;
-    rs_entry_t  [DISPATCH_WIDTH-1:0] rs_packets;
+    rs_entry_t  [`DISPATCH_WIDTH-1:0] rs_packets;
     // ROB
     logic [`DISPATCH_WIDTH-1:0] disp_rob_space;
     logic [`DISPATCH_WIDTH-1:0] disp_rob_valid;
@@ -113,10 +113,10 @@ module cpu #(
     logic [`DISPATCH_WIDTH-1:0][$clog2(`PHYS_REGS)-1:0] disp_rd_old_prf;
 
 // Free list
-    logic [DISPATCH_WIDTH-1:0][$clog2(`PHYS_REGS-1):0] alloc_phys; // allocated PRF numbers
+    logic [`DISPATCH_WIDTH-1:0][$clog2(`PHYS_REGS)-1:0] alloc_phys; // allocated PRF numbers
     logic [`DISPATCH_WIDTH-1:0] alloc_valid; // whether each alloc succeed
     logic free_full;      // true if no free regs left
-    logic [$clog2(DISPATCH_WIDTH+1)-1:0] free_count; // number of free regs
+    logic [$clog2(`PHYS_REGS+1)-1:0] free_count; // number of free regs
 
 // Arch map table
     logic [`ARCH_REGS-1:0][$clog2(`PHYS_REGS)-1:0] snapshot; // Full snapshot of current architectural-to-physical map
@@ -155,7 +155,7 @@ module cpu #(
     logic [$clog2(`ROB_DEPTH)-1:0] flush_upto_rob_idx;
 
 // RS
-    logic [$clog2(`DISPATCH_WIDTH)-1:0] rs_free_slot;      // how many slot is free? (saturate at DISPATCH_WIDTH)
+    logic [$clog2(`DISPATCH_WIDTH+1)-1:0] rs_free_slot;      // how many slot is free? (saturate at DISPATCH_WIDTH)
     logic rs_full;
     //logic [`DISPATCH_WIDTH-1:0] disp_rs_ready; 
     rs_entry_t [`RS_DEPTH-1:0] rs_entries;
@@ -289,8 +289,6 @@ module cpu #(
     MEM_TAG     outstanding_mem_tag;    // tag load is waiting in
     MEM_COMMAND Dmem_command_filtered;  // removes redundant loads
 
-
-    logic br_misrpedict, branch_success_predict;
     //////////////////////////////////////////////////
     //                                              //
     //                Memory Outputs                //
@@ -333,9 +331,29 @@ module cpu #(
 
 
     // valid bit will cycle through the pipeline and come back from the wb stage
-    // assign if_valid = !stall;
-    assign if_valid = 1'b1; //###
-    assign if_flush = 1'b0; //###
+    // assign if_valid = ((!stall) && (if_packet[0].inst != 32'h10500073)) ? 1'b1 : 1'b0;//###
+    always_ff @(negedge clock) begin
+        $display("inst : %h", if_packet[0].inst);
+    end
+    // assign if_valid = 1'b1;
+    assign if_valid = !stall;
+    //###
+    logic [16:0] cycle;
+    always @(posedge clock) begin
+        if(reset)
+            cycle <= 0;
+        else
+            cycle <= cycle + 1;
+    end
+    // assign if_valid = (cycle < 45) ? 1'b1 : 1'b0; //###
+    // assign if_valid = 1'b1;
+    // assign if_flush = (wb_valid[3] & wb_mispred[3]); //###
+    // assign take_branch = wb_valid[3] & wb_mispred[3];
+    assign take_branch = 1'b0;
+    assign if_flush = 1'b0;
+    // always @(posedge clock) begin
+    //     $display("CPU. take_br, wb_valid, wb_mispred=%b %b %b", take_branch, wb_valid, wb_mispred);
+    // end
     assign pred_taken_i = 1'b0; //###
     assign pred_valid_i = 1'b0; //###
 
@@ -382,7 +400,8 @@ module cpu #(
 
         // Inputs
         .if_valid (if_valid),
-        .if_flush (if_flush),       
+        .if_flush (if_flush),  
+        .take_branch(take_branch),     
 
         .pred_valid_i(pred_valid_i),     
         .pred_lane_i(pred_lane_i),      
@@ -422,8 +441,8 @@ module cpu #(
     //                                              //
     //////////////////////////////////////////////////
 
-    // assign if_id_enable = !stall;
-    assign if_id_enable = 1'b1;//###
+    assign if_id_enable = !stall;
+    // assign if_id_enable = 1'b1;//###
 
     always_ff @(posedge clock) begin
         if (reset) begin
@@ -435,7 +454,14 @@ module cpu #(
             end
         end else if (if_id_enable) begin
             for(int i=0;i<`FETCH_WIDTH;i++) begin
-                if_id_reg[i] <= if_packet[i];
+                if_id_reg[i].inst <= if_packet[i].inst;
+                if_id_reg[i].NPC <= if_packet[i].NPC;
+                if_id_reg[i].PC <= if_packet[i].PC;
+                if(if_id_reg[i].inst == 0) begin
+                    if_id_reg[i].valid <= `FALSE;
+                end else begin
+                    if_id_reg[i].valid <= `TRUE;
+                end
             end
         end
     end
@@ -455,8 +481,8 @@ module cpu #(
     //                                              //
     //////////////////////////////////////////////////
     assign disp_rob_space = (free_rob_slots > `DISPATCH_WIDTH) ? `DISPATCH_WIDTH : free_rob_slots[`DISPATCH_WIDTH-1:0]; 
-    // assign disp_free_space = (free_count > `DISPATCH_WIDTH) ? `DISPATCH_WIDTH : free_count[`DISPATCH_WIDTH-1:0];
-    assign disp_free_space = 1'b1; //###
+    assign disp_free_space = (free_count > `DISPATCH_WIDTH) ? `DISPATCH_WIDTH : free_count[`DISPATCH_WIDTH-1:0];
+    // assign disp_free_space = 1'b1; //###
     dispatch_stage dispatch_stage_0(
         .clock (clock),
         .reset (reset),
@@ -483,7 +509,6 @@ module cpu #(
         .src1_arch_o(src1_arch),
         .src2_arch_o(src2_arch),
         .dest_new_prf(dest_new_prf),
-        .is_branch_o(is_branch),
 
         //rs inputs
         .free_rs_slots_i(rs_free_slot),
@@ -536,7 +561,7 @@ module cpu #(
         .wb_valid_i(wb_valid),
         .wb_rob_idx_i(wb_rob_idx),
         .wb_exception_i(wb_exception),
-        .wb_mispred_i(wb_mispred),
+        .wb_mispred_i(wb_mispred), //###
 
         // Commit
         .commit_valid_o(commit_valid),
@@ -546,8 +571,10 @@ module cpu #(
         .commit_old_prf_o(commit_old_prf),
 
         // Branch flush
-        .flush_o(flush_rob),
-        .flush_upto_rob_idx_o(flush_upto_rob_idx)
+        // .flush_o(flush_rob),
+        // .flush_upto_rob_idx_o(flush_upto_rob_idx)
+        .flush_o('0),
+        .flush_upto_rob_idx_o('0)
     );
 
     //////////////////////////////////////////////////
@@ -583,7 +610,6 @@ module cpu #(
         // .snapshot_restore_i(snapshot_restore_i),
         // .snapshot_data_i(snapshot_data_i),
         // .snapshot_data_o(snapshot_data_o)
-        .is_branch_instr_i(is_branch),
         .flush_i('0),
         .snapshot_restore_i('0),
         .snapshot_data_i('0),
@@ -684,11 +710,11 @@ module cpu #(
     //                                              //
     //////////////////////////////////////////////////
 
-
     RS rs_0(
         .clock (clock),
         .reset (reset),
-        .flush(flush),
+        .flush('0),
+        // .flush(flush),
         //Inputs
         .disp_valid_i(disp_rs_valid),
         .rs_packets_i(rs_packets),
@@ -706,10 +732,7 @@ module cpu #(
 
         .rs_entries_o(rs_entries),
         .rs_ready_o(rs_ready),  
-        .fu_type_o(fu_types),
-
-        .br_misrpedict_i(br_misrpedict), //####
-        .branch_success_predict(branch_success_predict)
+        .fu_type_o(fu_types)
     );
 
     //////////////////////////////////////////////////
@@ -718,8 +741,8 @@ module cpu #(
     //                                              //
     //////////////////////////////////////////////////
 
-    // assign id_s_enable = !stall;
-    assign id_s_enable = 1'b1;
+    assign id_s_enable = !stall;
+    // assign id_s_enable = 1'b1;
 
     always_ff @(posedge clock) begin
         if (reset) begin
@@ -774,11 +797,58 @@ module cpu #(
     //            S/EX Pipeline Register           //
     //                                              //
     //////////////////////////////////////////////////
-    // assign s_ex_enable = !stall;
+    // logic s_ex_stall;
+    // always_ff @(posedge clock) begin
+    //     s_ex_stall <= stall;
+    // end
+    // assign s_ex_enable = !s_ex_stall;
     assign s_ex_enable = 1'b1;
 
     always_ff @(posedge clock) begin
         if (reset) begin
+            // Clear all FU request registers
+            alu_req_reg_org[0]   <= '0;
+            mul_req_reg_org[0]   <= '0;
+            load_req_reg_org[0]  <= '0;
+            br_req_reg_org[0]    <= '0;
+
+            alu_req_reg[0].valid       <= '0;
+            alu_req_reg[0].rob_idx     <= '0;
+            alu_req_reg[0].imm         <= '0;
+            alu_req_reg[0].fu_type     <= '0;
+            alu_req_reg[0].opcode      <= '0;
+            alu_req_reg[0].dest_tag    <= '0;
+            alu_req_reg[0].src2_valid  <= '0;
+            alu_req_reg[0].disp_packet <= '0;
+
+            mul_req_reg[0].valid       <= '0;
+            mul_req_reg[0].rob_idx     <= '0;
+            mul_req_reg[0].imm         <= '0;
+            mul_req_reg[0].fu_type     <= '0;
+            mul_req_reg[0].opcode      <= '0;
+            mul_req_reg[0].dest_tag    <= '0;
+            mul_req_reg[0].src2_valid  <= '0;
+            mul_req_reg[0].disp_packet <= '0;
+
+            load_req_reg[0].valid       <= '0;
+            load_req_reg[0].rob_idx     <= '0;
+            load_req_reg[0].imm         <= '0;
+            load_req_reg[0].fu_type     <= '0;
+            load_req_reg[0].opcode      <= '0;
+            load_req_reg[0].dest_tag    <= '0;
+            load_req_reg[0].src2_valid  <= '0;
+            load_req_reg[0].disp_packet <= '0;
+
+            br_req_reg[0].valid       <= '0; 
+            br_req_reg[0].rob_idx     <= '0;
+            br_req_reg[0].imm         <= '0;
+            br_req_reg[0].fu_type     <= '0;
+            br_req_reg[0].opcode      <= '0;
+            br_req_reg[0].dest_tag    <= '0;
+            br_req_reg[0].src2_valid  <= '0;
+            br_req_reg[0].disp_packet <= '0;
+
+
             for(int i=0;i<`DISPATCH_WIDTH;i++) begin
 			    s_ex_reg[i] <= '0;
 		    end
@@ -844,12 +914,10 @@ module cpu #(
     //                     FU                       //
     //                                              //
     //////////////////////////////////////////////////
-   /*
-    always_ff @(negedge clock) begin
-        $display("rob=%d | dast_tag=%d | src1_val =%h | src2_val %h", alu_req_reg[0].rob_idx, alu_req_reg[0].dest_tag, alu_req_reg[0].src1_val, alu_req_reg[0].src2_val);
-        $display("MUL: rob=%d | dast_tag=%d | src1_val =%h | src2_val %h | res %h", mul_req_reg[0].rob_idx, mul_req_reg[0].dest_tag, mul_req_reg[0].src1_val, mul_req_reg[0].src2_val, fu_resp_bus[1].value);
-    end
-    */
+    // always_ff @(negedge clock) begin
+    //     $display("rob=%d | dast_tag=%d | src1_val =%h | src2_val %h", alu_req_reg[0].rob_idx, alu_req_reg[0].dest_tag, alu_req_reg[0].src1_val, alu_req_reg[0].src2_val);
+    //     $display("MUL: rob=%d | dast_tag=%d | src1_val =%h | src2_val %h | res %h", mul_req_reg[0].rob_idx, mul_req_reg[0].dest_tag, mul_req_reg[0].src1_val, mul_req_reg[0].src2_val, fu_resp_bus[1].value);
+    // end
     
     assign alu_req_reg[0].src1_val = rdata[0];
     assign alu_req_reg[0].src2_val = alu_req_reg_org[0].src2_valid ? rdata[1] : alu_req_reg_org[0].src2_val; 
@@ -883,6 +951,10 @@ module cpu #(
         .fu_mispred_o(fu_mispred)
     );
 
+    // always_ff @(negedge clock) begin
+    //     $display("fu br rob out valid, idx: %b, %d", fu_valid[3], fu_rob_idx[3]);
+    // end
+
     //////////////////////////////////////////////////
     //                                              //
     //             EX/C Pipeline Register           //
@@ -895,6 +967,12 @@ module cpu #(
                 ex_c_inst_dbg <= `NOP; // debug output
                 ex_c_reg      <= 0;    // the defaults can all be zero!
             end
+            fu_valid_reg <= '0;
+            fu_value_reg <= '0;
+            fu_dest_prf_reg <= '0;
+            fu_rob_idx_reg <= '0;
+            fu_exception_reg <= '0;
+            fu_mispred_reg <= '0;
         end else begin
             fu_valid_reg <= fu_valid;
             fu_value_reg <= fu_value;
@@ -910,6 +988,10 @@ module cpu #(
             end
         end
     end
+
+    // always_ff @(negedge clock) begin
+    //     $display("fu_valid : %b", fu_valid_reg);
+    // end
 
     // debug outputs
     //assign ex_c_NPC_dbg   = ex_c_reg.NPC;
@@ -946,19 +1028,10 @@ module cpu #(
         // cdb
         .cdb_o(cdb_packets)
     );
-
-    always_comb begin
-        br_misrpedict |= wb_mispred;
-    end
-    assign branch_success_predict = !br_misrpedict;
-    //assign  |= wb_exception;
-    /*
-    always_ff @(negedge clock) begin
-        $display("Complete input: CDB_alu_value=%d | CDB_mul_value=%d", fu_value_reg[0], fu_value_reg[1]);
-        $display("Complete: CDB_alu_value=%d | CDB_mul_value=%d", cdb_packets[0].value, cdb_packets[1].value);
-    end
-    */
-    
+    // always_ff @(negedge clock) begin
+    //     $display("Complete input: CDB_alu_value=%d | CDB_mul_value=%d | CDB_br_value=%d", fu_value_reg[0], fu_value_reg[1], fu_value_reg[3]);
+    //     $display("Complete: CDB_alu_value=%d | CDB_mul_value=%d | CDB_br_value=%d | wb_valid=%b | wb_mis_pred=%b | wb_rob_idx=%d ", cdb_packets[0].value, cdb_packets[1].value, cdb_packets[3].value, wb_valid, wb_mispred[3], wb_rob_idx[3]);
+    // end
     //////////////////////////////////////////////////
     //                                              //
     //                  retire                      //
@@ -975,7 +1048,8 @@ module cpu #(
         .commit_rd_arch_i(commit_rd_arch),
         .commit_new_prf_i(commit_new_prf),
         .commit_old_prf_i(commit_old_prf),
-        .flush_i(flush_rob),
+        // .flush_i(flush_rob),
+        .flush_i('0),
 
         // arch. map
         .amt_commit_valid_o(amt_commit_valid),

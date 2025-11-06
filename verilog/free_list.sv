@@ -26,7 +26,7 @@ module free_list #(
     output logic [DISPATCH_WIDTH-1:0][$clog2(PHYS_REGS)-1:0] alloc_phys_o, // allocated PRF numbers
     output logic [DISPATCH_WIDTH-1:0]                        alloc_valid_o, // whether each alloc succeed
     output logic                                             full_o,       // true if no free regs left
-    output logic [$clog2(PHYS_REGS):0]                       free_count_o, // number of free regs
+    output logic [$clog2(PHYS_REGS+1)-1:0]                       free_count_o, // number of free regs
     // output logic [DISPATCH_WIDTH-1:0]                       new_reg_o,
     // output logic [$clog2(DISPATCH_WIDTH)-1:0]               free_regs_o,   // how many regsiters are free? (saturate at DISPATCH_WIDTH)
     // output logic                                            empty_o,
@@ -181,7 +181,7 @@ module free_list #(
             //  Release (Commit) — push freed physical regs back
             // =========================================================
             for (int j = 0; j < COMMIT_WIDTH; j++) begin
-                if (free_valid_i[j]) begin
+                if (free_valid_i[j] && (free_phys_i[j] != 0)) begin
                     // tail  <= (tail + 1) % (PHYS_REGS - ARCH_REGS);
                     free_fifo[(tail+j) % (PHYS_REGS-ARCH_REGS)] <= free_phys_i[j];
                     // count <= count + 1;
@@ -205,8 +205,8 @@ module free_list #(
             // end
         end
     end 
+    /*
 
-/*
     always_ff @(negedge clock)begin 
         $display("free_phys = %0d , free_valid = %d\n", free_phys_i , free_valid_i);
         $display("head: %d , tail: %d\n" , head, tail);
@@ -214,7 +214,6 @@ module free_list #(
             $display("free_fifo[%d] = %0d\n", i, free_fifo[i]);
         end
     end
-
-*/
+    */
 
 endmodule

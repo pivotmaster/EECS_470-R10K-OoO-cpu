@@ -18,7 +18,8 @@ module stage_if #(
     input logic                            clock,          // system clock
     input logic                            reset,          // system reset
     input logic                            if_valid,       // only go to next PC when true (stall)
-    input logic                            if_flush,       
+    input logic                            if_flush,   
+    input logic take_branch, //###    
 
     // =========================================================
     // Branch Predictor ->  Fetch (only first branch was computed!!)
@@ -54,6 +55,11 @@ module stage_if #(
     // --------------------------
     logic [ADDR_WIDTH-1:0] PC_reg, PC_next;
 
+    // always_ff @(posedge clock) begin
+    //     $display("flush : %b, PC : %h, NPC : %h", if_flush, PC_reg, PC_next);
+    //     $display("if_valid : %b, pred_valid, taken, target : %b %b %h", if_valid, pred_valid_i, pred_taken_i, pred_target_i);
+    // end
+
     // Next PC priority:
     //  1) if_flush (from EXE correction)
     //  2) predicted taken
@@ -61,12 +67,18 @@ module stage_if #(
     always_comb begin
         // default: hold
         PC_next = PC_reg;
-
-        if (if_flush) begin
-            PC_next = correct_pc_target_o;
+        if(take_branch) begin
+            PC_next = 32'h68;
+        end else if (if_flush) begin
+            // PC_next = correct_pc_target_o;
+            PC_next = 32'h68;
         end else if (if_valid) begin
             if (pred_valid_i && pred_taken_i) begin
                 PC_next = pred_target_i;
+            end else if(PC_reg == 32'hA4) begin //###
+                PC_next = 32'h68; //###
+            // end else if(PC_reg == 32'hA8) begin //###
+            //     PC_next = 32'hA8; //###
             end else begin
                 PC_next = PC_reg + (FETCH_WIDTH << 2); // + 4 * FETCH_WIDTH
             end

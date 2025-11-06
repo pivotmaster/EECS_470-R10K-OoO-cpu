@@ -15,9 +15,9 @@
 module map_table#(
     parameter int ARCH_REGS = 64,           // Number of architectural registers
     parameter int PHYS_REGS = 128,          // Number of physical registers
-    parameter int DISPATCH_WIDTH = 2,       // Number of instructions dispatched per cycle
+    parameter int DISPATCH_WIDTH = 1,       // Number of instructions dispatched per cycle
     parameter int WB_WIDTH     = 4,         // Number of writeback ports
-    parameter int COMMIT_WIDTH = 2          // Number of commit ports
+    parameter int COMMIT_WIDTH = 1          // Number of commit ports
 )(
     input logic clock,                        // Clock signal
     input logic reset,                      // Asynchronous reset
@@ -101,8 +101,7 @@ module map_table#(
     //   snapshot_data_o     : current table snapshot for saving
     //
     input  logic                                              flush_i,
-    input  logic [DISPATCH_WIDTH-1:0]                         snapshot_restore_i,
-    input  logic [DISPATCH_WIDTH-1:0]                         is_branch_instr_i,
+    input  logic                                              snapshot_restore_i,
     input  logic [ARCH_REGS-1:0][$clog2(PHYS_REGS)-1:0]       snapshot_data_i,
     output logic [ARCH_REGS-1:0][$clog2(PHYS_REGS)-1:0]       snapshot_data_o
 );
@@ -119,8 +118,7 @@ module map_table#(
     } map_entry_t;
 
     // Full mapping table (Architectural Register → Physical Register)
-    map_entry_t table [ARCH_REGS-1:0];
-    map_entry_t snapshot_table [DISPATCH_WIDTH-1:0][ARCH_REGS-1:0];
+    map_entry_t table_reg [ARCH_REGS-1:0];
     // =======================================================
     // Reset / Init: on reset, create identity mapping:
     // arch reg i -> phys i, and mark valid = 1
@@ -129,23 +127,10 @@ module map_table#(
     always_ff @(posedge clock or posedge reset)begin
         if(reset)begin
             for(int i =0; i< ARCH_REGS; i++)begin
-                table[i].phys <= i;
-                table[i].valid <= 1'b1;
-
-                // snapshot_table[i].phys <= i;
-                // snapshot_table[i].valid <= 1'b1;
+                table_reg[i].phys <= i;
+                table_reg[i].valid <= 1'b1;
             end
-
-
-            // =============reset for snapshot table ================
-            for(int i =0 ; i< DISPATCH_WIDTH ; i++)begin
-                for(int j = 0 ; j < ARCH_REGS ; j++)begin
-                    snapshot_table[i][j].phys <= i;
-                    snapshot_table[i][j].valid <= 1'b1;
-                end
-            end
-
-            for(int i = 0; i < DISPATCH_WIDTH; i++)begin
+            for(int i =0 ; i < DISPATCH_WIDTH ; i++)begin
                 disp_old_phys_o[i] <= '0;
             end
         end else begin
@@ -153,11 +138,11 @@ module map_table#(
             //    Dispatch rename (speculative): for each dispatch slot,
             //    install new mapping and mark value as NOT ready (valid=0).
             // ===================================================
-            for(int i = 0 ; i < DISPATCH_WIDTH ; i++)begin
+            for(int i =0 ; i < DISPATCH_WIDTH ; i++)begin
                 if(disp_valid_i[i])begin
-                    disp_old_phys_o[i] <= table[disp_arch_i[i]].phys;
-                    table[disp_arch_i[i]].phys <= disp_new_phys_i[i];
-                    table[disp_arch_i[i]].valid <= 1'b0; 
+                    disp_old_phys_o[i] <= table_reg[disp_arch_i[i]].phys;
+                    table_reg[disp_arch_i[i]].phys <= disp_new_phys_i[i];
+                    table_reg[disp_arch_i[i]].valid <= 1'b0; 
                 end
             end
 
@@ -168,10 +153,10 @@ module map_table#(
             // ===================================================
             for (int i = 0 ; i < WB_WIDTH; i ++)begin
                 if(wb_valid_i[i])begin
-                    // table[wb_phys_i[i]].valid <= 1'b1;
+                    // table_reg[wb_phys_i[i]].valid <= 1'b1;
                     for(int j = 0 ; j < ARCH_REGS ; j++)begin
-                        if(table[j].phys == wb_phys_i[i])begin
-                            table[j].valid <= 1'b1;
+                        if(table_reg[j].phys == wb_phys_i[i])begin
+                            table_reg[j].valid <= 1'b1;
                         end
                     end
                 end
@@ -183,21 +168,10 @@ module map_table#(
             // We also mark valid = 1 for restored (AMT state is committed).
             // ===================================================
 
-            for(int i = 0 ; i < DISPATCH_WIDTH ; i++)begin
-                if(snapshot_restore_i[i]) begin
-                    for(int j =0; j < ARCH_REGS ; j++)begin
-                        table[j].phys <= snapshot_table[i][j].phys;
-                        table[j].valid <= snapshot_table[i][j].valid;
-                    end
-                end
-            end
-
-            for(int i = 0 ; i < DISPATCH_WIDTH ; i++)begin
-                if(is_branch_instr_i[i])begin
-                    for(int j = 0 ; j < ARCH_REGS ; j++)begin
-                        snapshot_table[i][j].phys <= table[j].phys;
-                        snapshot_table[i][j].valid <= table[j].valid;
-                    end
+            if(snapshot_restore_i) begin
+                for(int i =0; i < ARCH_REGS ; i++)begin
+                    table_reg[i].phys <= snapshot_data_i[i];
+                    table_reg[i].valid <= 1'b1;
                 end
             end
 
@@ -207,8 +181,8 @@ module map_table#(
             // ===================================================
             if(flush_i)begin
                 for(int i =0 ; i<ARCH_REGS ; i++)begin
-                    table[i].phys <= i;
-                    table[i].valid <= 1'b1;
+                    table_reg[i].phys <= i;
+                    table_reg[i].valid <= 1'b1;
                 end
             end
         end
@@ -221,11 +195,11 @@ module map_table#(
     generate 
         for(genvar i =0 ; i < DISPATCH_WIDTH ; i++)begin
             //rs1 outputs
-            assign rs1_phys_o[i] = table[rs1_arch_i[i]].phys;
-            assign rs1_valid_o[i] = table[rs1_arch_i[i]].valid;
+            assign rs1_phys_o[i] = table_reg[rs1_arch_i[i]].phys;
+            assign rs1_valid_o[i] = table_reg[rs1_arch_i[i]].valid;
             //rs2 outputs
-            assign rs2_phys_o[i] = table[rs2_arch_i[i]].phys;
-            assign rs2_valid_o[i] = table[rs2_arch_i[i]].valid;
+            assign rs2_phys_o[i] = table_reg[rs2_arch_i[i]].phys;
+            assign rs2_valid_o[i] = table_reg[rs2_arch_i].valid;
         end
     endgenerate
 
@@ -236,14 +210,14 @@ module map_table#(
     // snapshot_data_o[i] = current physical tag mapped to architectural register i
     generate
         for(genvar i =0 ; i< ARCH_REGS ; i++)begin
-            assign snapshot_data_o[i] = table[i].phys;
+            assign snapshot_data_o[i] = table_reg[i].phys;
         end
     endgenerate
 
 
     // always_ff @(negedge clock) begin
-    //     for(int i = 0 ; )
-    //     $display("table[1],valid = %0b, table[1].value  = %d \n", table[1].valid, table[1].phys);
+    //     // for(int i = 0 ; )
+    //     $display("table_reg[1],valid = %0b, table_reg[1].value  = %d \n", table_reg[1].valid, table_reg[1].phys);
     // end
 
 endmodule
