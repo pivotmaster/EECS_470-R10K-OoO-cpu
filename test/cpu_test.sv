@@ -352,28 +352,28 @@ module testbench;
         //);
     endtask
 
-    task automatic show_rs_status();
-        if (verisimpleV.rs_0.disp_valid_i[0]) begin
-            $display("[RS TEST] Dispatched to RS: fu_type=%0d, src1_tag=%0d(%b), src2_tag=%0d(%b), dest_tag=%0d, rob_idx=%0d",
-                verisimpleV.rs_0.rs_packets_i[0].fu_type,
-                verisimpleV.rs_0.rs_packets_i[0].src1_tag,
-                verisimpleV.rs_0.rs_packets_i[0].src1_ready,
-                verisimpleV.rs_0.rs_packets_i[0].src2_tag,
-                verisimpleV.rs_0.rs_packets_i[0].src2_ready,
-                verisimpleV.rs_0.rs_packets_i[0].dest_tag,
-                verisimpleV.rs_0.rs_packets_i[0].rob_idx
-            );
-        end
-    /*
-        $display("RS Entries:");
-        for (int i = 0; i < `RS_DEPTH; i++) begin
-        $display("Entry %0d: valid=%b, rob_idx=%0d, fu_type=%0d, dest_tag=%0d, src1_tag=%0d(%b), src2_tag=%0d(%b)", 
-            i, verisimpleV.rs_0.rs_entries_o[i].valid, verisimpleV.rs_0.rs_entries_o[i].rob_idx, verisimpleV.rs_0.rs_entries_o[i].fu_type, 
-            verisimpleV.rs_0.rs_entries_o[i].dest_tag, verisimpleV.rs_0.rs_entries_o[i].src1_tag, verisimpleV.rs_0.rs_entries_o[i].src1_ready,
-            verisimpleV.rs_0.rs_entries_o[i].src2_tag, verisimpleV.rs_0.rs_entries_o[i].src2_ready);
-        end
-    */
-    endtask
+    // task automatic show_rs_status();
+    //     if (verisimpleV.rs_0.disp_valid_i[0]) begin
+    //         $display("[RS TEST] Dispatched to RS: fu_type=%0d, src1_tag=%0d(%b), src2_tag=%0d(%b), dest_tag=%0d, rob_idx=%0d",
+    //             verisimpleV.rs_0.rs_packets_i[0].fu_type,
+    //             verisimpleV.rs_0.rs_packets_i[0].src1_tag,
+    //             verisimpleV.rs_0.rs_packets_i[0].src1_ready,
+    //             verisimpleV.rs_0.rs_packets_i[0].src2_tag,
+    //             verisimpleV.rs_0.rs_packets_i[0].src2_ready,
+    //             verisimpleV.rs_0.rs_packets_i[0].dest_tag,
+    //             verisimpleV.rs_0.rs_packets_i[0].rob_idx
+    //         );
+    //     end
+    // /*
+    //     $display("RS Entries:");
+    //     for (int i = 0; i < `RS_DEPTH; i++) begin
+    //     $display("Entry %0d: valid=%b, rob_idx=%0d, fu_type=%0d, dest_tag=%0d, src1_tag=%0d(%b), src2_tag=%0d(%b)", 
+    //         i, verisimpleV.rs_0.rs_entries_o[i].valid, verisimpleV.rs_0.rs_entries_o[i].rob_idx, verisimpleV.rs_0.rs_entries_o[i].fu_type, 
+    //         verisimpleV.rs_0.rs_entries_o[i].dest_tag, verisimpleV.rs_0.rs_entries_o[i].src1_tag, verisimpleV.rs_0.rs_entries_o[i].src1_ready,
+    //         verisimpleV.rs_0.rs_entries_o[i].src2_tag, verisimpleV.rs_0.rs_entries_o[i].src2_ready);
+    //     end
+    // */
+    // endtask
 /*
     always @(posedge clock) begin
         if (verisimpleV.if_valid_dbg[0])
@@ -393,6 +393,13 @@ module testbench;
     //###
     always_ff @(negedge clock) begin
         if(proc2mem_addr >= 32'd880) begin
+            $display("forced finished");
+            $finish;
+        end
+    end
+
+    always_ff @(negedge clock) begin
+        if(clock_count > 800) begin
             $display("forced finished");
             $finish;
         end

@@ -84,7 +84,9 @@ endmodule
 */
 
 module mul_fu #(
-  parameter int XLEN = 32
+  parameter int XLEN = 32,
+  parameter int PHYS_REGS = 128,
+  parameter int ROB_DEPTH = 64
 )(
     input  issue_packet_t req_i,
 
@@ -163,6 +165,15 @@ module branch_fu #(
   output fu_resp_t      resp_o,
   output logic          ready_o
 );
+
+  fu_resp_t resp_local_o;
+
+  alu_fu #(.XLEN(XLEN), .PHYS_REGS(PHYS_REGS), .ROB_DEPTH(ROB_DEPTH)) u_alu_br (
+        .req_i  (req_i),
+        .resp_o (resp_local_o),
+        .ready_o(ready_o)
+      );
+
   logic take;
   always_comb begin
           case (req_i.disp_packet.inst.b.funct3)
@@ -176,14 +187,14 @@ module branch_fu #(
           endcase
       end
 
-  assign ready_o = 1'b1;
+  // assign ready_o = 1'b1;
 
   always_comb begin
     resp_o.valid     = req_i.valid;
-    resp_o.value     = {{(XLEN-1){1'b0}}, take};
+    resp_o.value     = resp_local_o.value; // alu value
     resp_o.dest_prf  = req_i.dest_tag;
     resp_o.rob_idx   = req_i.rob_idx;
-    resp_o.exception = 1'b0;
+    resp_o.exception = 1'b1; // TODO: is branch
     resp_o.mispred   = take;
   end
 endmodule

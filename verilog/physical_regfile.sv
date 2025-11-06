@@ -2,7 +2,7 @@ module pr #(
     parameter int unsigned PHYS_REGS = 128,
     parameter int unsigned XLEN      = 32,
     parameter int unsigned READ_PORTS = 8,
-    parameter int unsigned WRITE_PORTS = 8,
+    parameter int unsigned WRITE_PORTS = 4,
     parameter bit          BYPASS_EN    = 1
 )(
     input logic clock,

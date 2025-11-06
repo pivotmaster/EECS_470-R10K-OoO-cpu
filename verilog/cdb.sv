@@ -13,7 +13,7 @@
 module cdb #(
     parameter int unsigned CDB_WIDTH  = 4,
     parameter int unsigned PHYS_REGS  = 128,
-    parameter int unsigned ARCH_REGS  = 32,
+    parameter int unsigned ARCH_REGS  = 64,
     parameter int unsigned ROB_DEPTH  = 64,
     parameter int unsigned XLEN       = 32
 )(
@@ -64,7 +64,6 @@ always_ff @(posedge clock) begin
         end
     end
 end
-
 
     // =========================================================
     // Internal signals

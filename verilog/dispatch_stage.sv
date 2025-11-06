@@ -60,13 +60,12 @@ module dispatch_stage #(
     output  logic      [DISPATCH_WIDTH-1:0][$clog2(ARCH_REGS)-1:0]    dest_arch_o,     //write reg   request
     output  logic      [DISPATCH_WIDTH-1:0][$clog2(ARCH_REGS)-1:0]    src1_arch_o,   //read  reg 1 request
     output  logic      [DISPATCH_WIDTH-1:0][$clog2(ARCH_REGS)-1:0]    src2_arch_o,   //read  reg 2 request
-    output  logic      [DISPATCH_WIDTH-1:0][$clog2(PHYS_REGS)-1:0]    dest_new_prf, //
-    output  logic      [DISPATCH_WIDTH-1:0]                           is_branch_o,
+    output  logic      [DISPATCH_WIDTH-1:0][$clog2(PHYS_REGS)-1:0]   dest_new_prf, //
 
     // =========================================================
     // Dispatch <-> RS
     // =========================================================
-    input  logic       [$clog2(DISPATCH_WIDTH+1)-1:0]                 free_rs_slots_i,      // how many free slots in rs
+    input  logic       [$clog2(DISPATCH_WIDTH+1)-1:0]                   free_rs_slots_i,      // how many free slots in rs
     input  logic                                                      rs_full_i,   
     
     output logic       [DISPATCH_WIDTH-1:0]                           disp_rs_valid_o,
@@ -111,6 +110,13 @@ module dispatch_stage #(
         if (free_regs_i < disp_n)      disp_n = free_regs_i;
     end
 
+    // always_ff @(posedge clock) begin
+    //   if (!reset) begin
+    //     $display("[%0t] DISPATCH: RS=%0d ROB=%0d REG=%0d  W=%0d  -> disp_n=%0d",
+    //             $time, free_rs_slots_i, free_rob_slots_i, free_regs_i, DISPATCH_WIDTH, disp_n);
+    //   end
+    // end
+
 
 
     assign disp_rob_rd_wen_o = disp_rs_rd_wen_o;
@@ -148,6 +154,8 @@ module dispatch_stage #(
         );
     end
 
+
+    //TODO exist latch
     always_comb begin
         disp_rs_valid_o = '0;
         disp_rob_valid_o = '0;
@@ -161,7 +169,6 @@ module dispatch_stage #(
             dest_arch_o[i] = disp_packet_o[i].dest_reg_idx;  // from decoder
             rename_valid_o[i] = if_packet_i[i].valid & disp_rs_rd_wen_o[i] & (i < disp_n); // only if instruction is valid
             alloc_req_o[i] = if_packet_i[i].valid & disp_rs_rd_wen_o[i] & (i < disp_n);
-            is_branch_o[i] = (disp_packet_o[i].cond_branch | disp_packet_o[i].uncond_branch);
 
             // To RS
             if(i < disp_n)begin
@@ -191,6 +198,12 @@ module dispatch_stage #(
                 // To map table
                 dest_new_prf[i] = new_reg_i[i];
                 
+            end else begin
+              disp_rd_arch_o[i] = '0;
+              rs_packets_o[i] = '0;
+              dest_new_prf[i] = '0;
+              disp_rd_new_prf_o[i] = '0;
+              disp_rd_old_prf_o[i] = '0;
             end
             
         end

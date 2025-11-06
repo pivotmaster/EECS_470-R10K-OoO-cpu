@@ -18,7 +18,7 @@
 `endif
 
 `ifndef ARCH_REGS
-  `define ARCH_REGS       32      // architectural registers (x0–x31)
+  `define ARCH_REGS       64      // architectural registers (x0–x31)
 `endif
 
 `ifndef ROB_DEPTH
@@ -36,7 +36,7 @@
 
 typedef struct packed {
     logic                          valid;    
-    fu_type_e                 fu_type;       // functional unit type
+    fu_type_e                      fu_type;       // functional unit type
     logic [3:0]                    opcode;        // operation code
     logic [$clog2(`PHYS_REGS)-1:0] dest_tag;      // destination physical reg tag
     logic [`XLEN-1:0]               src1_val;      // actual operand value 1
@@ -475,7 +475,7 @@ typedef struct packed {
 
 typedef struct packed {
     logic                          valid;    
-    fu_type_e                     fu_type;       // functional unit type
+    fu_type_e                      fu_type;       // functional unit type
     logic [3:0]                    opcode;        // operation code
     logic [$clog2(`PHYS_REGS)-1:0] dest_tag;      // destination physical reg tag
     logic [XLEN-1:0]               src1_val;      // actual operand value 1

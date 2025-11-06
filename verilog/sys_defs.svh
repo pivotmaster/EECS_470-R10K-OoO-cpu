@@ -93,7 +93,7 @@
 `endif
 
 `ifndef ARCH_REGS
-  `define ARCH_REGS       32      // architectural registers (x0–x31)
+  `define ARCH_REGS       64      // architectural registers (x0–x31)
 `endif
 
 // sizes
@@ -476,7 +476,7 @@ typedef struct packed {
     logic    halt;          // Is this a halt?
     logic    illegal;       // Is this instruction illegal?
     logic    csr_op;        // Is this a CSR operation? (we only used this as a cheap way to get return code)
-    logic    [1:0] fu_type;
+    logic    [1:0]fu_type;
 
     logic    valid;
 } DISP_PACKET;
