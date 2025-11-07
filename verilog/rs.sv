@@ -221,5 +221,57 @@ module RS #(
     
 //   end
 
+    // =========================================================
+    // For GUI Debugger (RS Trace)
+    // =========================================================
+    integer rs_trace_fd;
+
+    initial begin
+        rs_trace_fd = $fopen("dump_files/rs_trace.json", "w");
+        if (rs_trace_fd == 0)
+            $fatal("Failed to open dump_files/rs_trace.json!");
+    end
+
+        task automatic dump_rs_state(int cycle);
+        $fwrite(rs_trace_fd, "{ \"cycle\": %0d, \"RS\": [", cycle);
+        for (int i = 0; i < RS_DEPTH; i++) begin
+            automatic rs_entry_t e = rs_entries_o[i];
+            if (e.valid) begin
+                $fwrite(rs_trace_fd,
+                    "{\"idx\":%0d, \"valid\":%0d, \"ready\":%0d, \"alu_func\":%0d, \"rob_idx\":%0d, \"fu_type\":%0d, \"dest_reg_idx\":%0d, \"dest_tag\":%0d, \"src1_tag\":%0d, \"src1_ready\":%0d, \"src2_tag\":%0d, \"src2_ready\":%0d}",
+                    i, e.valid, rs_ready_o[i],
+                    e.disp_packet.alu_func, e.rob_idx,
+                    e.disp_packet.fu_type, e.disp_packet.dest_reg_idx,
+                    e.dest_tag,
+                    e.src1_tag, e.src1_ready,
+                    e.src2_tag, e.src2_ready
+                );
+            end else begin
+                $fwrite(rs_trace_fd, "{\"idx\":%0d, \"valid\":0}", i);
+            end
+
+            if (i != RS_DEPTH - 1)
+                $fwrite(rs_trace_fd, ",");
+        end
+        $fwrite(rs_trace_fd, "]}\n");
+        $fflush(rs_trace_fd);
+    endtask
+
+
+
+    // =========================================================
+    // Auto Dump per Cycle
+    // =========================================================
+    int cycle_count;
+    always_ff @(posedge clock) begin
+        if (reset) begin
+            cycle_count <= 0;
+        end else begin
+            cycle_count <= cycle_count + 1;
+            dump_rs_state(cycle_count);
+        end
+    end
+
+
 endmodule
 
