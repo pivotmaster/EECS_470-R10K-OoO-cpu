@@ -11,14 +11,15 @@
 `include "sys_defs.svh"
 
 module stage_if #(
-    parameter int unsigned           FETCH_WIDTH  = 2,
+    parameter int unsigned           FETCH_WIDTH  = 1,
     parameter int unsigned           ADDR_WIDTH   = 32
 
 )(
     input logic                            clock,          // system clock
     input logic                            reset,          // system reset
     input logic                            if_valid,       // only go to next PC when true (stall)
-    input logic                            if_flush,       
+    input logic                            if_flush,   
+    input logic take_branch, //###    
 
     // =========================================================
     // Branch Predictor ->  Fetch (only first branch was computed!!)
@@ -33,9 +34,8 @@ module stage_if #(
     // Problem : fetch one line (from ICache) per cycle (might not enough for N-way)
     // Possible Solution: dual-line fetch (two fetch requests per cycle)?
     // =========================================================
+    input [FETCH_WIDTH-1:0]                Imem_valid,
     input  MEM_BLOCK [FETCH_WIDTH-1:0]     Imem_data,      // data coming back from Instruction memory
-    input  MEM_TAG                         Imem2proc_transaction_tag,        // Should be zero unless there is a response
-    input  MEM_TAG                         Imem2proc_data_tag,
     output MEM_COMMAND                     Imem_command, // Command sent to memory
     output ADDR                            Imem_addr, // address sent to Instruction memory
 
@@ -55,6 +55,11 @@ module stage_if #(
     // --------------------------
     logic [ADDR_WIDTH-1:0] PC_reg, PC_next;
 
+    // always_ff @(posedge clock) begin
+    //     $display("flush : %b, PC : %h, NPC : %h", if_flush, PC_reg, PC_next);
+    //     $display("if_valid : %b, pred_valid, taken, target : %b %b %h", if_valid, pred_valid_i, pred_taken_i, pred_target_i);
+    // end
+
     // Next PC priority:
     //  1) if_flush (from EXE correction)
     //  2) predicted taken
@@ -62,12 +67,19 @@ module stage_if #(
     always_comb begin
         // default: hold
         PC_next = PC_reg;
-
-        if (if_flush) begin
-            PC_next = correct_pc_target_o;
+        if(take_branch) begin
+            PC_next = 32'h68;
+        end else if (if_flush) begin
+            // PC_next = correct_pc_target_o;
+            PC_next = 32'h68;
         end else if (if_valid) begin
             if (pred_valid_i && pred_taken_i) begin
                 PC_next = pred_target_i;
+                $display("PC_next=%h", PC_next);
+            // end else if(PC_reg == 32'hA4) begin //### close flush
+            //     PC_next = 32'h68; //###
+            // end else if(PC_reg == 32'hA8) begin //###
+            //     PC_next = 32'hA8; //###
             end else begin
                 PC_next = PC_reg + (FETCH_WIDTH << 2); // + 4 * FETCH_WIDTH
             end
@@ -89,7 +101,6 @@ module stage_if #(
     assign Imem_addr    = {PC_reg[ADDR_WIDTH-1:3], 3'b0};
 
     // Fire load when we are allowed to fetch (not flushing this cycle)
-    // You可以依你專案定義改 BUS_* 符號
     assign Imem_command = (reset || if_flush || !if_valid)
                           ? MEM_NONE
                           : MEM_LOAD;
@@ -138,7 +149,7 @@ module stage_if #(
                 end
             end
 
-            // 封包輸出
+            // Packet output
             assign if_packet_o[k].PC    = this_pc;
             assign if_packet_o[k].NPC   = this_pc + 32'd4;
             assign if_packet_o[k].inst  = this_valid ? this_inst : `NOP;

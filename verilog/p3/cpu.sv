@@ -10,7 +10,7 @@
 
 `include "sys_defs.svh"
 
-module cpu (
+module cpu1243 (
     input clock, // System clock
     input reset, // System reset
 

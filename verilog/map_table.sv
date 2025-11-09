@@ -15,11 +15,11 @@
 module map_table#(
     parameter int ARCH_REGS = 64,           // Number of architectural registers
     parameter int PHYS_REGS = 128,          // Number of physical registers
-    parameter int DISPATCH_WIDTH = 2,       // Number of instructions dispatched per cycle
+    parameter int DISPATCH_WIDTH = 1,       // Number of instructions dispatched per cycle
     parameter int WB_WIDTH     = 4,         // Number of writeback ports
-    parameter int COMMIT_WIDTH = 2          // Number of commit ports
+    parameter int COMMIT_WIDTH = 1          // Number of commit ports
 )(
-    input logic clk,                        // Clock signal
+    input logic clock,                        // Clock signal
     input logic reset,                      // Asynchronous reset
 
     // =======================================================
@@ -118,17 +118,20 @@ module map_table#(
     } map_entry_t;
 
     // Full mapping table (Architectural Register → Physical Register)
-    map_entry_t table [ARCH_REGS-1:0];
+    map_entry_t table_reg [ARCH_REGS-1:0];
     // =======================================================
     // Reset / Init: on reset, create identity mapping:
     // arch reg i -> phys i, and mark valid = 1
     // (this assumes PHYS_REGS >= ARCH_REGS)
     // =======================================================
-    always_ff @(posedge clk or posedge reset)begin
+    always_ff @(posedge clock or posedge reset)begin
         if(reset)begin
             for(int i =0; i< ARCH_REGS; i++)begin
-                table[i].phys <= i;
-                table[i].valid <= 1'b1;
+                table_reg[i].phys <= i;
+                table_reg[i].valid <= 1'b1;
+            end
+            for(int i =0 ; i < DISPATCH_WIDTH ; i++)begin
+                disp_old_phys_o[i] <= '0;
             end
         end else begin
             // ===================================================
@@ -137,9 +140,9 @@ module map_table#(
             // ===================================================
             for(int i =0 ; i < DISPATCH_WIDTH ; i++)begin
                 if(disp_valid_i[i])begin
-                    disp_old_phys_o[i] <= table[disp_arch_i[i]].phys;
-                    table[disp_arch_i[i]].phys <= disp_new_phys_i[i];
-                    table[disp_arch_i[i]].valid <= 1'b0; 
+                    disp_old_phys_o[i] <= table_reg[disp_arch_i[i]].phys;
+                    table_reg[disp_arch_i[i]].phys <= disp_new_phys_i[i];
+                    table_reg[disp_arch_i[i]].valid <= 1'b0; 
                 end
             end
 
@@ -150,10 +153,10 @@ module map_table#(
             // ===================================================
             for (int i = 0 ; i < WB_WIDTH; i ++)begin
                 if(wb_valid_i[i])begin
-                    // table[wb_phys_i[i]].valid <= 1'b1;
+                    // table_reg[wb_phys_i[i]].valid <= 1'b1;
                     for(int j = 0 ; j < ARCH_REGS ; j++)begin
-                        if(table[j].phys == wb_phys_i[i])begin
-                            table[j].valid <= 1'b1;
+                        if(table_reg[j].phys == wb_phys_i[i])begin
+                            table_reg[j].valid <= 1'b1;
                         end
                     end
                 end
@@ -167,8 +170,8 @@ module map_table#(
 
             if(snapshot_restore_i) begin
                 for(int i =0; i < ARCH_REGS ; i++)begin
-                    table[i].phys <= snapshot_data_i[i];
-                    table[i].valid <= 1'b1;
+                    table_reg[i].phys <= snapshot_data_i[i];
+                    table_reg[i].valid <= 1'b1;
                 end
             end
 
@@ -178,8 +181,8 @@ module map_table#(
             // ===================================================
             if(flush_i)begin
                 for(int i =0 ; i<ARCH_REGS ; i++)begin
-                    table[i].phys <= i;
-                    table[i].valid <= 1'b1;
+                    table_reg[i].phys <= i;
+                    table_reg[i].valid <= 1'b1;
                 end
             end
         end
@@ -192,11 +195,11 @@ module map_table#(
     generate 
         for(genvar i =0 ; i < DISPATCH_WIDTH ; i++)begin
             //rs1 outputs
-            assign rs1_phys_o[i] = table[rs1_arch_i[i]].phys;
-            assign rs1_valid_o[i] = table[rs1_arch_i[i]].valid;
+            assign rs1_phys_o[i] = table_reg[rs1_arch_i[i]].phys;
+            assign rs1_valid_o[i] = table_reg[rs1_arch_i[i]].valid;
             //rs2 outputs
-            assign rs2_phys_o[i] = table[rs2_arch_i[i]].phys;
-            assign rs2_valid_o[i] = table[rs2_arch_i].valid;
+            assign rs2_phys_o[i] = table_reg[rs2_arch_i[i]].phys;
+            assign rs2_valid_o[i] = table_reg[rs2_arch_i].valid;
         end
     endgenerate
 
@@ -207,8 +210,14 @@ module map_table#(
     // snapshot_data_o[i] = current physical tag mapped to architectural register i
     generate
         for(genvar i =0 ; i< ARCH_REGS ; i++)begin
-            assign snapshot_data_o[i] = table[i].phys;
+            assign snapshot_data_o[i] = table_reg[i].phys;
         end
     endgenerate
+
+
+    // always_ff @(negedge clock) begin
+    //     // for(int i = 0 ; )
+    //     $display("table_reg[1],valid = %0b, table_reg[1].value  = %d \n", table_reg[1].valid, table_reg[1].phys);
+    // end
 
 endmodule

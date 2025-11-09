@@ -17,11 +17,10 @@
 
 
 `include "def.svh"
-`include "decoder.sv"
 
 module dispatch_stage #(
-    parameter int unsigned FETCH_WIDTH = 2,
-    parameter int unsigned DISPATCH_WIDTH = 2,
+    parameter int unsigned FETCH_WIDTH = 1,
+    parameter int unsigned DISPATCH_WIDTH = 1,
     parameter int unsigned PHYS_REGS = 128,
     parameter int unsigned ARCH_REGS = 64,
     parameter int unsigned DEPTH = 64,
@@ -43,7 +42,7 @@ module dispatch_stage #(
     // (RENAME) Dispatch <-> Free List
     // =========================================================
     input  logic       [$clog2(DISPATCH_WIDTH+1)-1:0]   free_regs_i,   // how many regsiters in Free list? (saturate at DISPATCH_WIDTH)
-    input  logic                                      empty_i,       // Whether Free list is empty
+    input  logic                                      free_full_i,       // Whether Free list is empty
     input  logic       [DISPATCH_WIDTH-1:0][$clog2(PHYS_REGS)-1:0] new_reg_i,
 
     output logic       [DISPATCH_WIDTH-1:0]           alloc_req_o,   // request sent to Free List (return new_reg_o)
@@ -61,6 +60,7 @@ module dispatch_stage #(
     output  logic      [DISPATCH_WIDTH-1:0][$clog2(ARCH_REGS)-1:0]    dest_arch_o,     //write reg   request
     output  logic      [DISPATCH_WIDTH-1:0][$clog2(ARCH_REGS)-1:0]    src1_arch_o,   //read  reg 1 request
     output  logic      [DISPATCH_WIDTH-1:0][$clog2(ARCH_REGS)-1:0]    src2_arch_o,   //read  reg 2 request
+    output  logic      [DISPATCH_WIDTH-1:0][$clog2(PHYS_REGS)-1:0]   dest_new_prf, //
 
     // =========================================================
     // Dispatch <-> RS
@@ -110,6 +110,13 @@ module dispatch_stage #(
         if (free_regs_i < disp_n)      disp_n = free_regs_i;
     end
 
+    always_ff @(posedge clock) begin
+      if (!reset) begin
+        $display("[%0t] DISPATCH: RS=%0d ROB=%0d REG=%0d  W=%0d  -> disp_n=%0d",
+                $time, free_rs_slots_i, free_rob_slots_i, free_regs_i, DISPATCH_WIDTH, disp_n);
+      end
+    end
+
 
 
     assign disp_rob_rd_wen_o = disp_rs_rd_wen_o;
@@ -142,10 +149,13 @@ module dispatch_stage #(
             .uncond_branch (disp_packet_o[i].uncond_branch),
             .csr_op        (disp_packet_o[i].csr_op),
             .halt          (disp_packet_o[i].halt),
-            .illegal       (disp_packet_o[i].illegal)
+            .illegal       (disp_packet_o[i].illegal),
+            .fu_type       (disp_packet_o[i].fu_type)
         );
     end
 
+
+    //TODO exist latch
     always_comb begin
         disp_rs_valid_o = '0;
         disp_rob_valid_o = '0;
@@ -166,6 +176,7 @@ module dispatch_stage #(
 
                 //rs_entry
                 rs_packets_o[i].valid = 1;
+                rs_packets_o[i].fu_type = (rs_packets_o[i].disp_packet.mult) ? 2'b01 : (rs_packets_o[i].disp_packet.rd_mem) ? 2'b10 : (rs_packets_o[i].disp_packet.cond_branch|rs_packets_o[i].disp_packet.uncond_branch) ? 2'b11 : 2'b00;
                 rs_packets_o[i].rob_idx = disp_rob_idx_i;
 
                 rs_packets_o[i].dest_arch_reg = disp_packet_o[i].dest_reg_idx;
@@ -183,7 +194,16 @@ module dispatch_stage #(
                 disp_rd_arch_o[i] = disp_packet_o[i].dest_reg_idx;
                 disp_rd_old_prf_o[i] = dest_reg_old_i[i]; // Told
                 disp_rd_new_prf_o[i] = new_reg_i[i];  //from free list
+
+                // To map table
+                dest_new_prf[i] = new_reg_i[i];
                 
+            end else begin
+              disp_rd_arch_o[i] = '0;
+              rs_packets_o[i] = '0;
+              dest_new_prf[i] = '0;
+              disp_rd_new_prf_o[i] = '0;
+              disp_rd_old_prf_o[i] = '0;
             end
             
         end
@@ -191,6 +211,29 @@ module dispatch_stage #(
 
     end
 
+/*
+  // =========================================================
+  // DEBUG
+  // =========================================================
+  integer cycle_count;
+  always_ff @(posedge clock) begin
+    if (reset)
+      cycle_count <= 0;
+    else
+      cycle_count <= cycle_count + 1;
+
+    for (int i = 0; i < DISPATCH_WIDTH; i++) begin
+      if (disp_rs_valid_o[i]) begin
+        $display("[Cycle=%0d] Dispatch %0d | ROB_idx=%0d | Dest=%0d | Src1=%0d (%b) | Src2=%0d (%b)",
+                 cycle_count, i,
+                 rs_packets_o[i].rob_idx,
+                 rs_packets_o[i].dest_tag,
+                 rs_packets_o[i].src1_tag, rs_packets_o[i].src1_ready,
+                 rs_packets_o[i].src2_tag, rs_packets_o[i].src2_ready);
+      end
+    end
+  end
+*/
 
 endmodule
 

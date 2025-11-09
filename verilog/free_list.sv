@@ -11,12 +11,12 @@
 /////////////////////////////////////////////////////////////////////////
 
 module free_list #(
-    parameter int unsigned DISPATCH_WIDTH  = 2,
-    parameter int unsigned COMMIT_WIDTH    = 2,
+    parameter int unsigned DISPATCH_WIDTH  = 1,
+    parameter int unsigned COMMIT_WIDTH    = 1,
     parameter int unsigned ARCH_REGS       = 64,
     parameter int unsigned PHYS_REGS       = 128
 )(
-    input  logic clk,
+    input  logic clock,
     input  logic reset,
 
     // =========================================================
@@ -26,7 +26,7 @@ module free_list #(
     output logic [DISPATCH_WIDTH-1:0][$clog2(PHYS_REGS)-1:0] alloc_phys_o, // allocated PRF numbers
     output logic [DISPATCH_WIDTH-1:0]                        alloc_valid_o, // whether each alloc succeed
     output logic                                             full_o,       // true if no free regs left
-    output logic [$clog2(PHYS_REGS):0]                       free_count_o, // number of free regs
+output logic [$clog2(PHYS_REGS+1)-1:0]                       free_count_o, // number of free regs
     // output logic [DISPATCH_WIDTH-1:0]                       new_reg_o,
     // output logic [$clog2(DISPATCH_WIDTH)-1:0]               free_regs_o,   // how many regsiters are free? (saturate at DISPATCH_WIDTH)
     // output logic                                            empty_o,
@@ -35,8 +35,14 @@ module free_list #(
     // Commit -> free list: release old physical registers
     // =========================================================
     input  logic [COMMIT_WIDTH-1:0]                         free_valid_i,  //not all instructions will release reg (ex:store)
-    input  logic [COMMIT_WIDTH-1:0][$clog2(PHYS_REGS)-1:0]  free_phys_i
-    // output logic [$clog2(PHYS_REGS)-1:0] free_fifo_debug [PHYS_REGS-1:0];    
+    input  logic [COMMIT_WIDTH-1:0][$clog2(PHYS_REGS)-1:0]  free_phys_i,
+    // output logic [$clog2(PHYS_REGS)-1:0] free_fifo_debug [PHYS_REGS-1:0];   
+
+
+    //### TODO: for debug only (sychenn 11/6) ###//
+    input  logic flush_i,
+    input logic [`ROB_DEPTH-1:0] flush_free_regs_valid,
+    input logic [(PHYS_REGS)-1:0]  flush_free_regs
 );
 
     // =========================================================
@@ -47,7 +53,7 @@ module free_list #(
     logic [$clog2(PHYS_REGS):0]   count;
 
     logic [$clog2(PHYS_REGS)-1:0] next_head, next_tail;
-    logic [$clog2(PHYS_REGS):0]     next_count;
+    logic [$clog2(PHYS_REGS):0]    next_count;
 
     // Used to track simultaneous transactions
     int N_alloc; // Actual number of successful allocations (0 to DISPATCH_WIDTH)
@@ -112,7 +118,6 @@ module free_list #(
         // 總可用資源：舊 count + N_free (體現 Release-first policy)
         total_available = count + N_free; 
 
-        
         // --- 2. 計算 N_alloc 和分配輸出 ---
         next_head = head; // 預設值
         N_alloc = 0;
@@ -158,7 +163,7 @@ module free_list #(
     // =========================================================
     // Initialize free list
     // =========================================================
-    always_ff @(posedge clk or posedge reset ) begin
+    always_ff @(posedge clock or posedge reset ) begin
         if (reset) begin
             head  <= '0;
             tail  <= PHYS_REGS - ARCH_REGS - 1;
@@ -181,11 +186,26 @@ module free_list #(
             //  Release (Commit) — push freed physical regs back
             // =========================================================
             for (int j = 0; j < COMMIT_WIDTH; j++) begin
-                if (free_valid_i[j]) begin
+                if (free_valid_i[j] && (free_phys_i[j] != 0)) begin
                     // tail  <= (tail + 1) % (PHYS_REGS - ARCH_REGS);
                     free_fifo[(tail+j) % (PHYS_REGS-ARCH_REGS)] <= free_phys_i[j];
                     // count <= count + 1;
                 end
+            end
+
+            //### TODO: for debug only (sychenn 11/6) ###//
+            if (flush_i) begin
+                int t = next_tail;
+                int added = 0;
+                for (int k = 0; k <(PHYS_REGS); k++) begin
+                    if (flush_free_regs[k]) begin
+                        t = (t + 1) % (PHYS_REGS);
+                        free_fifo[t] <= k;
+                        added++;
+                    end
+                end
+                tail  <= t;
+                count <= next_count + added;
             end
 
             // =====================================================
@@ -205,5 +225,18 @@ module free_list #(
             // end
         end
     end 
+    
+
+    // always_ff @(negedge clock)begin 
+    //     $display("free_phys = %0d , free_valid = %d\n", free_phys_i , free_valid_i);
+    //     $display("head: %d , tail: %d\n" , head, tail);
+    //     for(int i =0 ; i< (PHYS_REGS-ARCH_REGS); i++)begin
+    //         $display("free_fifo[%d] = %0d\n", i, free_fifo[i]);
+    //     end
+    // end
+    
+    // always_ff @(posedge clock) begin 
+    //     $display("total_available = %0d", total_available);
+    // end
 
 endmodule

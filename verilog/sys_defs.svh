@@ -24,6 +24,78 @@
 `define N 1
 `define CDB_SZ `N // This MUST match your superscalar width
 
+`ifndef XLEN
+  `define XLEN            32      // 64-bit processor width
+`endif
+
+`ifndef OPCODE_N
+    `define OPCODE_N 7
+`endif
+
+`ifndef READ_PORTS
+    `define READ_PORTS 8
+`endif
+
+`ifndef FETCH_WIDTH
+    `define FETCH_WIDTH 1
+`endif
+
+`ifndef CDB_WIDTH
+    `define CDB_WIDTH 4
+`endif
+
+`ifndef DISPATCH_WIDTH
+    `define DISPATCH_WIDTH 1
+`endif
+
+`ifndef COMMIT_WIDTH
+    `define COMMIT_WIDTH 1
+`endif
+
+`ifndef WB_WIDTH
+    `define WB_WIDTH 4
+`endif
+
+`ifndef ALU_COUNT
+    `define ALU_COUNT 1
+`endif
+
+`ifndef MUL_COUNT
+    `define MUL_COUNT 1
+`endif
+
+`ifndef LOAD_COUNT
+    `define LOAD_COUNT 1
+`endif
+
+`ifndef BR_COUNT
+    `define BR_COUNT 1
+`endif
+
+`ifndef FU_NUM
+  `define FU_NUM          4       // total number of functional unit types
+`endif
+
+`ifndef OPCODE_N
+  `define OPCODE_N        8       // total number of opcodes
+`endif
+
+`ifndef RS_DEPTH
+    `define RS_DEPTH 64
+`endif
+
+`ifndef ROB_DEPTH
+  `define ROB_DEPTH       64      // reorder buffer entries
+`endif
+
+`ifndef PHYS_REGS
+  `define PHYS_REGS       128     // physical register file size
+`endif
+
+`ifndef ARCH_REGS
+  `define ARCH_REGS       64      // architectural registers (x0–x31)
+`endif
+
 // sizes
 `define ROB_SZ xx
 `define RS_SZ xx
@@ -73,8 +145,8 @@ typedef logic [4:0] REG_IDX;
 // you are not allowed to change this definition for your final processor
 // the project 3 processor has a massive boost in performance just from having no mem latency
 // see if you can beat it's CPI in project 4 even with a 100ns latency!
-//`define MEM_LATENCY_IN_CYCLES  0
-`define MEM_LATENCY_IN_CYCLES (100.0/`CLOCK_PERIOD+0.49999)
+`define MEM_LATENCY_IN_CYCLES  0
+// `define MEM_LATENCY_IN_CYCLES (100.0/`CLOCK_PERIOD+0.49999)
 // the 0.49999 is to force ceiling(100/period). The default behavior for
 // float to integer conversion is rounding to nearest
 
@@ -244,13 +316,13 @@ typedef enum logic [1:0] {
 } ALU_OPA_SELECT;
 
 // ALU opB input mux selects
-typedef enum logic [3:0] {
-    OPB_IS_RS2    = 4'h0,
-    OPB_IS_I_IMM  = 4'h1,
-    OPB_IS_S_IMM  = 4'h2,
-    OPB_IS_B_IMM  = 4'h3,
-    OPB_IS_U_IMM  = 4'h4,
-    OPB_IS_J_IMM  = 4'h5
+typedef enum logic [2:0] {
+    OPB_IS_RS2    = 3'h0,
+    OPB_IS_I_IMM  = 3'h1,
+    OPB_IS_S_IMM  = 3'h2,
+    OPB_IS_B_IMM  = 3'h3,
+    OPB_IS_U_IMM  = 3'h4,
+    OPB_IS_J_IMM  = 3'h5
 } ALU_OPB_SELECT;
 
 // ALU function code
@@ -382,5 +454,70 @@ typedef struct packed {
     logic   valid;
 } COMMIT_PACKET;
 
+
+typedef struct packed {
+    INST inst; //INST.i.imm
+    ADDR PC;
+    ADDR NPC; // PC + 4
+
+    //DATA rs1_value; // reg A value
+    //DATA rs2_value; // reg B value
+
+    ALU_OPA_SELECT opa_select; // ALU opa mux select (ALU_OPA_xxx *)
+    ALU_OPB_SELECT opb_select; // ALU opb mux select (ALU_OPB_xxx *)
+
+    REG_IDX  dest_reg_idx;  // destination (writeback) register index
+    ALU_FUNC alu_func;      // ALU function select (ALU_xxx *)
+    logic    mult;          // Is inst a multiply instruction?
+    logic    rd_mem;        // Does inst read memory?
+    logic    wr_mem;        // Does inst write memory?
+    logic    cond_branch;   // Is inst a conditional branch?
+    logic    uncond_branch; // Is inst an unconditional branch?
+    logic    halt;          // Is this a halt?
+    logic    illegal;       // Is this instruction illegal?
+    logic    csr_op;        // Is this a CSR operation? (we only used this as a cheap way to get return code)
+    logic    [1:0]fu_type;
+
+    logic    valid;
+} DISP_PACKET;
+
+typedef struct packed {
+    logic                           valid;     // = busy
+    logic [$clog2(`ROB_DEPTH)-1:0]  rob_idx;
+    logic [1:0]                     fu_type; 
+    logic [$clog2(`ARCH_REGS)-1:0]  dest_arch_reg; // for cdb update map table
+    logic [$clog2(`PHYS_REGS)-1:0]  dest_tag;  // write reg
+    logic [$clog2(`PHYS_REGS)-1:0]  src1_tag;  // source reg 1      
+    logic [$clog2(`PHYS_REGS)-1:0]  src2_tag;  // source reg 2
+    logic                          src1_ready; // is value of source reg 1 ready?
+    logic                          src2_ready; // is value of source reg 2 ready?
+    
+    DISP_PACKET                   disp_packet; //decoder_o 
+} rs_entry_t;
+
+typedef enum logic [1:0] {
+    FU_ALU = 2'b00,
+    FU_MUL = 2'b01,
+    FU_LOAD = 2'b10,
+    FU_BRANCH = 2'b11
+} fu_type_e;
+
+
+
+typedef struct packed {
+    logic                         valid;
+    logic [`XLEN-1:0]                  value;
+    logic [$clog2(`PHYS_REGS)-1:0] dest_prf;
+    logic [$clog2(`ROB_DEPTH)-1:0] rob_idx;
+    logic                         exception;
+    logic                         mispred;
+} fu_resp_t;
+
+typedef struct packed {
+    logic                         valid;      // broadcast valid
+    logic [$clog2(`ARCH_REGS)-1:0] dest_arch;  // Arch reg
+    logic [$clog2(`PHYS_REGS)-1:0] phys_tag;   // PRF tag
+    logic [`XLEN-1:0]              value;      // result value
+} cdb_entry_t;
 
 `endif // __SYS_DEFS_SVH__

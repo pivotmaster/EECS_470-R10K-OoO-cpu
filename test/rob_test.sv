@@ -49,7 +49,7 @@ module tb_rob_only;
     .WB_WIDTH(WB_WIDTH), .ARCH_REGS(ARCH_REGS),
     .PHYS_REGS(PHYS_REGS), .XLEN(XLEN)
   ) dut (
-    .clk(clk), .reset(reset),
+    .clock(clk), .reset(reset),
     .disp_valid_i(disp_valid_i), .disp_rd_wen_i(disp_rd_wen_i),
     .disp_rd_arch_i(disp_rd_arch_i),
     .disp_rd_new_prf_i(disp_rd_new_prf_i),

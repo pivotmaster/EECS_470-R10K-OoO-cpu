@@ -13,7 +13,7 @@
 
 // Decode an instruction: generate useful datapath control signals by matching the RISC-V ISA
 // This module is purely combinational
-module decoder (
+module decoder1234 (
     input INST  inst,
     input logic valid, // when low, ignore inst. Output will look like a NOP
 

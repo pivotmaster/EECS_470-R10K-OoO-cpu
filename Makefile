@@ -190,12 +190,36 @@ GREP = grep -E --color=auto
 # ---- Modules to Test ---- #
 
 # TODO: add more modules here
-MODULES = rs
+MODULES = cpu  
 
 # TODO: update this if you add more header files
 ALL_HEADERS = $(CPU_HEADERS)
 
-# TODO: add extra source file dependencies below
+# All other required modules
+CPU_FILES = verilog/mult.sv \
+           verilog/rob.sv \
+           verilog/rs.sv \
+           verilog/retire_stage.sv \
+           verilog/complete_stage.sv \
+           verilog/dispatch_stage.sv \
+           verilog/fetch_stage.sv \
+           verilog/arch_map_table.sv \
+           verilog/free_list.sv \
+           verilog/cdb.sv \
+           verilog/issue_logic.sv \
+           verilog/physical_regfile.sv \
+           verilog/map_table.sv \
+		   verilog/decoder.sv \
+		   verilog/rs_single_entry.sv \
+		   verilog/rs_disp_selector.sv \
+		   verilog/issue_selector.sv \
+		   verilog/fu.sv
+
+
+
+build/cpu.simv: $(CPU_FILES)
+build/cpu.cov: $(CPU_FILES)
+synth/cpu.vg: $(CPU_FILES)
 
 MULT_FILES = verilog/sys_defs.svh
 build/mult.simv: $(MULT_FILES)
@@ -203,10 +227,7 @@ build/mult.cov: $(MULT_FILES)
 synth/mult.vg: $(MULT_FILES)
 
 # TODO: add any files required for the RS here (besides test/rs_test.sv and verilog/rs.sv)
-RS_FILES = verilog/def.svh \
-		   verilog/rs_disp_selector.sv \
-		   verilog/rs_single_entry.sv \
-
+RS_REQS = verilog/sys_defs.svh
 build/rs.simv: $(RS_FILES)
 build/rs.cov: $(RS_FILES)
 synth/rs.vg: $(RS_FILES)

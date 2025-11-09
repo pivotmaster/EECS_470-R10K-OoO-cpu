@@ -30,7 +30,19 @@ import "DPI-C" function string decode_inst(int inst);
 `define TB_MAX_CYCLES 50000000
 
 
+
 module testbench;
+
+    // // ==========================================================
+    // //  VCD DUMP SETUP (for GTKWave waveform generation)
+    // // ==========================================================
+    // initial begin
+    //     $dumpfile("cpu_test.vcd");   // 產生波形檔名
+    //     $dumpvars(0, testbench);      // dump 整個 testbench 訊號
+    // end
+    // // ==========================================================
+
+    
     // string inputs for loading memory and output files
     // run like: cd build && ./simv +MEMORY=../programs/mem/<my_program>.mem +OUTPUT=../output/<my_program>
     // this testbench will generate 4 output files based on the output
@@ -56,21 +68,23 @@ module testbench;
     COMMIT_PACKET [`N-1:0] committed_insts;
     EXCEPTION_CODE error_status = NO_ERROR;
 
-    ADDR  if_NPC_dbg;
-    DATA  if_inst_dbg;
-    logic if_valid_dbg;
-    ADDR  if_id_NPC_dbg;
-    DATA  if_id_inst_dbg;
-    logic if_id_valid_dbg;
-    ADDR  id_ex_NPC_dbg;
-    DATA  id_ex_inst_dbg;
-    logic id_ex_valid_dbg;
-    ADDR  ex_mem_NPC_dbg;
-    DATA  ex_mem_inst_dbg;
-    logic ex_mem_valid_dbg;
-    ADDR  mem_wb_NPC_dbg;
-    DATA  mem_wb_inst_dbg;
-    logic mem_wb_valid_dbg;
+    ADDR [`FETCH_WIDTH-1:0] if_NPC_dbg;
+    DATA [`FETCH_WIDTH-1:0] if_inst_dbg;
+    logic [`FETCH_WIDTH-1:0] if_valid_dbg;
+
+    ADDR [`FETCH_WIDTH-1:0] if_id_NPC_dbg;
+    DATA [`FETCH_WIDTH-1:0] if_id_inst_dbg;
+    logic [`FETCH_WIDTH-1:0] if_id_valid_dbg;
+
+    ADDR [`DISPATCH_WIDTH-1:0] id_s_NPC_dbg;
+    DATA [`DISPATCH_WIDTH-1:0] id_s_inst_dbg;
+    logic [`DISPATCH_WIDTH-1:0] id_s_valid_dbg;
+    
+    ADDR [`DISPATCH_WIDTH-1:0] s_ex_NPC_dbg;
+    DATA [`DISPATCH_WIDTH-1:0] s_ex_inst_dbg;
+    logic [`DISPATCH_WIDTH-1:0] s_ex_valid_dbg;
+
+    DATA [`DISPATCH_WIDTH-1:0] ex_c_inst_dbg;
 
 
     // Instantiate the Pipeline
@@ -95,26 +109,29 @@ module testbench;
         .if_NPC_dbg       (if_NPC_dbg),
         .if_inst_dbg      (if_inst_dbg),
         .if_valid_dbg     (if_valid_dbg),
+
         .if_id_NPC_dbg    (if_id_NPC_dbg),
         .if_id_inst_dbg   (if_id_inst_dbg),
         .if_id_valid_dbg  (if_id_valid_dbg),
-        .id_ex_NPC_dbg    (id_ex_NPC_dbg),
-        .id_ex_inst_dbg   (id_ex_inst_dbg),
-        .id_ex_valid_dbg  (id_ex_valid_dbg),
-        .ex_mem_NPC_dbg   (ex_mem_NPC_dbg),
-        .ex_mem_inst_dbg  (ex_mem_inst_dbg),
-        .ex_mem_valid_dbg (ex_mem_valid_dbg),
-        .mem_wb_NPC_dbg   (mem_wb_NPC_dbg),
-        .mem_wb_inst_dbg  (mem_wb_inst_dbg),
-        .mem_wb_valid_dbg (mem_wb_valid_dbg)
+
+        .id_s_NPC_dbg    (id_s_NPC_dbg),
+        .id_s_inst_dbg   (id_s_inst_dbg),
+        .id_s_valid_dbg  (id_s_valid_dbg),
+
+        .s_ex_NPC_dbg   (s_ex_NPC_dbg),
+        .s_ex_inst_dbg  (s_ex_inst_dbg),
+        .s_ex_valid_dbg (s_ex_valid_dbg),
+        .ex_c_inst_dbg (ex_c_inst_dbg)
     );
 
 
     // Instantiate the Data Memory
+    MEM_COMMAND debug_proc2mem_command;//###
+    assign debug_proc2mem_command = MEM_LOAD;//###
     mem memory (
         // Inputs
         .clock            (clock),
-        .proc2mem_command (proc2mem_command),
+        .proc2mem_command (debug_proc2mem_command),//###
         .proc2mem_addr    (proc2mem_addr),
         .proc2mem_data    (proc2mem_data),
 `ifndef CACHE_MODE
@@ -334,6 +351,20 @@ module testbench;
         //    clock_count-1
         //);
     endtask
+
+    always_ff @(negedge clock) begin
+        if(proc2mem_addr >= 32'd880) begin
+            $display("forced finished");
+            $finish;
+        end
+    end
+
+    always_ff @(negedge clock) begin
+        if(clock_count > 800) begin
+            $display("forced finished");
+            $finish;
+        end
+    end
 
 
 endmodule // module testbench
