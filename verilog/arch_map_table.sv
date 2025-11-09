@@ -1,9 +1,9 @@
 module arch_map_table #(
     parameter int ARCH_REGS = 64,
     parameter int PHYS_REGS = 128,
-    parameter int COMMIT_WIDTH = 2
+    parameter int COMMIT_WIDTH = 1
 )(
-    input  logic clk,
+    input  logic clock,
     input  logic reset,     
     // =======================================================
     // ========== Lookup Interface ===========================
@@ -33,28 +33,28 @@ module arch_map_table #(
 );
 
    
-    logic [ARCH_REGS-1:0][$clog2(PHYS_REGS)-1:0] table;
+    logic [ARCH_REGS-1:0][$clog2(PHYS_REGS)-1:0] table_reg;
 
 
     // =======================================================
     // Commit update
     // =======================================================
-    always_ff @(posedge clk && posedge reset)begin
+    always_ff @(posedge clock or posedge reset)begin
         if(reset)begin
             for(int i =0; i< ARCH_REGS; i++)begin
-                    table[i] <= i;
+                    table_reg[i] <= i;
             end
-        end else if (restore_snapshot_i)begin
+        end else if (restore_valid_i)begin
             for(int i =0; i< ARCH_REGS; i++)begin
-                table[i] <= restore_snapshot_i[i];
+                table_reg[i] <= restore_snapshot_i[i];
             end
         end else begin
             for (int i =0 ; i< COMMIT_WIDTH ; i++)begin
-                if(commit_valid_i[i]) table[commit_arch_i[i]] <= commit_phys_i[i];
+                if(commit_valid_i[i]) table_reg[commit_arch_i[i]] <= commit_phys_i[i];
             end
         end
     end
 
-    assign snapshot_o = table;
+    assign snapshot_o = table_reg;
 
 endmodule

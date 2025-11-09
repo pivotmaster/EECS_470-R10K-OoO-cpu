@@ -2,37 +2,54 @@
 
 // ---------------- ALU FU ----------------
 module alu_fu #(
-  parameter int XLEN = 64,
+  parameter int XLEN = 32,
   parameter int PHYS_REGS = 128,
   parameter int ROB_DEPTH = 64
 )(
-  input  fu_req_t  req_i,
-  output fu_resp_t resp_o,
-  output logic     ready_o
+  input  issue_packet_t req_i,
+  output fu_resp_t      resp_o,
+  output logic          ready_o
 );
   logic [XLEN-1:0] result;
+    always_comb begin
+        case (req_i.opcode)
+            ALU_ADD:  result = req_i.src1_val + req_i.src2_val;
+            ALU_SUB:  result = req_i.src1_val - req_i.src2_val;
+            ALU_AND:  result = req_i.src1_val & req_i.src2_val;
+            ALU_SLT:  result = signed'(req_i.src1_val) < signed'(req_i.src2_val);
+            ALU_SLTU: result = req_i.src1_val < req_i.src2_val;
+            ALU_OR:   result = req_i.src1_val | req_i.src2_val;
+            ALU_XOR:  result = req_i.src1_val ^ req_i.src2_val;
+            ALU_SRL:  result = req_i.src1_val >> req_i.src2_val[4:0];
+            ALU_SLL:  result = req_i.src1_val << req_i.src2_val[4:0];
+            ALU_SRA:  result = signed'(req_i.src1_val) >>> req_i.src2_val[4:0]; // arithmetic from logical shift
+            // here to prevent latches:
+            default:  result = 32'hfacebeec;
+        endcase
+    end
 
+/*
   always_comb begin
     unique case (req_i.opcode)
-      4'd0: result = req_i.src1_value + req_i.src2_value;
-      4'd1: result = req_i.src1_value - req_i.src2_value;
-      4'd2: result = req_i.src1_value & req_i.src2_value;
-      4'd3: result = req_i.src1_value | req_i.src2_value;
-      4'd4: result = req_i.src1_value ^ req_i.src2_value;
-      4'd5: result = req_i.src1_value << req_i.src2_value[5:0];
-      4'd6: result = req_i.src1_value >> req_i.src2_value[5:0];
-      4'd7: result = $signed(req_i.src1_value) >>> req_i.src2_value[5:0];
-      4'd8: result = ($signed(req_i.src1_value) <  $signed(req_i.src2_value));
-      4'd9: result = (req_i.src1_value < req_i.src2_value);
+      4'd0: result = req_i.src1_val + req_i.src2_val;
+      4'd1: result = req_i.src1_val - req_i.src2_val;
+      4'd2: result = req_i.src1_val & req_i.src2_val;
+      4'd3: result = req_i.src1_val | req_i.src2_val;
+      4'd4: result = req_i.src1_val ^ req_i.src2_val;
+      4'd5: result = req_i.src1_val << req_i.src2_val[5:0];
+      4'd6: result = req_i.src1_val >> req_i.src2_val[5:0];
+      4'd7: result = $signed(req_i.src1_val) <<< req_i.src2_val[5:0];
+      4'd8: result = ($signed(req_i.src1_val) <  $signed(req_i.src2_val));
+      4'd9: result = (req_i.src1_val < req_i.src2_val);
       default: result = '0;
     endcase
-  end
+  end*/
 
   assign ready_o = 1'b1;
   always_comb begin
     resp_o.valid     = req_i.valid;
     resp_o.value     = result;
-    resp_o.dest_prf  = req_i.dest_prf;
+    resp_o.dest_prf  = req_i.dest_tag;
     resp_o.rob_idx   = req_i.rob_idx;
     resp_o.exception = 1'b0;
     resp_o.mispred   = 1'b0;
@@ -41,48 +58,96 @@ endmodule
 
 
 // ---------------- MUL FU ----------------
+/* initial one
 module mul_fu #(
-  parameter int XLEN = 64,
+  parameter int XLEN = 32,
   parameter int PHYS_REGS = 128,
   parameter int ROB_DEPTH = 64
 )(
-  input  fu_req_t  req_i,
-  output fu_resp_t resp_o,
-  output logic     ready_o
+  input  issue_packet_t req_i,
+  output fu_resp_t      resp_o,
+  output logic          ready_o
 );
   logic [2*XLEN-1:0] product;
-  assign product = $signed(req_i.src1_value) * $signed(req_i.src2_value);
+  assign product = $signed(req_i.src1_val) * $signed(req_i.src2_val);
 
   assign ready_o = 1'b1;
   always_comb begin
     resp_o.valid     = req_i.valid;
     resp_o.value     = product[XLEN-1:0];
-    resp_o.dest_prf  = req_i.dest_prf;
+    resp_o.dest_prf  = req_i.dest_tag;
     resp_o.rob_idx   = req_i.rob_idx;
     resp_o.exception = 1'b0;
     resp_o.mispred   = 1'b0;
   end
 endmodule
+*/
 
-
-// ---------------- LOAD FU ----------------
-module load_fu #(
-  parameter int XLEN = 64,
+module mul_fu #(
+  parameter int XLEN = 32,
   parameter int PHYS_REGS = 128,
   parameter int ROB_DEPTH = 64
 )(
-  input  fu_req_t  req_i,
-  output fu_resp_t resp_o,
-  output logic     ready_o
+    input  issue_packet_t req_i,
+
+    output fu_resp_t      resp_o,
+    output logic  ready_o
+);
+ assign ready_o = 1;
+
+    logic [63:0] mcand, mplier, product;
+    logic [31:0] rs1, rs2;
+    logic [XLEN-1:0] result;
+
+    assign rs1 = req_i.src1_val;
+    assign rs2 = req_i.src2_val;
+
+    assign product = mcand * mplier;
+
+    // Sign-extend the multiplier inputs based on the operation
+    always_comb begin
+        case (req_i.disp_packet.inst.r.funct3)
+            M_MUL, M_MULH, M_MULHSU: mcand = {{(32){rs1[31]}}, rs1};
+            default:                 mcand = {32'b0, rs1};
+        endcase
+        case (req_i.disp_packet.inst.r.funct3)
+            M_MUL, M_MULH: mplier = {{(32){rs2[31]}}, rs2};
+            default:       mplier = {32'b0, rs2};
+        endcase
+    end
+
+    // Use the high or low bits of the product based on the output func
+    assign result = (req_i.disp_packet.inst.r.funct3 == M_MUL) ? product[31:0] : product[63:32];
+
+    always_comb begin
+      resp_o.valid     = req_i.valid;
+      resp_o.value     = result;
+      resp_o.dest_prf  = req_i.dest_tag;
+      resp_o.rob_idx   = req_i.rob_idx;
+      resp_o.exception = 1'b0;
+      resp_o.mispred   = 1'b0;
+    end
+
+endmodule  
+
+// ---------------- LOAD FU ----------------
+module load_fu #(
+  parameter int XLEN = 32,
+  parameter int PHYS_REGS = 128,
+  parameter int ROB_DEPTH = 64
+)(
+  input  issue_packet_t req_i,
+  output fu_resp_t      resp_o,
+  output logic          ready_o
 );
   logic [XLEN-1:0] addr;
-  assign addr = req_i.src1_value + {{(XLEN-12){req_i.src2_value[11]}}, req_i.src2_value[11:0]};
+  assign addr = req_i.src1_val + {{(XLEN-12){req_i.imm[11]}}, req_i.imm[11:0]};
 
   assign ready_o = 1'b1;
   always_comb begin
     resp_o.valid     = req_i.valid;
-    resp_o.value     = addr;  // address computation only
-    resp_o.dest_prf  = req_i.dest_prf;
+    resp_o.value     = addr;
+    resp_o.dest_prf  = req_i.dest_tag;
     resp_o.rob_idx   = req_i.rob_idx;
     resp_o.exception = 1'b0;
     resp_o.mispred   = 1'b0;
@@ -92,40 +157,51 @@ endmodule
 
 // ---------------- BRANCH FU ----------------
 module branch_fu #(
-  parameter int XLEN = 64,
+  parameter int XLEN = 32,
   parameter int PHYS_REGS = 128,
   parameter int ROB_DEPTH = 64
 )(
-  input  fu_req_t  req_i,
-  output fu_resp_t resp_o,
-  output logic     ready_o
+  input  issue_packet_t req_i,
+  output fu_resp_t      resp_o,
+  output logic          ready_o
 );
+
+  fu_resp_t resp_local_o;
+
+  alu_fu #(.XLEN(XLEN), .PHYS_REGS(PHYS_REGS), .ROB_DEPTH(ROB_DEPTH)) u_alu_br (
+        .req_i  (req_i),
+        .resp_o (resp_local_o),
+        .ready_o(ready_o)
+      );
+
   logic take;
   always_comb begin
-    unique case (req_i.opcode[2:0])
-      3'b000: take = ($signed(req_i.src1_value) == $signed(req_i.src2_value)); // BEQ
-      3'b001: take = ($signed(req_i.src1_value) != $signed(req_i.src2_value)); // BNE
-      3'b100: take = ($signed(req_i.src1_value) <  $signed(req_i.src2_value)); // BLT
-      3'b101: take = ($signed(req_i.src1_value) >= $signed(req_i.src2_value)); // BGE
-      3'b110: take = (req_i.src1_value <  req_i.src2_value);                   // BLTU
-      3'b111: take = (req_i.src1_value >= req_i.src2_value);                   // BGEU
-      default: take = 1'b0;
-    endcase
-  end
+          case (req_i.disp_packet.inst.b.funct3)
+              3'b000:  take = signed'(req_i.src1_val) == signed'(req_i.src2_val); // BEQ
+              3'b001:  take = signed'(req_i.src1_val) != signed'(req_i.src2_val); // BNE
+              3'b100:  take = signed'(req_i.src1_val) <  signed'(req_i.src2_val); // BLT
+              3'b101:  take = signed'(req_i.src1_val) >= signed'(req_i.src2_val); // BGE
+              3'b110:  take = req_i.src1_val < req_i.src2_val;                    // BLTU
+              3'b111:  take = req_i.src1_val >= req_i.src2_val;                   // BGEU
+              default: take = `FALSE;
+          endcase
+      end
 
-  assign ready_o = 1'b1;
+  // assign ready_o = 1'b1;
+
   always_comb begin
     resp_o.valid     = req_i.valid;
-    resp_o.value     = {{(XLEN-1){1'b0}}, take};
-    resp_o.dest_prf  = req_i.dest_prf;
+    resp_o.value     = resp_local_o.value; // alu value
+    resp_o.dest_prf  = req_i.dest_tag;
     resp_o.rob_idx   = req_i.rob_idx;
-    resp_o.exception = 1'b0;
-    resp_o.mispred   = 1'b0;
+    resp_o.exception = 1'b1; // TODO: is branch
+    resp_o.mispred   = take;
   end
 endmodule
 
+
 module fu #(
-  parameter int XLEN        = 64,
+  parameter int XLEN        = 32,
   parameter int PHYS_REGS   = 128,
   parameter int ROB_DEPTH   = 64,
   parameter int ALU_COUNT   = 1,
@@ -134,10 +210,10 @@ module fu #(
   parameter int BR_COUNT    = 1
 )(
     // Issue → FU
-    input  fu_req_t alu_req  [ALU_COUNT],
-    input  fu_req_t mul_req  [MUL_COUNT],
-    input  fu_req_t load_req [LOAD_COUNT],
-    input  fu_req_t br_req   [BR_COUNT],
+    input  issue_packet_t alu_req  [ALU_COUNT],
+    input  issue_packet_t mul_req  [MUL_COUNT],
+    input  issue_packet_t load_req [LOAD_COUNT],
+    input  issue_packet_t br_req   [BR_COUNT],
 
     // FU → Issue
     output logic   alu_ready_o  [ALU_COUNT],
@@ -158,7 +234,7 @@ module fu #(
 );
 
   localparam int TOTAL_FU = ALU_COUNT + MUL_COUNT + LOAD_COUNT + BR_COUNT;
-
+  // always_ff @(negedge clock)
   genvar i;
   generate
     // ---------------- ALU ----------------
@@ -179,6 +255,8 @@ module fu #(
         .ready_o(mul_ready_o[i])
       );
     end
+
+
 
     // ---------------- LOAD ----------------
     for (i = 0; i < LOAD_COUNT; i++) begin : GEN_LOAD
@@ -215,5 +293,6 @@ module fu #(
       fu_mispred_o  [k] = fu_resp_bus[k].mispred;
     end
   end
+
 
 endmodule
