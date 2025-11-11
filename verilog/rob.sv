@@ -333,7 +333,37 @@ module rob #(
     //=============================================================//
     //### for debug only (sychenn 11/6) ###//
     //=============================================================//
-                    
+    logic wb_valid;
+    COMMIT_PACKET [`N-1:0] wb_packet;
+
+    always_ff @(posedge clock or posedge reset) begin
+        wb_valid <= 1'b0;
+        for (int i = 0; i < COMMIT_WIDTH; i++) begin
+            if (retire_en[i]) begin    
+                wb_valid <= 1;
+                break;
+            end
+        end
+        
+    end
+
+    always_comb begin 
+        if  (wb_valid) begin
+            for (int i = 0; i < COMMIT_WIDTH; i++) begin
+            wb_packet_o[i].data = wb_packet[i].data;
+            wb_packet_o[i].reg_idx =wb_packet[i].reg_idx;
+            wb_packet_o[i].halt = wb_packet[i].halt;
+            wb_packet_o[i].illegal=wb_packet[i].illegal;
+            wb_packet_o[i].valid =wb_packet[i].valid;
+            wb_packet_o[i].NPC = wb_packet[i].NPC;
+            end     
+        end  else begin
+            for (int i = 0; i < COMMIT_WIDTH; i++) begin
+                wb_packet_o[i].valid = 0;
+            end
+        end
+    end
+
     // ===== Dispatch Logic =====
     assign disp_enable_space_o = DEPTH - count;
     always_comb begin
@@ -381,7 +411,7 @@ module rob #(
         flush_count = '0;
         flushed_mask = '0;
         if (mispredict_i) begin
-            for (int j = 0; j < DEPTH; j++) begin
+            for (int j = 1; j < DEPTH; j++) begin
                 // (mispredict_rob_idx_i + 1 + j) % DEPTH = idx (but cannot 2 int in one block?)
                 if ((mispredict_rob_idx_i + j) % DEPTH == tail) begin
                     break;
@@ -410,7 +440,7 @@ module rob #(
             flush_upto_rob_idx_o <= '0;
             
             for(int i = 0 ; i< `N; i++)begin
-                wb_packet_o[i] <= '0;
+                wb_packet[i] <= '0;
             end
 
             for(int i = 0 ; i< COMMIT_WIDTH; i++)begin
@@ -455,9 +485,9 @@ module rob #(
                     rob_table[disp_rob_idx_o[i]].mispred   <= 1'b0;
 
                     //###11/7 SYCHENN ###//
-                    rob_table[disp_rob_idx_o[i]].NPC   <= disp_packet_i[0].NPC;
-                    rob_table[disp_rob_idx_o[i]].PC   <= disp_packet_i[0].PC;
-                    rob_table[disp_rob_idx_o[i]].inst   <=disp_packet_i[0].inst;
+                    rob_table[disp_rob_idx_o[i]].NPC   <= disp_packet_i[i].NPC;
+                    rob_table[disp_rob_idx_o[i]].PC    <= disp_packet_i[i].PC;
+                    rob_table[disp_rob_idx_o[i]].inst  <= disp_packet_i[i].inst;
                 end
             end
 
@@ -491,12 +521,12 @@ module rob #(
                         commit_new_prf_o[i] <= rob_table[head + i].new_prf;
                         commit_old_prf_o[i] <= rob_table[head + i].old_prf;
                         // wb file
-                        wb_packet_o[i].data <= rob_table[wb_rob_idx_i[i]].value;
-                        wb_packet_o[i].reg_idx <= rob_table[head + i].rd_arch;
-                        wb_packet_o[i].halt <= 0;
-                        wb_packet_o[i].illegal <=0;
-                        wb_packet_o[i].valid <=1;
-                        wb_packet_o[i].NPC <= rob_table[head + i].NPC;
+                        wb_packet[i].data <= rob_table[head + i].value;
+                        wb_packet[i].reg_idx <= rob_table[head + i].rd_arch;
+                        wb_packet[i].halt <= 0;
+                        wb_packet[i].illegal <=0;
+                        wb_packet[i].valid <=1;
+                        wb_packet[i].NPC <= rob_table[head + i].NPC;
                         // $display("npc1=%h | npc2=%h",rob_table[head + i].NPC, disp_packet_i[0].NPC);
 
                 end else begin
@@ -597,6 +627,7 @@ endtask
         end else begin
             cycle_count <= cycle_count + 1;
             dump_rob_state(cycle_count);
+            show_rob_output();
         end
     end
 

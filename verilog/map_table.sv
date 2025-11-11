@@ -100,10 +100,13 @@ module map_table#(
     // Output:
     //   snapshot_data_o     : current table snapshot for saving
     //
+    input logic [DISPATCH_WIDTH-1:0] is_branch_i,  //### 11/10 sychenn ###//
     input  logic                                              flush_i,
-    input  logic                                              snapshot_restore_i,
-    input  logic [ARCH_REGS-1:0][$clog2(PHYS_REGS)-1:0]       snapshot_data_i,
-    output logic [ARCH_REGS-1:0][$clog2(PHYS_REGS)-1:0]       snapshot_data_o
+    input  logic                                              snapshot_restore_valid_i, //valid bit
+    input  map_entry_t      snapshot_data_i [ARCH_REGS-1:0],
+    
+    output map_entry_t       snapshot_data_o [ARCH_REGS-1:0],
+    output logic checkpoint_valid_o //### 11/10 sychenn ###//
 );
 
     // =======================================================
@@ -112,13 +115,21 @@ module map_table#(
     // Each architectural register maps to a physical register entry,
     // along with a valid bit indicating whether the physical value is ready.
     //
-    typedef struct packed {
-        logic [$clog2(PHYS_REGS)-1:0] phys;  // physical register tag
-        logic                         valid; // 1 = physical register holds valid data
-    } map_entry_t;
 
     // Full mapping table (Architectural Register → Physical Register)
     map_entry_t table_reg [ARCH_REGS-1:0];
+
+    //### 11/10 sychenn ###//
+    logic checkpoint_valid_next;
+    always_comb begin 
+        checkpoint_valid_next = 1'b0;
+        for(int i =0 ; i < DISPATCH_WIDTH ; i++)begin
+            if(is_branch_i[i])begin
+                checkpoint_valid_next = 1'b1;
+                break;
+            end
+        end        
+    end
     // =======================================================
     // Reset / Init: on reset, create identity mapping:
     // arch reg i -> phys i, and mark valid = 1
@@ -133,23 +144,32 @@ module map_table#(
             for(int i =0 ; i < DISPATCH_WIDTH ; i++)begin
                 disp_old_phys_o[i] <= '0;
             end
+            checkpoint_valid_o <= 1'b0;
         end else begin
             // ===================================================
             //    Dispatch rename (speculative): for each dispatch slot,
             //    install new mapping and mark value as NOT ready (valid=0).
             // ===================================================
-            for(int i =0 ; i < DISPATCH_WIDTH ; i++)begin
-                if(disp_valid_i[i])begin
-                    disp_old_phys_o[i] <= table_reg[disp_arch_i[i]].phys;
-                    table_reg[disp_arch_i[i]].phys <= disp_new_phys_i[i];
-                    table_reg[disp_arch_i[i]].valid <= 1'b0; 
+            checkpoint_valid_o <= checkpoint_valid_next;
+            if (snapshot_restore_valid_i) begin
+                for(int i =0 ; i < ARCH_REGS ; i++)begin
+                    table_reg[i].phys <= snapshot_data_i[i].phys;
+                    // table_reg[i].valid <= snapshot_data_i[i].valid;
+                end
+            end else begin
+                for(int i =0 ; i < DISPATCH_WIDTH ; i++)begin
+                        if(disp_valid_i[i])begin
+                            disp_old_phys_o[i] <= table_reg[disp_arch_i[i]].phys;
+                            table_reg[disp_arch_i[i]].phys <= disp_new_phys_i[i];
+                            table_reg[disp_arch_i[i]].valid <= 1'b0; 
+                        end
+                    end
                 end
             end
 
             // ===================================================
             //  Writeback(aka complete stage): any WB that writes a physical tag should mark 
             //  every architectural mapping that references that physical tag as valid.
-            //  (This is a simple model: scan all ARCH_REGS; it's correct but O(ARCH_REGS * WB_WIDTH).)
             // ===================================================
             for (int i = 0 ; i < WB_WIDTH; i ++)begin
                 if(wb_valid_i[i])begin
@@ -168,25 +188,25 @@ module map_table#(
             // We also mark valid = 1 for restored (AMT state is committed).
             // ===================================================
 
-            if(snapshot_restore_i) begin
-                for(int i =0; i < ARCH_REGS ; i++)begin
-                    table_reg[i].phys <= snapshot_data_i[i];
-                    table_reg[i].valid <= 1'b1;
-                end
-            end
+            // if(snapshot_restore_valid_i) begin
+            //     for(int i =0; i < ARCH_REGS ; i++)begin
+            //         table_reg[i].phys <= snapshot_data_i[i];
+            //         table_reg[i].valid <= 1'b1;
+            //     end
+            // end
 
-            // ===================================================
-            // 4) Optional flush: if flush asserted, reset to identity mapping.
-            //    Depending on your microarchitecture you might instead restore from AMT.
-            // ===================================================
-            if(flush_i)begin
-                for(int i =0 ; i<ARCH_REGS ; i++)begin
-                    table_reg[i].phys <= i;
-                    table_reg[i].valid <= 1'b1;
-                end
-            end
+            // // ===================================================
+            // // 4) Optional flush: if flush asserted, reset to identity mapping.
+            // //    Depending on your microarchitecture you might instead restore from AMT.
+            // // ===================================================
+            // if(flush_i)begin
+            //     for(int i =0 ; i<ARCH_REGS ; i++)begin
+            //         table_reg[i].phys <= i;
+            //         table_reg[i].valid <= 1'b1;
+            //     end
+            // end
         end
-    end
+
 
     // =======================================================
     // Combinational read outputs: lookup for each dispatch slot
@@ -199,18 +219,26 @@ module map_table#(
             assign rs1_valid_o[i] = table_reg[rs1_arch_i[i]].valid;
             //rs2 outputs
             assign rs2_phys_o[i] = table_reg[rs2_arch_i[i]].phys;
-            assign rs2_valid_o[i] = table_reg[rs2_arch_i].valid;
+            assign rs2_valid_o[i] = table_reg[rs2_arch_i[i]].valid; //###11/10
         end
     endgenerate
 
-
+    always_ff @(posedge clock) begin
+        if (!reset) begin
+            $display("MAP_TABLE: snapshot_restore_i=%b | is_branch_i=%b valid =%b ",snapshot_restore_valid_i,is_branch_i,checkpoint_valid_o);
+            for (int i = 0 ; i < ARCH_REGS ; i++)begin
+                $display("table_reg[%0d] value = %d (%d)| checkpoint[%0d] value = %d (%d)| snapshot_data_i[%0d] value = %d (%d)", i, table_reg[i].phys,table_reg[i].valid, i, snapshot_data_o[i].phys,snapshot_data_o[i].valid, i, snapshot_data_i[i].phys,snapshot_data_i[i].valid);
+            end
+        end
+    end
     // =======================================================
-    // Snapshot output: provide current mapping (for ROB to save)
+    // Snapshot output: provide current mapping (for ROB/CPU to save)
+    // Drive it continuously from table_reg; CPU will latch on checkpoint_valid_o
     // =======================================================
-    // snapshot_data_o[i] = current physical tag mapped to architectural register i
     generate
-        for(genvar i =0 ; i< ARCH_REGS ; i++)begin
-            assign snapshot_data_o[i] = table_reg[i].phys;
+        for(genvar i = 0; i < ARCH_REGS; i++) begin
+            assign snapshot_data_o[i].phys  = table_reg[i].phys;
+            assign snapshot_data_o[i].valid = table_reg[i].valid;
         end
     endgenerate
 
