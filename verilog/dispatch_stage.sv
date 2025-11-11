@@ -62,6 +62,8 @@ module dispatch_stage #(
     output  logic      [DISPATCH_WIDTH-1:0][$clog2(ARCH_REGS)-1:0]    src2_arch_o,   //read  reg 2 request
     output  logic      [DISPATCH_WIDTH-1:0][$clog2(PHYS_REGS)-1:0]   dest_new_prf, //
 
+    output logic [DISPATCH_WIDTH-1:0] is_branch_o,  //### 11/10 sychenn ###//
+
     // =========================================================
     // Dispatch <-> RS
     // =========================================================
@@ -99,6 +101,13 @@ module dispatch_stage #(
     output logic stall
 
 );
+    //### 11/10 sychenn ###// (for map table restore)
+    always_comb begin
+        for (int i = 0; i < DISPATCH_WIDTH; i++) begin
+            is_branch_o[i] = disp_rs_valid_o[i] && (rs_packets_o[i].fu_type == FU_BRANCH);
+        end
+    end
+
     logic [$clog2(DISPATCH_WIDTH+1)-1:0] disp_n;
     assign stall = (disp_n == '0);
 
@@ -176,8 +185,9 @@ module dispatch_stage #(
 
                 //rs_entry
                 rs_packets_o[i].valid = 1;
-                rs_packets_o[i].fu_type = (rs_packets_o[i].disp_packet.mult) ? 2'b01 : (rs_packets_o[i].disp_packet.rd_mem) ? 2'b10 : (rs_packets_o[i].disp_packet.cond_branch|rs_packets_o[i].disp_packet.uncond_branch) ? 2'b11 : 2'b00;
-                rs_packets_o[i].rob_idx = disp_rob_idx_i;
+                //###11/10
+                rs_packets_o[i].fu_type = (disp_packet_o[i].mult) ? 2'b01 : (disp_packet_o[i].rd_mem) ? 2'b10 : (disp_packet_o[i].cond_branch|disp_packet_o[i].uncond_branch) ? 2'b11 : 2'b00;
+                rs_packets_o[i].rob_idx = disp_rob_idx_i[i];
 
                 rs_packets_o[i].dest_arch_reg = disp_packet_o[i].dest_reg_idx;
 

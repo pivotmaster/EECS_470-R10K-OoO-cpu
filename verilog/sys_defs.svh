@@ -520,4 +520,8 @@ typedef struct packed {
     logic [`XLEN-1:0]              value;      // result value
 } cdb_entry_t;
 
+typedef struct packed {
+    logic [$clog2(`PHYS_REGS)-1:0] phys;  // physical register tag
+    logic                         valid; // 1 = physical register holds valid data
+} map_entry_t;
 `endif // __SYS_DEFS_SVH__

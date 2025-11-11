@@ -80,11 +80,11 @@ module rs_single_entry #(
         rs_busy_next = rs_busy;
         br_mis_tag_next = br_mis_tag;
 
-        if (clear_wrong_instr_i && !empty && br_mis_tag) begin // !empty = 有效指令
+        if (clear_wrong_instr_i && !empty && br_mis_tag ) begin // !empty = 有效指令
             empty_next    = 1'b1;
             rs_busy_next  = 1'b0;
             rs_entry_next = '{default:'0}; 
-        end else if (disp_enable_i && empty &&rs_packets_i.valid) begin
+        end else if (disp_enable_i && empty &&rs_packets_i.valid ) begin
             rs_entry_next = rs_packets_i;
             empty_next    = 1'b0;
             rs_busy_next  = 1'b1; 

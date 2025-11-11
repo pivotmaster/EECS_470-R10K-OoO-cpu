@@ -84,6 +84,7 @@ module stage_if #(
                 PC_next = PC_reg + (FETCH_WIDTH << 2); // + 4 * FETCH_WIDTH
             end
         end
+        
     end
 
     always_ff @(posedge clock) begin
@@ -91,6 +92,7 @@ module stage_if #(
             PC_reg <= '0;
         end else begin
             PC_reg <= PC_next;
+            $display("PC_next=%h", PC_next);
         end
     end
 

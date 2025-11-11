@@ -100,6 +100,8 @@ module cpu #(
     logic [`DISPATCH_WIDTH-1:0][$clog2(`ARCH_REGS)-1:0] src1_arch;
     logic [`DISPATCH_WIDTH-1:0][$clog2(`ARCH_REGS)-1:0] src2_arch;
     logic [`DISPATCH_WIDTH-1:0][$clog2(`PHYS_REGS)-1:0] dest_new_prf; //T_new
+    logic [`DISPATCH_WIDTH-1:0] is_branch; //### 11/10 sychenn ###//
+    
     // RS
     logic [`DISPATCH_WIDTH-1:0] disp_rs_valid;
     logic [`DISPATCH_WIDTH-1:0] disp_rs_rd_wen;
@@ -179,8 +181,11 @@ module cpu #(
     //####
     logic flush_i;
     logic snapshot_restore_i;
-    logic [`ARCH_REGS-1:0][$clog2(`PHYS_REGS)-1:0] snapshot_data_i;
-    logic [`ARCH_REGS-1:0][$clog2(`PHYS_REGS)-1:0] snapshot_data_o;
+    map_entry_t      snapshot_data_i [`ARCH_REGS-1:0];
+    map_entry_t       snapshot_data_o [`ARCH_REGS-1:0] ;
+    map_entry_t       snapshot_reg [`ARCH_REGS-1:0];
+    logic checkpoint_valid;//### 11/10 sychenn ###//
+    logic has_snapshot; // guard restore until a snapshot is captured
 
 // Issue
 
@@ -523,6 +528,7 @@ module cpu #(
         .src1_phys_i(rs1_phys),
         .src2_phys_i(rs2_phys),
         .dest_reg_old_i(disp_old_phys),
+        .is_branch_o(is_branch),
 
         //map table outputs
         .rename_valid_o(rename_valid),
@@ -594,10 +600,8 @@ module cpu #(
         .commit_old_prf_o(commit_old_prf),
 
         // Branch flush
-        // .flush_o(flush_rob),
-        // .flush_upto_rob_idx_o(flush_upto_rob_idx)
-        .flush_o('0),
-        .flush_upto_rob_idx_o('0),
+        .flush_o(flush_rob),
+        .flush_upto_rob_idx_o(flush_upto_rob_idx),
 
         // Mispredict flush (sychenn 11/6)
         .mispredict_i(if_flush),
@@ -635,19 +639,44 @@ module cpu #(
 
         .wb_valid_i(cdb_valid_mp),//
         .wb_phys_i(cdb_phy_tag_mp),//
-        // .wb_valid_i('0),//
-        // .wb_phys_i('0),//
-        //####
-        // .flush_i(flush_i),
-        // .snapshot_restore_i(snapshot_restore_i),
-        // .snapshot_data_i(snapshot_data_i),
-        // .snapshot_data_o(snapshot_data_o)
-        .flush_i('0),
-        .snapshot_restore_i('0),
-        .snapshot_data_i('0),
-        .snapshot_data_o('0)
-    );
 
+        .is_branch_i(is_branch),
+        .flush_i('0),
+        .snapshot_restore_valid_i(snapshot_restore_i),
+        .snapshot_data_i(snapshot_data_i),
+
+        .snapshot_data_o(snapshot_data_o),
+        .checkpoint_valid_o(checkpoint_valid)
+    );
+    always_ff @(posedge clock or posedge reset) begin : checkpoint
+        if (reset) begin
+            snapshot_reg       <= '{default:'{phys:'0, valid:'0}};
+            snapshot_data_i    <= '{default:'{phys:'0, valid:'0}};
+            snapshot_restore_i <= 1'b0;
+            has_snapshot       <= 1'b0;
+        end else begin
+            $display("snapshot_reg:");
+            for(int i =0 ; i < `ARCH_REGS ; i++)begin
+                $display("snapshot_reg[%0d] = %d (%d)",i,snapshot_reg[i].phys,snapshot_reg[i].valid);
+            end
+            if (if_flush && has_snapshot) begin
+                for(int i =0 ; i <`ARCH_REGS ; i++)begin
+                    snapshot_data_i[i].phys <= snapshot_reg[i].phys;
+                    snapshot_data_i[i].valid <= snapshot_reg[i].valid;
+                end
+                snapshot_restore_i <= 1'b1;
+                has_snapshot       <= 1'b0; // consume snapshot
+            end else if (checkpoint_valid) begin
+                for(int i =0 ; i < `ARCH_REGS ; i++)begin
+                    snapshot_reg[i].phys <= snapshot_data_o[i].phys;
+                    snapshot_reg[i].valid <= snapshot_data_o[i].valid;
+                end
+                has_snapshot <= 1'b1;
+            end else begin
+                snapshot_restore_i <= 1'b0;
+            end
+        end
+    end
     //////////////////////////////////////////////////
     //                                              //
     //                 free list                    //
