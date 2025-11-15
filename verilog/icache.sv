@@ -65,6 +65,7 @@ module icache (
 
     ICACHE_TAG [`ICACHE_LINES-1:0] icache_tags;
 
+    //### THIS IS ICACHE NOT MEMORY ###//
     memDP #(
         .WIDTH     ($bits(MEM_BLOCK)),
         .DEPTH     (`ICACHE_LINES),

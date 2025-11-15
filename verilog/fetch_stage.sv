@@ -34,9 +34,9 @@ module stage_if #(
     // Problem : fetch one line (from ICache) per cycle (might not enough for N-way)
     // Possible Solution: dual-line fetch (two fetch requests per cycle)?
     // =========================================================
-    input [FETCH_WIDTH-1:0]                Imem_valid,
-    input  MEM_BLOCK [FETCH_WIDTH-1:0]     Imem_data,      // data coming back from Instruction memory
-    output MEM_COMMAND                     Imem_command, // Command sent to memory
+    input [FETCH_WIDTH-1:0]                Icache_valid,
+    input  MEM_BLOCK [FETCH_WIDTH-1:0]     Icache_data,      // data coming back from Instruction memory
+
     output ADDR                            Imem_addr, // address sent to Instruction memory
 
     // =========================================================
@@ -55,6 +55,10 @@ module stage_if #(
     // --------------------------
     logic [ADDR_WIDTH-1:0] PC_reg, PC_next;
 
+    //### stall fetch due to icache miss
+    logic stall_fetch;
+    assign stall_fetch = if_valid && !(&Icache_valid);
+
     // always_ff @(posedge clock) begin
     //     $display("flush : %b, PC : %h, NPC : %h", if_flush, PC_reg, PC_next);
     //     $display("if_valid : %b, pred_valid, taken, target : %b %b %h", if_valid, pred_valid_i, pred_taken_i, pred_target_i);
@@ -72,7 +76,7 @@ module stage_if #(
         end else if (if_flush) begin
             // PC_next = correct_pc_target_o;
             PC_next = 32'h68;
-        end else if (if_valid) begin
+        end else if (if_valid && !stall_fetch) begin
             if (pred_valid_i && pred_taken_i) begin
                 PC_next = pred_target_i;
                 $display("PC_next=%h", PC_next);
@@ -92,7 +96,7 @@ module stage_if #(
             PC_reg <= '0;
         end else begin
             PC_reg <= PC_next;
-            $display("PC_next=%h", PC_next);
+            
         end
     end
 
@@ -101,11 +105,6 @@ module stage_if #(
     // --------------------------
     // Align base fetch address to 8 bytes (64b line)
     assign Imem_addr    = {PC_reg[ADDR_WIDTH-1:3], 3'b0};
-
-    // Fire load when we are allowed to fetch (not flushing this cycle)
-    assign Imem_command = (reset || if_flush || !if_valid)
-                          ? MEM_NONE
-                          : MEM_LOAD;
 
     // --------------------------
     // Lane packing helpers
@@ -133,16 +132,23 @@ module stage_if #(
             logic [31:0]           this_inst;
             logic                  this_valid;
 
-            assign this_pc   = PC_reg + (k << 2);
-            assign this_inst = pick_inst_from_block(Imem_data[k], this_pc);
-
             // Lane valid rules:
             // During flush: all lanes are invalid (0) — or alternatively, output NOP with valid=0 in the same cycle.
             // When stalled (if_valid=0): all lanes are invalid (0).
             // When a predicted branch is taken: only lanes with index ≤ pred_lane_i are valid.
             // Otherwise: all lanes are valid.
             always_comb begin
-                if (reset || if_flush || !if_valid) begin
+                this_pc = '0;
+                this_inst = `NOP;
+                this_valid = 1'b0;
+
+                if (Icache_valid[k]) begin
+                    this_pc   = PC_reg + (k << 2);
+                    this_inst = pick_inst_from_block(Icache_data[k], this_pc);
+                end
+
+                // TODO: for N-way, when one of the instructions miss, all instructions after it should be invalid?
+                if (reset || if_flush || !if_valid || !Icache_valid[k]) begin
                     this_valid = 1'b0;
                 end else if (pred_valid_i && pred_taken_i) begin
                     this_valid = (k <= pred_lane_i);
@@ -158,5 +164,11 @@ module stage_if #(
             assign if_packet_o[k].valid = this_valid;
         end
     endgenerate
+
+    always_ff @(posedge clock or posedge reset) begin
+        if (!reset) begin
+            $display("PC_next=%h | Icache_valid=%b | if_valid=%b", PC_next, Icache_valid[0], if_packet_o[0].valid );
+        end
+    end
 
 endmodule

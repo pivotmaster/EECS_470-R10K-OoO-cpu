@@ -41,7 +41,7 @@ output logic [$clog2(PHYS_REGS+1)-1:0]                       free_count_o, // nu
 
     //### TODO: for debug only (sychenn 11/6) ###//
     input  logic flush_i,
-    input logic [`ROB_DEPTH-1:0] flush_free_regs_valid,
+    input logic [`ROB_DEPTH-1:0] flush_free_regs_valid, /// unused
     input logic [(PHYS_REGS)-1:0]  flush_free_regs
 );
 
@@ -157,6 +157,19 @@ output logic [$clog2(PHYS_REGS+1)-1:0]                       free_count_o, // nu
         next_count = count + N_free - N_alloc;
     end
 
+logic [$clog2(PHYS_REGS)-1:0] t, added;
+always_comb begin 
+    t = next_tail;
+    added = 0;
+    if (flush_i) begin
+        for (int k = 0; k <(PHYS_REGS); k++) begin
+            if (flush_free_regs[k]) begin
+                t = (t + 1) % (PHYS_REGS-ARCH_REGS);
+                added++;
+            end
+        end
+    end    
+end
 
     ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -184,26 +197,15 @@ output logic [$clog2(PHYS_REGS+1)-1:0]                       free_count_o, // nu
 
             // =========================================================
             //  Release (Commit) — push freed physical regs back
-            // =========================================================
+            // ==============================================================
             for (int j = 0; j < COMMIT_WIDTH; j++) begin
                 if (free_valid_i[j] && (free_phys_i[j] != 0)) begin
-                    // tail  <= (tail + 1) % (PHYS_REGS - ARCH_REGS);
-                    free_fifo[(tail+j) % (PHYS_REGS-ARCH_REGS)] <= free_phys_i[j];
-                    // count <= count + 1;
+                    free_fifo[(tail + j) % (PHYS_REGS-ARCH_REGS)] <= free_phys_i[j];
                 end
             end
 
             //### TODO: for debug only (sychenn 11/6) ###//
             if (flush_i) begin
-                int t = next_tail;
-                int added = 0;
-                for (int k = 0; k <(PHYS_REGS); k++) begin
-                    if (flush_free_regs[k]) begin
-                        t = (t + 1) % (PHYS_REGS);
-                        free_fifo[t] <= k;
-                        added++;
-                    end
-                end
                 tail  <= t;
                 count <= next_count + added;
             end
@@ -227,13 +229,13 @@ output logic [$clog2(PHYS_REGS+1)-1:0]                       free_count_o, // nu
     end 
     
 
-    // always_ff @(negedge clock)begin 
-    //     $display("free_phys = %0d , free_valid = %d\n", free_phys_i , free_valid_i);
-    //     $display("head: %d , tail: %d\n" , head, tail);
-    //     for(int i =0 ; i< (PHYS_REGS-ARCH_REGS); i++)begin
-    //         $display("free_fifo[%d] = %0d\n", i, free_fifo[i]);
-    //     end
-    // end
+    always_ff @(negedge clock)begin 
+        $display("free_phys = %0d , free_valid = %d\n", free_phys_i , free_valid_i);
+        $display("head: %d , tail: %d\n" , head, tail);
+        for(int i =0 ; i< (PHYS_REGS-ARCH_REGS); i++)begin
+            $display("free_fifo[%d] = %0d | flush_free_regs_valid = %d", i, free_fifo[i], flush_free_regs_valid[i]);
+        end
+    end
     
     // always_ff @(posedge clock) begin 
     //     $display("total_available = %0d", total_available);

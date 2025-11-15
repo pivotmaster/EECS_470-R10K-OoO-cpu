@@ -313,18 +313,21 @@ module cpu #(
     // note that there is no latency in project 3
     // but there will be a 100ns latency in project 4
 
-    // always_comb begin
-    //     if (Dmem_command != MEM_NONE) begin  // read or write DATA from memory
-    //         proc2mem_command = Dmem_command_filtered;
-    //         proc2mem_size    = Dmem_size;
-    //         proc2mem_addr    = Dmem_addr;
-    //     end else begin                      // read an INSTRUCTION from memory
-    //         proc2mem_command = Imem_command;
-    //         proc2mem_addr    = Imem_addr;
-    //         proc2mem_size    = DOUBLE;      // instructions load a full memory line (64 bits)
-    //     end
-    //     proc2mem_data = Dmem_store_data;
-    // end
+    always_comb begin
+        // TODO: now only has icache
+        proc2mem_command = Imem_command;
+        proc2mem_addr    = Imem_addr;
+        // if (Dmem_command != MEM_NONE) begin  // read or write DATA from memory
+        //     proc2mem_command = Dmem_command_filtered;
+        //     proc2mem_size    = Dmem_size;
+        //     proc2mem_addr    = Dmem_addr;
+        // end else begin                      // read an INSTRUCTION from memory
+        //     proc2mem_command = Imem_command;
+        //     proc2mem_addr    = Imem_addr;
+        //     proc2mem_size    = DOUBLE;      // instructions load a full memory line (64 bits)
+        // end
+        // proc2mem_data = Dmem_store_data;
+    end
     assign proc2mem_size = DOUBLE;
 
     //////////////////////////////////////////////////
@@ -389,29 +392,28 @@ module cpu #(
     //                  I-cache                     //
     //                                              //
     //////////////////////////////////////////////////
-    // icache icache_0(
-    //     .clock (clock),
-    //     .reset (reset),
+    icache icache_0(
+        .clock (clock),
+        .reset (reset),
 
-    //     // Inputs
+        // Inputs
+        // From memory
+        .Imem2proc_transaction_tag(mem2proc_transaction_tag), 
+        .Imem2proc_data(mem2proc_data),
+        .Imem2proc_data_tag(mem2proc_data_tag),
 
-    //     // From memory
-    //     .Imem2proc_transaction_tag(mem2proc_transaction_tag), 
-    //     .Imem2proc_data(mem2proc_data),
-    //     .Imem2proc_data_tag(mem2proc_data_tag),
+        // From fetch stage (the insturction address)
+        .proc2Icache_addr(proc2Icache_addr),
 
-    //     // From fetch stage
-    //     .proc2Icache_addr(proc2Icache_addr),
+        // Outputs
+        // To memory
+        .proc2Imem_command(Imem_command), // this let memory know we want to load or store (also act as valid signal)
+        .proc2Imem_addr(Imem_addr),
 
-    //     // Outputs
-    //     // To memory
-    //     .proc2Imem_command(Imem_command),
-    //     .proc2Imem_addr(Imem_addr),
-
-
-    //     .Icache_data_out(Icache_data_out),
-    //     .Icache_valid_out(Icache_valid_out) // When valid is high
-    // );
+        // To fetch stage
+        .Icache_data_out(Icache_data_out),
+        .Icache_valid_out(Icache_valid_out) // When valid is high
+    );
 
     //////////////////////////////////////////////////
     //                                              //
@@ -437,20 +439,19 @@ module cpu #(
         // =========================================================
         // Fetch <-> ICache / Mem
         // =========================================================
-        .Imem_valid(Icache_valid_out), 
-        .Imem_data (mem2proc_data),
-
-        // .Imem2proc_transaction_tag (mem2proc_transaction_tag),
-        // .Imem2proc_data_tag (mem2proc_data_tag),
+        // Inputs from icache
+        .Icache_valid(Icache_valid_out), // valid signal from I-cache
+        .Icache_data (Icache_data_out), // data from I-cache (instruction)
 
         // Outputs
         // These now go to the I-Cache, NOT main memory
-        .Imem_command (proc2mem_command),  // <-- MODIFIED (Was: Imem_command)
-        .Imem_addr (proc2mem_addr), 
+        // .Imem_command (Imem_command),  //### initially fetch -> mem so has this line (now control by icache)
+        .Imem_addr (proc2Icache_addr), 
 
         .correct_pc_target_o(correct_pc_target_o), 
         .if_packet_o (if_packet)
     );
+
 
     // IF-stage debug outputs
     always_comb begin
@@ -483,7 +484,7 @@ module cpu #(
                 if_id_reg[i].inst <= if_packet[i].inst;
                 if_id_reg[i].NPC <= if_packet[i].NPC;
                 if_id_reg[i].PC <= if_packet[i].PC;
-                if(if_id_reg[i].inst == 0) begin
+                if(if_packet[i].inst == 0 || !(if_packet[i].valid)) begin
                     if_id_reg[i].valid <= `FALSE;
                 end else begin
                     if_id_reg[i].valid <= `TRUE;
@@ -648,6 +649,8 @@ module cpu #(
         .snapshot_data_o(snapshot_data_o),
         .checkpoint_valid_o(checkpoint_valid)
     );
+
+    //### 11/10 sychenn ###// (for map table restore)
     always_ff @(posedge clock or posedge reset) begin : checkpoint
         if (reset) begin
             snapshot_reg       <= '{default:'{phys:'0, valid:'0}};
@@ -655,10 +658,10 @@ module cpu #(
             snapshot_restore_i <= 1'b0;
             has_snapshot       <= 1'b0;
         end else begin
-            $display("snapshot_reg:");
-            for(int i =0 ; i < `ARCH_REGS ; i++)begin
-                $display("snapshot_reg[%0d] = %d (%d)",i,snapshot_reg[i].phys,snapshot_reg[i].valid);
-            end
+            // $display("snapshot_reg:");
+            // for(int i =0 ; i < `ARCH_REGS ; i++)begin
+            //     $display("snapshot_reg[%0d] = %d (%d)",i,snapshot_reg[i].phys,snapshot_reg[i].valid);
+            // end
             if (if_flush && has_snapshot) begin
                 for(int i =0 ; i <`ARCH_REGS ; i++)begin
                     snapshot_data_i[i].phys <= snapshot_reg[i].phys;
