@@ -130,6 +130,24 @@ module map_table#(
             end
         end        
     end
+
+    //### 11/15  sychenn ####################################################################//
+    //### The problem is that dispatch instruction read reg at the same cycle with writeback 
+    //### (need to get the valid tag at the same cycle, orignally has 1 cycle latency)
+    //#######################################################################################//
+    logic [ARCH_REGS-1:0] wb_forward_valid;
+    always_comb begin 
+        wb_forward_valid = '0;
+        for (int i = 0 ; i < WB_WIDTH; i ++)begin
+            if(wb_valid_i[i])begin
+                for(int j = 0 ; j < ARCH_REGS ; j++)begin
+                    if(table_reg[j].phys == wb_phys_i[i])begin
+                        wb_forward_valid[j] = 1'b1;
+                    end
+                end
+            end
+        end       
+    end
     // =======================================================
     // Reset / Init: on reset, create identity mapping:
     // arch reg i -> phys i, and mark valid = 1
@@ -141,9 +159,7 @@ module map_table#(
                 table_reg[i].phys <= i;
                 table_reg[i].valid <= 1'b1;
             end
-            for(int i =0 ; i < DISPATCH_WIDTH ; i++)begin
-                disp_old_phys_o[i] <= '0;
-            end
+
             checkpoint_valid_o <= 1'b0;
         end else begin
             // ===================================================
@@ -159,7 +175,7 @@ module map_table#(
             end else begin
                 for(int i =0 ; i < DISPATCH_WIDTH ; i++)begin
                         if(disp_valid_i[i])begin
-                            disp_old_phys_o[i] <= table_reg[disp_arch_i[i]].phys;
+                            $display("disp_arch_i = %d | old_phys = %d | disp_old_phys_o = %d ", disp_arch_i[i],table_reg[disp_arch_i[i]].phys,disp_old_phys_o[i] );
                             table_reg[disp_arch_i[i]].phys <= disp_new_phys_i[i];
                             table_reg[disp_arch_i[i]].valid <= 1'b0; 
                         end
@@ -175,8 +191,11 @@ module map_table#(
                 if(wb_valid_i[i])begin
                     // table_reg[wb_phys_i[i]].valid <= 1'b1;
                     for(int j = 0 ; j < ARCH_REGS ; j++)begin
-                        if(table_reg[j].phys == wb_phys_i[i])begin
-                            table_reg[j].valid <= 1'b1;
+                        //###11/15 sychenn prevent wb and dispatch write to the same reg at the same cycle###//
+                        for(int k =0 ; k < DISPATCH_WIDTH ; k++)begin
+                            if ((table_reg[j].phys == wb_phys_i[i]) && (disp_arch_i[k] != j))begin 
+                                table_reg[j].valid <= 1'b1;
+                            end
                         end
                     end
                 end
@@ -211,15 +230,20 @@ module map_table#(
     // =======================================================
     // Combinational read outputs: lookup for each dispatch slot
     // =======================================================
+    // Forwarding logic to handle same-cycle writeback and dispatch
+
+
     // Provide mapped phys tag and ready bit for each rs1/rs2 of every dispatch slot
     generate 
         for(genvar i =0 ; i < DISPATCH_WIDTH ; i++)begin
             //rs1 outputs
-            assign rs1_phys_o[i] = table_reg[rs1_arch_i[i]].phys;
-            assign rs1_valid_o[i] = table_reg[rs1_arch_i[i]].valid;
+            assign rs1_phys_o[i] = table_reg[rs1_arch_i[i]].phys;                    
+            assign rs1_valid_o[i] = table_reg[rs1_arch_i[i]].valid | wb_forward_valid[rs1_arch_i[i]]; //###11/15    sychenn ###//                     
             //rs2 outputs
-            assign rs2_phys_o[i] = table_reg[rs2_arch_i[i]].phys;
-            assign rs2_valid_o[i] = table_reg[rs2_arch_i[i]].valid; //###11/10
+            assign rs2_phys_o[i] = table_reg[rs2_arch_i[i]].phys;                    
+            assign rs2_valid_o[i] = table_reg[rs2_arch_i[i]].valid | wb_forward_valid[rs2_arch_i[i]]; //###11/15    sychenn ###//      
+            // old prf
+            assign disp_old_phys_o[i] = table_reg[disp_arch_i[i]].phys; //### 11/15 ###//                          
         end
     endgenerate
 

@@ -415,7 +415,7 @@ module rob #(
                 // (mispredict_rob_idx_i + 1 + j) % DEPTH = idx (but cannot 2 int in one block?)
                 if ((mispredict_rob_idx_i + j) % DEPTH == tail) begin
                     break;
-                end else if (rob_table[(mispredict_rob_idx_i + j) % DEPTH].valid) begin
+                end else if ((rob_table[(mispredict_rob_idx_i + j) % DEPTH].valid) && (rob_table[(mispredict_rob_idx_i + j) % DEPTH].old_prf != 0)) begin
                     // $display("j=%d | rob_table[j].old_prf=%0d", (mispredict_rob_idx_i + j) % DEPTH,rob_table[j].old_prf);
                     // flush mispredict instructions
                     flush_count++;
@@ -464,6 +464,12 @@ module rob #(
             tail  <= (mispredict_rob_idx_i) % DEPTH;
             count <= count - flush_count;
             $display("flush misprdicted count=%d",flush_count);
+
+            // stop commit
+            for (int i = 0; i < COMMIT_WIDTH; i++) begin
+                commit_valid_o[i]   <= 1'b0;
+                commit_old_prf_o[i] <= '0;
+            end
             // output 
             // flush_o              <= 1'b1;
             // flush_upto_rob_idx_o <= mispredict_rob_idx_i;
