@@ -25,7 +25,7 @@
 `define CDB_SZ `N // This MUST match your superscalar width
 
 `ifndef XLEN
-  `define XLEN            32      // 64-bit processor width
+  `define XLEN            32      // 32-bit processor width
 `endif
 
 `ifndef OPCODE_N

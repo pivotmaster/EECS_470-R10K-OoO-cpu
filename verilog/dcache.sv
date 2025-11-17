@@ -1,0 +1,415 @@
+
+module dcache (
+    input clock, reset,
+    
+    // Request from LOAD unit
+    input  ADDR        Dcache_addr_0,      // Request 0
+    input  MEM_COMMAND Dcache_command_0, // MEM_LOAD or MEM_STORE or MEM_NONE
+    input  MEM_SIZE    Dcache_size_0, // WORD/BYTE/HALF
+    input  MEM_BLOCK   Dcache_store_data_0, // load = 0
+
+    output logic       Dcache_req_0_accept, // if bank conflict (two request go to the same bank), it might be 0 and need to be resent at the next cycle
+    output MEM_BLOCK   Dcache_data_out_0,
+    output logic       Dcache_valid_out_0,
+    
+    input  ADDR        Dcache_addr_1,      // Request 1
+    input  MEM_COMMAND Dcache_command_1,
+    input  MEM_SIZE    Dcache_size_1,
+    input  MEM_BLOCK   Dcache_store_data_1,
+
+    output logic       Dcache_req_1_accept,  // if bank conflict (two request go to the same bank), it might be 0
+    output MEM_BLOCK   Dcache_data_out_1,
+    output logic       Dcache_valid_out_1,
+    
+    // Memory interface (non-blocking)
+    output MEM_COMMAND Dcache2mem_command,
+    output ADDR        Dcache2mem_addr,
+    output MEM_SIZE    Dcache2mem_size,
+    output MEM_BLOCK   Dcache2mem_data,
+    output logic       Dcache2mem_valid,
+    
+    input  MEM_TAG   mem2proc_transaction_tag, //Tell you the tag for this to mem request (1 cycle after sending request)
+    input  MEM_BLOCK mem2proc_data,
+    input  MEM_TAG   mem2proc_data_tag
+);
+
+    // =========================================================
+    // Cache configuration
+    // =========================================================
+
+    // Cache parameters
+    parameter int CACHE_SIZE = 256;
+    parameter int LINE_SIZE = (`XLEN /8) * 2; //8 Bytes
+    parameter int CACHE_WAYS = 4;             // 4-way associative
+    parameter int BANKS = 2;                  // 2 banks for dual-port
+    parameter int CACHE_LINES = 256 / LINE_SIZE;           // Total lines (32 lines)
+    parameter int BANK_SIZE = CACHE_LINES / BANKS; // Total lines per bank (16 lines / bank)
+    parameter int SETS_PER_BANK = BANK_SIZE / CACHE_WAYS; //4 sets per bank
+
+    parameter int VICTIM_SIZE = 8;            // Victim cache entries
+    parameter int MSHR_SIZE = 4;             // Outstanding requests
+
+    // Bits parameters
+    parameter int BANK_BITS = $clog2(BANKS); // # bank = 2 (1 bit)
+    parameter int OFFSET_BITS = $clog2(LINE_SIZE); // # offset = 8 bytes (3 bits)
+    parameter int INDEX_BITS = $clog2(BANK_SIZE / CACHE_WAYS);      // # set = 4 = 16 lines / 4 ways (2 bits per bank)
+    parameter int TAG_BITS = `XLEN - INDEX_BITS - OFFSET_BITS - BANK_BITS; // 3 for byte offset
+    
+    // =========================================================
+    // Cache Signals (sent to mem_dp)
+    // =========================================================
+    // ---------- READ ---------- 
+    // Read enable signals
+    logic cache_read_en_0, cache_read_en_1;
+    // Read addresses 
+    logic [INDEX_BITS-1:0] cache_read_addr_0;
+    logic [INDEX_BITS-1:0] cache_read_addr_1;
+    // Read Data
+    MEM_BLOCK cache_data_read_0 [CACHE_WAYS-1:0];
+    MEM_BLOCK cache_data_read_1 [CACHE_WAYS-1:0];
+    
+    // ---------- WRITE ---------- 
+    // Write enable signals
+    logic cache_write_en_0 [CACHE_WAYS-1:0];
+    logic cache_write_en_1 [CACHE_WAYS-1:0];
+    // Write addresses 
+    logic [INDEX_BITS-1:0] cache_write_addr_0, cache_write_addr_1;
+    // Write Data
+    MEM_BLOCK cache_write_data_0, cache_write_data_1;
+    
+    // =========================================================
+    // Cache helper bits
+    // =========================================================
+    // ----------  Banked, associative storage ----------
+    logic [TAG_BITS-1:0]       cache_tags [BANKS-1:0][SETS_PER_BANK-1:0][CACHE_WAYS-1:0];
+    logic [CACHE_WAYS-1:0]     cache_valid[BANKS-1:0][SETS_PER_BANK-1:0];
+    logic [CACHE_WAYS-1:0]     cache_dirty[BANKS-1:0][SETS_PER_BANK-1:0];
+
+
+    // ---------- LRU tracking for replacement ---------- 
+    logic [$clog2(CACHE_WAYS)-1:0] lru_bits [BANKS-1:0][SETS_PER_BANK-1:0];
+
+    // =========================================================
+    // Main Cache Arrays
+    // =========================================================
+    // even bank (bank bit = 0)
+    genvar i;
+    for (i = 0; i < CACHE_WAYS; i++) begin : gen_cache_data_bank_even
+        memDP #(
+            .WIDTH(LINE_SIZE * 8),           // MEM_BLOCK width (in bytes)
+            .DEPTH(SETS_PER_BANK),  // = set size = 4 (each DP contains 1 way)
+            .READ_PORTS(1),       
+            .BYPASS_EN(1)         // Enable bypass for write-through
+        ) cache_data_0 (
+            .clock(clock),
+            .reset(reset),
+            .re(cache_read_en_0),
+            .raddr(cache_read_addr_0),
+            .rdata(cache_data_read_0[i]),
+            .we(cache_write_en_0[i]),
+            .waddr(cache_write_addr_0),
+            .wdata(cache_write_data_0)
+        );
+    end 
+
+    // odd bank (bank bit = 1)
+    genvar j;
+    for (j = 0; j < CACHE_WAYS; j++) begin : gen_cache_data_bank_odd
+        memDP #(
+            .WIDTH(LINE_SIZE * 8),           // MEM_BLOCK width (in bytes)
+            .DEPTH(SETS_PER_BANK),  //= set size (each DP contains 1 way)
+            .READ_PORTS(1),       
+            .BYPASS_EN(1)         // Enable bypass for write-through
+        ) cache_data_1 (
+            .clock(clock),
+            .reset(reset),
+            .re(cache_read_en_1),
+            .raddr(cache_read_addr_1),
+            .rdata(cache_data_read_1[j]),
+            .we(cache_write_en_1[j]),
+            .waddr(cache_write_addr_1),
+            .wdata(cache_write_data_1)
+        );
+    end 
+    
+    // // =========================================================
+    // // Victim Cache
+    // // =========================================================
+    // typedef struct packed {
+    //     logic valid;
+    //     logic [CACHE_TAG_BITS-1:0] tag;
+    //     logic [CACHE_INDEX_BITS-1:0] index;
+    //     MEM_BLOCK data;
+    //     logic dirty;
+    // } victim_entry_t;
+
+    // victim_entry_t victim_cache [VICTIM_SIZE-1:0];
+    // logic [$clog2(VICTIM_SIZE)-1:0] victim_lru [VICTIM_SIZE-1:0];
+
+
+    // =========================================================
+    // Cache Read Control
+    // =========================================================
+    // ----------  Address breakdown ---------- 
+    logic [TAG_BITS-1:0] tag_0, tag_1;
+    logic [INDEX_BITS-1:0] index_0, index_1;
+    logic [BANK_BITS-1:0] bank_0, bank_1;
+
+    assign bank_0 = Dcache_addr_0[OFFSET_BITS +: BANK_BITS];
+    assign index_0 =  Dcache_addr_0[OFFSET_BITS + BANK_BITS +: INDEX_BITS];
+    assign tag_0 =  Dcache_addr_0[31 : OFFSET_BITS + BANK_BITS + INDEX_BITS];
+
+    assign bank_1  = Dcache_addr_1[OFFSET_BITS +: BANK_BITS];
+    assign index_1 = Dcache_addr_1[OFFSET_BITS + BANK_BITS +: INDEX_BITS];
+    assign tag_1   = Dcache_addr_1[31 : OFFSET_BITS + BANK_BITS + INDEX_BITS];
+
+    // ----------  Bank determiniation ---------- (turn #request to #BANK)
+    logic req_0_to_bank_0, req_0_to_bank_1, req_1_to_bank_0, req_1_to_bank_1;
+    logic req_0_accept,req_1_accept; //whether request has assign to bank
+
+    assign req_0_to_bank_0 = (Dcache_command_0 != MEM_NONE) && !bank_0;
+    assign req_0_to_bank_1 = (Dcache_command_0 != MEM_NONE) && bank_0;
+    assign req_1_to_bank_0 = (Dcache_command_1 != MEM_NONE) && !req_0_to_bank_0 && !bank_1;
+    assign req_1_to_bank_1 = (Dcache_command_1 != MEM_NONE) && !req_0_to_bank_1 && bank_1;
+
+    assign Dcache_req_0_accept = req_0_to_bank_0 || req_0_to_bank_1;
+    assign Dcache_req_1_accept = req_1_to_bank_0 || req_1_to_bank_1;
+
+    // ----------  Read enable signals ----------    
+    assign cache_read_en_0 = (req_0_to_bank_0 && Dcache_command_0 != MEM_NONE) || (req_1_to_bank_0 && Dcache_command_1 != MEM_NONE);
+    assign cache_read_en_1 = (req_0_to_bank_1 && Dcache_command_0 != MEM_NONE) || (req_1_to_bank_1 && Dcache_command_1 != MEM_NONE);
+
+    // ----------  Assign Read address ----------    
+    // Only need index to determine which set 
+    assign cache_read_addr_0 = (req_0_to_bank_0) ? index_0 : (req_1_to_bank_0) ? index_1 : '0;
+    assign cache_read_addr_1 = (req_0_to_bank_1) ? index_0 : (req_1_to_bank_1) ? index_1 : '0;
+
+    // ----------  Cache Hit Detection ----------       
+    ///### The 1/0 here is from REQUEST not bank###//
+    logic [CACHE_WAYS-1:0] way_hit_0, way_hit_1;  // all ways hit =1 , miss = 0 (ex: 0010)
+    logic [1:0] hit_way_0, hit_way_1;  //which way hit (ex: 2)
+    logic cache_hit_0, cache_hit_1;
+
+    always_comb begin
+        way_hit_0 = '0;
+        way_hit_1 = '0;
+        hit_way_0 = 0;
+        hit_way_1 = 0;
+        
+        // Check all ways for hits using arrays (valid and tag match)
+        for (int w = 0; w < CACHE_WAYS; w++) begin
+            way_hit_0[w] = cache_valid[bank_0][index_0][w] && (cache_tags[bank_0][index_0][w] == tag_0);
+            way_hit_1[w] = cache_valid[bank_1][index_1][w] && (cache_tags[bank_1][index_1][w] == tag_1);
+        end
+        
+        // hit or miss
+        cache_hit_0 = |way_hit_0;
+        cache_hit_1 = |way_hit_1;
+
+        // check which way hit
+        for (int w = 0; w < CACHE_WAYS; w++) begin
+            if (way_hit_0[w]) hit_way_0 = w;
+            if (way_hit_1[w]) hit_way_1 = w;
+        end
+    end
+
+    // ----------  Get Read Result ---------- 
+    always_comb begin
+        Dcache_valid_out_0 = (Dcache_command_0 != MEM_NONE) && cache_hit_0 && Dcache_req_0_accept;
+        Dcache_valid_out_1 = (Dcache_command_1 != MEM_NONE) && cache_hit_1 && Dcache_req_1_accept;
+        Dcache_data_out_0 = '0;
+        Dcache_data_out_1 = '0;
+
+        if (cache_hit_0) begin
+            if (req_0_to_bank_0) Dcache_data_out_0 = cache_data_read_0[hit_way_0];
+            else if (req_0_to_bank_1) Dcache_data_out_0 = cache_data_read_1[hit_way_0];
+        end 
+
+        if (cache_hit_1) begin
+            if (req_1_to_bank_0) Dcache_data_out_1 = cache_data_read_0[hit_way_1];
+            else if (req_1_to_bank_1) Dcache_data_out_1 = cache_data_read_1[hit_way_1];
+        end 
+    end
+
+    // ----------  Cache Miss Path ----------     
+    // 0/1 here is from REQUEST
+    logic miss_0, miss_1;
+    logic send_miss_0, send_miss_1;
+    logic has_req_to_mem;
+
+    assign miss_0       = (Dcache_command_0 != MEM_NONE) && Dcache_req_0_accept && !cache_hit_0;
+    assign miss_1       = (Dcache_command_1 != MEM_NONE) && Dcache_req_1_accept && !cache_hit_1;
+    assign send_miss_0  = miss_0;
+    assign send_miss_1  = !miss_0 && miss_1;  // request_0 go first
+    assign has_req_to_mem = send_miss_0 || send_miss_1;
+
+    // ---------- MSHR for Non-Blocking ----------   
+    typedef struct packed {
+        logic valid;
+        logic [TAG_BITS-1:0] tag;
+        logic [INDEX_BITS-1:0] index;
+        logic [BANK_BITS-1:0] bank;
+        logic [$clog2(CACHE_WAYS)-1:0] way;
+        MEM_COMMAND command;
+        MEM_SIZE size;
+        MEM_BLOCK store_data;
+        // logic [3:0] request_id;
+        MEM_TAG     mem_tag; 
+        // logic victim_hit;  // Request went to victim cache
+    } mshr_entry_t;
+
+    mshr_entry_t mshr [MSHR_SIZE-1:0];
+    logic [MSHR_SIZE-1:0] mshr_valid;
+
+    // ---------- Allocate MSHR ----------   
+    logic [$clog2(MSHR_SIZE)-1:0] pending_mshr_id;
+    logic penidng_req_to_mem;
+    logic send_new_mem_req; // have req to memory & has MSHR entry
+    int free_mshr_idx;
+    logic mshr_found;
+
+    // Find empty MSHR
+    always_comb begin
+        mshr_found    = 0;
+        free_mshr_idx = 0;
+        for (int i = 0; i < MSHR_SIZE; i++) begin
+            if (!mshr[i].valid && !mshr_found) begin
+                mshr_found    = 1;
+                free_mshr_idx = i;
+            end
+        end
+        
+    end
+
+    assign send_new_mem_req = has_req_to_mem && mshr_found;
+
+    // Record #MSHR that was used
+    always_ff @(posedge clock or posedge reset) begin
+        if (reset) begin
+            pending_mshr_id <= '0;
+            penidng_req_to_mem <= 0;
+        end else begin
+            if (send_new_mem_req) begin
+                pending_mshr_id <= free_mshr_idx
+                penidng_req_to_mem <= 1;
+            end
+        end
+    end
+
+    // Allocate to the MSHR
+    //TODO: what if tag = 0 (reject)
+    always_ff @(posedge clock or posedge reset) begin
+        if (reset) begin
+            for (int i = 0; i < MSHR_SIZE; i++) begin
+                mshr[i].valid   <= 0;
+                mshr[i].mem_tag <= '0;
+            end
+        end else begin
+            if (send_new_mem_req) begin
+                mshr[free_mshr_idx].valid  <= 1;
+                mshr[free_mshr_idx].tag    <= (send_miss_0 ? tag_0   : tag_1);
+                mshr[free_mshr_idx].index  <= (send_miss_0 ? index_0 : index_1);
+                mshr[free_mshr_idx].bank   <= ((send_miss_0 && req_0_to_bank_0) || (send_miss_1 && req_1_to_bank_0)) ? bank_0  : bank_1;
+                mshr[free_mshr_idx].way    <= '0;  //TODO: victim or lru way
+                mshr[free_mshr_idx].command<= (send_miss_0 ? Dcache_command_0 : Dcache_command_1);
+                mshr[free_mshr_idx].size   <= (send_miss_0 ? Dcache_size_0    : Dcache_size_1);
+                mshr[free_mshr_idx].store_data <= '0;
+                mshr[free_mshr_idx].mem_tag <= '0;  
+            end
+
+            if (mem2proc_transaction_tag != 0 && penidng_req_to_mem) begin
+                mshr[pending_mshr_id].mem_tag <= mem2proc_transaction_tag;
+            end
+        end
+    end
+
+    // Send signal to the memory
+    always_comb begin : signal_to_mem
+        // default
+        Dcache2mem_command = MEM_NONE;
+        Dcache2mem_valid   = 1'b0;
+        Dcache2mem_addr    = '0;
+        Dcache2mem_size    = BYTE;  
+        Dcache2mem_data    = '0;
+
+        if (send_new_mem_req) begin
+            Dcache2mem_valid   = 1'b1;
+            if (send_miss_0) begin
+                Dcache2mem_addr = {tag_0, index_0, {OFFSET_BITS{1'b0}}};
+                Dcache2mem_command = Dcache_command_0;
+            end else begin // send_miss_1
+                Dcache2mem_addr = {tag_1, index_1, {OFFSET_BITS{1'b0}}};
+                Dcache2mem_command = Dcache_command_1;
+            end
+
+            Dcache2mem_size = DOUBLE;  // MEM_BLOCK = 8 bytes
+            Dcache2mem_data = '0;      // TODO: READ ONLY NOW
+        end
+    end
+      
+
+    // Get result from mem and clear MSHR entry
+    always_ff @(posedge clock or posedge reset) begin
+        if (reset) begin
+            for (int w = 0; w < CACHE_WAYS; w++) begin
+                cache_write_en_0[w] <= 1'b0;
+                cache_write_en_1[w] <= 1'b0;
+            end
+        end else begin
+            // default: no write (need to clear every cycle or it will keep writing into cache)
+            for (int w = 0; w < CACHE_WAYS; w++) begin
+                cache_write_en_0[w] <= 1'b0;
+                cache_write_en_1[w] <= 1'b0;
+            end
+            if (mem2proc_data_tag != 0) begin
+                for (int i = 0; i < MSHR_SIZE; i++) begin
+                    if (mshr[i].valid && (mshr[i].mem_tag == mem2proc_data_tag)) begin
+                        //TODO: need to write to the cache?
+                        if (mshr[i].bank == 1'b0) begin
+                            cache_write_addr_0 <= mshr[i].index;
+                            cache_write_data_0 <= mem2proc_data;
+                            cache_write_en_0[mshr[i].way] <= 1'b1;
+                        end else begin
+                            cache_write_addr_1 <= mshr[i].index;
+                            cache_write_data_1 <= mem2proc_data;
+                            cache_write_en_1[mshr[i].way] <= 1'b1;
+                        end
+                        // update cache tags and clear mshr entry
+                        cache_tags [mshr[i].bank][mshr[i].index][mshr[i].way]  <= mshr[i].tag;
+                        cache_valid[mshr[i].bank][mshr[i].index][mshr[i].way]  <= 1'b1;
+                        cache_dirty[mshr[i].bank][mshr[i].index][mshr[i].way]  <= 1'b0;
+                        mshr[i].valid <= 1'b0;
+                    end
+                end
+            end
+        end
+    end
+
+
+
+
+
+
+    // =========================================================
+    // Cache Write Control
+    // =========================================================
+    
+    // Default write controls (will be implemented with MSHR)
+    assign cache_write_en_0 = 1'b0;
+    assign cache_write_en_1 = 1'b0;
+
+    // =========================================================
+    // Memory Interface (Placeholder)
+    // =========================================================
+    
+    always_comb begin
+        Dcache2mem_command = MEM_NONE;
+        Dcache2mem_addr = '0;
+        Dcache2mem_size = DOUBLE;
+        Dcache2mem_data = '0;
+        Dcache2mem_valid = 1'b0;
+        
+        // TODO: Implement MSHR-based memory requests for misses
+    end
+
+endmodule
