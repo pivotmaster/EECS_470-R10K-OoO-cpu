@@ -89,7 +89,7 @@ module dcache (
 
 
     // ---------- LRU tracking for replacement ---------- 
-    logic [$clog2(CACHE_WAYS)-1:0] lru_bits [BANKS-1:0][SETS_PER_BANK-1:0];
+    logic [$clog2(CACHE_WAYS)-1:0] lru_bits [BANKS-1:0][SETS_PER_BANK-1:0][CACHE_WAYS-1:0];
 
     // =========================================================
     // Main Cache Arrays
@@ -220,7 +220,7 @@ module dcache (
 
     // ----------  Get Read Result ---------- 
     always_comb begin
-        Dcache_valid_out_0 = (Dcache_command_0 != MEM_NONE) && cache_hit_0 && Dcache_req_0_accept;
+        Dcache_valid_out_0 = (Dcache_command_0 != MEM_NONE) && cache_hit_0 && Dcache_req_0_accept; //Actually Dcache_req_0_accept contains (Dcache_command_0 != MEM_NONE)
         Dcache_valid_out_1 = (Dcache_command_1 != MEM_NONE) && cache_hit_1 && Dcache_req_1_accept;
         Dcache_data_out_0 = '0; //8 byte per line = 64 bits
         Dcache_data_out_1 = '0;
@@ -237,16 +237,16 @@ module dcache (
 
         // Choose the data to cpu by data size and offset
         unique case (Dcache_size_0)
-            BYTE:    Dcache_data_out_0.byte_level[7:0] = line_data_0.byte_level[offset_0];
-            HALF:    Dcache_data_out_0.half_level[15:0] = line_data_0.half_level[offset_0[OFFSET_BITS-1:1]];
-            WORD:    Dcache_data_out_0.word_level[31:0] = line_data_0.word_level[offset_0[OFFSET_BITS-1:2]];
+            BYTE:    Dcache_data_out_0.byte_level[0] = line_data_0.byte_level[offset_0];
+            HALF:    Dcache_data_out_0.half_level[0] = line_data_0.half_level[offset_0[OFFSET_BITS-1:1]];
+            WORD:    Dcache_data_out_0.word_level[0] = line_data_0.word_level[offset_0[OFFSET_BITS-1:2]];
             DOUBLE:  Dcache_data_out_0.dbbl_level = line_data_0.dbbl_level;
             default: Dcache_data_out_0.dbbl_level = line_data_0.dbbl_level;
         endcase
         unique case (Dcache_size_1)
-            BYTE:    Dcache_data_out_1.byte_level[7:0] = line_data_1.byte_level[offset_1];
-            HALF:    Dcache_data_out_1.half_level[15:0] = line_data_1.half_level[offset_1[OFFSET_BITS-1:1]];
-            WORD:    Dcache_data_out_1.word_level[31:0] = line_data_1.word_level[offset_1[OFFSET_BITS-1:2]];
+            BYTE:    Dcache_data_out_1.byte_level[0] = line_data_1.byte_level[offset_1];
+            HALF:    Dcache_data_out_1.half_level[0] = line_data_1.half_level[offset_1[OFFSET_BITS-1:1]];
+            WORD:    Dcache_data_out_1.word_level[0] = line_data_1.word_level[offset_1[OFFSET_BITS-1:2]];
             DOUBLE:  Dcache_data_out_1.dbbl_level = line_data_1.dbbl_level;
             default: Dcache_data_out_1.dbbl_level = line_data_1.dbbl_level;
         endcase
@@ -257,6 +257,8 @@ module dcache (
     logic miss_0, miss_1;
     logic send_miss_0, send_miss_1;
     logic has_req_to_mem;
+    logic [$clog2(CACHE_WAYS)-1:0] replace_way_0, replace_way_1;
+    logic mshr_hit_0, mshr_hit_1;
 
     assign miss_0       = (Dcache_command_0 != MEM_NONE) && req_0_accept && !cache_hit_0;
     assign miss_1       = (Dcache_command_1 != MEM_NONE) && req_1_accept && !cache_hit_1;
@@ -264,8 +266,8 @@ module dcache (
     assign send_miss_1  = !miss_0 && miss_1;  // request_0 go first
     assign has_req_to_mem = send_miss_0 || send_miss_1;
 
-    assign Dcache_req_1_accept = req_1_accept && !(miss_0 && miss_1); // if request 0 and 1 both miss, give up request 1
-    assign Dcache_req_0_accept = req_0_accept;
+    assign Dcache_req_1_accept = req_1_accept && !(miss_0 && miss_1) && !mshr_hit_1 ; // if request 0 and 1 both miss, give up request 1
+    assign Dcache_req_0_accept = req_0_accept && !mshr_hit_0;
 
     // ---------- MSHR for Non-Blocking ----------   
     typedef struct packed {
@@ -293,6 +295,100 @@ module dcache (
     int free_mshr_idx;
     logic mshr_found;
 
+    // ----------  LRU logic ----------  
+    //### LRU update at hit ###//
+    // Find the replacement way
+    always_comb begin : LRU
+        int max_val_0 = -1;
+        int max_val_1 = -1;
+        replace_way_0 = '0;
+        replace_way_1 = '0;
+
+        // Req 0
+        // First find invalid
+        if (!(&cache_valid[bank_0][index_0])) begin
+            for (int w1 = 0; w1 <CACHE_WAYS; w1++) begin
+                if (!cache_valid[bank_0][index_0][w1]) begin
+                    replace_way_0 = w1;
+                    break;
+                end
+            end
+        end else begin
+            // If no invalid, find the oldest
+            for (int w = 0; w <CACHE_WAYS; w++) begin
+                if (lru_bits[bank_0][index_0][w] > max_val_0) begin
+                    replace_way_0 = w;
+                    max_val_0 = lru_bits[bank_0][index_0][w];
+                end
+            end
+        end
+
+        // Req 1
+        // First find invalid
+        if (!(&cache_valid[bank_1][index_1])) begin
+            for (int w3 = 0; w3 <CACHE_WAYS; w3++) begin
+                if (!cache_valid[bank_1][index_1][w3]) begin
+                    replace_way_1 = w3;
+                    break;
+                end
+            end
+        end else begin
+            // If no invalid, find the oldest
+            for (int w2 = 0; w2 <CACHE_WAYS; w2++) begin
+                if (lru_bits[bank_1][index_1][w2] > max_val_1) begin
+                    replace_way_1 = w2;
+                    max_val_1 = lru_bits[bank_1][index_1][w2];
+                end
+            end
+        end
+    end
+
+    // Update LRU Bits
+    // ### only update when cache hit ###//
+    always_ff @(posedge clock or posedge reset) begin : update_LRU
+        if (reset) begin
+            for (int b = 0; b < BANKS; b++) begin
+                for (int s = 0; s < SETS_PER_BANK; s++) begin
+                    for (int w = 0; w < CACHE_WAYS; w++) begin
+                        lru_bits[b][s][w] <= '0;   
+                    end
+                end
+            end
+        end else begin
+            // cpu reauest 0
+            if (cache_hit_0 && Dcache_req_0_accept) begin
+                int b0   = bank_0;
+                int s0   = index_0;
+                int w0   = hit_way_0;
+                logic [$clog2(CACHE_WAYS)-1:0] old = lru_bits[b0][s0][w0];
+
+                for (int w = 0; w < CACHE_WAYS; w++) begin
+                    if (w == w0) begin
+                        lru_bits[b0][s0][w] <= '0;
+                    end else if (lru_bits[b0][s0][w] < old) begin
+                        lru_bits[b0][s0][w] <= lru_bits[b0][s0][w] + 1'b1;
+                    end
+                end
+            end
+            // cpu reauest 1
+            if (cache_hit_1 && Dcache_req_1_accept) begin
+                int b1   = bank_1;
+                int s1   = index_1;
+                int w1   = hit_way_1;
+                logic [$clog2(CACHE_WAYS)-1:0] old1 = lru_bits[b1][s1][w1];
+
+                for (int w11 = 0; w11 < CACHE_WAYS; w11++) begin
+                    if (w11 == w1) begin
+                        lru_bits[b1][s1][w11] <= '0;
+                    end else if (lru_bits[b1][s1][w11] < old1) begin
+                        lru_bits[b1][s1][w11] <= lru_bits[b1][s1][w11] + 1'b1;
+                    end
+                end
+            end
+        end
+    end
+
+    // ----------  MSHR logic -------------------------  
     // Find empty MSHR
     always_comb begin
         mshr_found    = 0;
@@ -349,7 +445,6 @@ module dcache (
                 for (int s = 0; s < SETS_PER_BANK; s++) begin
                     cache_valid[b][s] <= '0;
                     cache_dirty[b][s] <= '0;
-                    lru_bits[b][s]    <= '0;
                     for (int w2 = 0; w2 < CACHE_WAYS; w2++) begin
                         cache_tags[b][s][w2] <= '0;
                     end
@@ -366,7 +461,7 @@ module dcache (
                 mshr[free_mshr_idx].tag    <= (send_miss_0 ? tag_0   : tag_1);
                 mshr[free_mshr_idx].index  <= (send_miss_0 ? index_0 : index_1);
                 mshr[free_mshr_idx].bank   <= ((send_miss_0 && req_0_to_bank_0) || (send_miss_1 && req_1_to_bank_0)) ? bank_0  : bank_1;
-                mshr[free_mshr_idx].way    <= '0;  //TODO: victim or lru way
+                mshr[free_mshr_idx].way    <= (send_miss_0 ? replace_way_0 : replace_way_1); //lru
                 mshr[free_mshr_idx].command<= (send_miss_0 ? Dcache_command_0 : Dcache_command_1);
                 mshr[free_mshr_idx].size   <= (send_miss_0 ? Dcache_size_0    : Dcache_size_1);
                 mshr[free_mshr_idx].store_data <= '0;
@@ -406,8 +501,7 @@ module dcache (
         end
     end
 
-
-    // Send signal to the memory
+    // ---------- Send signal to the memory ------------------
     always_comb begin : signal_to_mem
         // default
         Dcache2mem_command = MEM_NONE;
@@ -431,6 +525,25 @@ module dcache (
         end
     end
 
-
+    // ---------- MSHR Conflict ------------------
+    //### Handle the situation that cpu sent request that is waiting inside the MSHR ###//
+    always_comb begin
+        mshr_hit_0 = 1'b0;
+        mshr_hit_1 = 1'b0;
+        for (int i = 0; i < MSHR_SIZE; i++) begin
+            if (mshr[i].valid &&
+                mshr[i].tag   == tag_0   &&
+                mshr[i].index == index_0 &&
+                mshr[i].bank  == bank_0) begin
+                mshr_hit_0 = 1'b1;
+            end
+            if (mshr[i].valid &&
+                mshr[i].tag   == tag_1   &&
+                mshr[i].index == index_1 &&
+                mshr[i].bank  == bank_1) begin
+                mshr_hit_1 = 1'b1;
+            end
+        end
+    end
 
 endmodule
