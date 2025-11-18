@@ -181,6 +181,10 @@ module rob #(
         end
 
     end
+    // always_ff @(negedge clock)begin
+    //    // $display("head = %0d  , tail = %0d\n" , head, tail);
+    //    $display("disp_rob_idx_o=%d | commit_old_prf_o: %d", disp_rob_idx_o[0], commit_old_prf_o[0]);
+    // end
 
 task automatic show_rob_output();
     $display("============================================");
