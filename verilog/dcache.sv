@@ -203,8 +203,8 @@ module dcache (
         
         // Check all ways for hits using arrays (valid and tag match)
         for (int w = 0; w < CACHE_WAYS; w++) begin
-            way_hit_0[w] = cache_valid[bank_0][index_0][w] && (cache_tags[bank_0][index_0][w] == tag_0);
-            way_hit_1[w] = cache_valid[bank_1][index_1][w] && (cache_tags[bank_1][index_1][w] == tag_1);
+            way_hit_0[w] = (Dcache_req_0_accept) ? cache_valid[bank_0][index_0][w] && (cache_tags[bank_0][index_0][w] == tag_0) : '0;
+            way_hit_1[w] = (Dcache_req_1_accept) ? cache_valid[bank_1][index_1][w] && (cache_tags[bank_1][index_1][w] == tag_1) : '0;
         end
         
         // hit or miss
