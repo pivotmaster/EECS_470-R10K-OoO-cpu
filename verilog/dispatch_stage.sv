@@ -62,6 +62,8 @@ module dispatch_stage #(
     output  logic      [DISPATCH_WIDTH-1:0][$clog2(ARCH_REGS)-1:0]    src2_arch_o,   //read  reg 2 request
     output  logic      [DISPATCH_WIDTH-1:0][$clog2(PHYS_REGS)-1:0]   dest_new_prf, //
 
+    output logic [DISPATCH_WIDTH-1:0] is_branch_o,  //### 11/10 sychenn ###//
+
     // =========================================================
     // Dispatch <-> RS
     // =========================================================
@@ -99,6 +101,13 @@ module dispatch_stage #(
     output logic stall
 
 );
+    //### 11/10 sychenn ###// (for map table restore)
+    always_comb begin
+        for (int i = 0; i < DISPATCH_WIDTH; i++) begin
+            is_branch_o[i] = disp_rs_valid_o[i] && (rs_packets_o[i].fu_type == FU_BRANCH);
+        end
+    end
+
     logic [$clog2(DISPATCH_WIDTH+1)-1:0] disp_n;
     assign stall = (disp_n == '0);
 
@@ -110,12 +119,12 @@ module dispatch_stage #(
         if (free_regs_i < disp_n)      disp_n = free_regs_i;
     end
 
-    // always_ff @(posedge clock) begin
-    //   if (!reset) begin
-    //     $display("[%0t] DISPATCH: RS=%0d ROB=%0d REG=%0d  W=%0d  -> disp_n=%0d",
-    //             $time, free_rs_slots_i, free_rob_slots_i, free_regs_i, DISPATCH_WIDTH, disp_n);
-    //   end
-    // end
+    always_ff @(posedge clock) begin
+      if (!reset) begin
+        $display("[%0t] DISPATCH: now valid=%b | RS=%0d ROB=%0d REG=%0d  W=%0d  -> disp_n=%0d",
+                $time, if_packet_i[0].valid, free_rs_slots_i, free_rob_slots_i, free_regs_i, DISPATCH_WIDTH, disp_n);
+      end
+    end
 
 
 
@@ -158,54 +167,54 @@ module dispatch_stage #(
     //TODO exist latch
     always_comb begin
         disp_rs_valid_o = '0;
+        rs_packets_o = '0;
         disp_rob_valid_o = '0;
+        rename_valid_o = '0;
+        alloc_req_o = '0;
+        dest_new_prf = '0;
+        disp_rd_arch_o = '0;
+        disp_rd_new_prf_o = '0;
+        disp_rd_old_prf_o = '0;
 
         for (int i = 0; i < DISPATCH_WIDTH; i++) begin
-            //disp_packet_o[i].dest_reg_idx = ;
+            if (if_packet_i[i].valid) begin //### Account for icache miss (valid = 0)
+              // Dispatch -> Map Table
+              src1_arch_o[i] = if_packet_i[i].inst.r.rs1;
+              src2_arch_o[i]= if_packet_i[i].inst.r.rs2;
+              dest_arch_o[i] = disp_packet_o[i].dest_reg_idx;  // from decoder
+              rename_valid_o[i] = if_packet_i[i].valid & disp_rs_rd_wen_o[i] & (i < disp_n); // only if instruction is valid
+              alloc_req_o[i] = if_packet_i[i].valid & disp_rs_rd_wen_o[i] & (i < disp_n);
 
-            // Dispatch -> Map Table
-            src1_arch_o[i] = if_packet_i[i].inst.r.rs1;
-            src2_arch_o[i]= if_packet_i[i].inst.r.rs2;
-            dest_arch_o[i] = disp_packet_o[i].dest_reg_idx;  // from decoder
-            rename_valid_o[i] = if_packet_i[i].valid & disp_rs_rd_wen_o[i] & (i < disp_n); // only if instruction is valid
-            alloc_req_o[i] = if_packet_i[i].valid & disp_rs_rd_wen_o[i] & (i < disp_n);
+              // To RS
+              if(i < disp_n)begin
+                  disp_rs_valid_o[i] = 1;
 
-            // To RS
-            if(i < disp_n)begin
-                disp_rs_valid_o[i] = 1;
+                  //rs_entry
+                  rs_packets_o[i].valid = 1;
+                  //###11/10
+                  rs_packets_o[i].fu_type = (disp_packet_o[i].mult) ? 2'b01 : (disp_packet_o[i].rd_mem) ? 2'b10 : (disp_packet_o[i].cond_branch|disp_packet_o[i].uncond_branch) ? 2'b11 : 2'b00;
+                  rs_packets_o[i].rob_idx = disp_rob_idx_i[i];
 
-                //rs_entry
-                rs_packets_o[i].valid = 1;
-                rs_packets_o[i].fu_type = (rs_packets_o[i].disp_packet.mult) ? 2'b01 : (rs_packets_o[i].disp_packet.rd_mem) ? 2'b10 : (rs_packets_o[i].disp_packet.cond_branch|rs_packets_o[i].disp_packet.uncond_branch) ? 2'b11 : 2'b00;
-                rs_packets_o[i].rob_idx = disp_rob_idx_i;
+                  rs_packets_o[i].dest_arch_reg = disp_packet_o[i].dest_reg_idx;
 
-                rs_packets_o[i].dest_arch_reg = disp_packet_o[i].dest_reg_idx;
+                  rs_packets_o[i].dest_tag = new_reg_i[i];//from free list
 
-                rs_packets_o[i].dest_tag = new_reg_i[i];//from free list
+                  rs_packets_o[i].src1_tag = src1_phys_i[i];  // physical tag for rs1
+                  rs_packets_o[i].src2_tag = src2_phys_i[i];  // physical tag for rs2
+                  rs_packets_o[i].src1_ready = src1_ready_i[i]; // whether rs1 is ready (+)
+                  rs_packets_o[i].src2_ready = src2_ready_i[i];
+                  rs_packets_o[i].disp_packet = disp_packet_o[i];
 
-                rs_packets_o[i].src1_tag = src1_phys_i[i];  // physical tag for rs1
-                rs_packets_o[i].src2_tag = src2_phys_i[i];  // physical tag for rs2
-                rs_packets_o[i].src1_ready = src1_ready_i[i]; // whether rs1 is ready (+)
-                rs_packets_o[i].src2_ready = src2_ready_i[i];
-                rs_packets_o[i].disp_packet = disp_packet_o[i];
+                  // To ROB
+                  disp_rob_valid_o[i] = 1;
+                  disp_rd_arch_o[i] = disp_packet_o[i].dest_reg_idx;
+                  disp_rd_old_prf_o[i] = dest_reg_old_i[i]; // Told
+                  disp_rd_new_prf_o[i] = new_reg_i[i];  //from free list
 
-                // To ROB
-                disp_rob_valid_o[i] = 1;
-                disp_rd_arch_o[i] = disp_packet_o[i].dest_reg_idx;
-                disp_rd_old_prf_o[i] = dest_reg_old_i[i]; // Told
-                disp_rd_new_prf_o[i] = new_reg_i[i];  //from free list
-
-                // To map table
-                dest_new_prf[i] = new_reg_i[i];
-                
-            end else begin
-              disp_rd_arch_o[i] = '0;
-              rs_packets_o[i] = '0;
-              dest_new_prf[i] = '0;
-              disp_rd_new_prf_o[i] = '0;
-              disp_rd_old_prf_o[i] = '0;
+                  // To map table
+                  dest_new_prf[i] = new_reg_i[i];
+              end 
             end
-            
         end
 
 
@@ -234,6 +243,30 @@ module dispatch_stage #(
     end
   end
 */
+
+  // =========================================================
+  // DEBUG
+  // =========================================================
+  integer cycle_count;
+  always_ff @(posedge clock) begin
+    if (reset)
+      cycle_count <= 0;
+    else
+      cycle_count <= cycle_count + 1;
+
+    for (int i = 0; i < DISPATCH_WIDTH; i++) begin
+      $display("disp_rs_valid_o=%b | rs_packets_o valid=%b", disp_rs_valid_o[0], rs_packets_o[0].valid);
+      if (disp_rs_valid_o[i]) begin
+        $display("Dispatch %0d | ROB_idx=%0d | Dest=%0d | Src1=%0d (%b) | Src2=%0d (%b)",
+                 i,
+                 rs_packets_o[i].rob_idx,
+                 rs_packets_o[i].dest_tag,
+                 rs_packets_o[i].src1_tag, rs_packets_o[i].src1_ready,
+                 rs_packets_o[i].src2_tag, rs_packets_o[i].src2_ready);
+      end
+    end
+  end
+
 
 endmodule
 

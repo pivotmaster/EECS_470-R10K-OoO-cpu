@@ -31,7 +31,14 @@ module rs_single_entry #(
 
     // CDB interface
     input  logic [CDB_WIDTH-1:0]                         cdb_valid_single_i, 
-    input  logic [CDB_WIDTH-1:0][$clog2(PHYS_REGS)-1:0]  cdb_tag_single_i
+    input  logic [CDB_WIDTH-1:0][$clog2(PHYS_REGS)-1:0]  cdb_tag_single_i,
+
+    // BR mispredict recovery 
+    input  logic                                         br_mis_tag_single_i, // from RS control module
+    input  logic                                         clear_br_tag_i, // from RS control module
+    input logic                                          clear_wrong_instr_i, // from RS control module
+
+    output logic                                debug_br_tag
 );  
 
     // =========================================================
@@ -43,6 +50,9 @@ module rs_single_entry #(
     rs_entry_t      rs_entry, rs_entry_next; // reg
     logic rs_busy, rs_busy_next;
 
+    // TODO: Br tag
+    logic br_mis_tag, br_mis_tag_next;
+    assign debug_br_tag = br_mis_tag;
     // =========================================================
     // CDB Wakeup
     //
@@ -68,17 +78,22 @@ module rs_single_entry #(
         rs_entry_next = rs_entry;
         empty_next    = empty;
         rs_busy_next = rs_busy;
+        br_mis_tag_next = br_mis_tag;
 
-        if (disp_enable_i && empty &&rs_packets_i.valid) begin
+        if (clear_wrong_instr_i && !empty && br_mis_tag ) begin // !empty = 有效指令
+            empty_next    = 1'b1;
+            rs_busy_next  = 1'b0;
+            rs_entry_next = '{default:'0}; 
+        end else if (disp_enable_i && empty &&rs_packets_i.valid ) begin
             rs_entry_next = rs_packets_i;
             empty_next    = 1'b0;
             rs_busy_next  = 1'b1; 
+            br_mis_tag_next = br_mis_tag_single_i;
         end else begin
             
             // CDB wake up
             rs_entry_next.src1_ready = rs_entry.src1_ready | src1_hit;
             rs_entry_next.src2_ready = rs_entry.src2_ready | src2_hit;
-
             // Clear RS entry after issue
             if ( issue_i&& ready_o) begin
                 empty_next = 1'b1;
@@ -94,10 +109,12 @@ module rs_single_entry #(
             rs_entry     <= '{default:'0}; 
             empty        <= 1'b1;
             rs_busy     <= 1'b0;
+            br_mis_tag <= 1'b0;
         end else begin
             rs_entry     <= rs_entry_next;
             empty        <= empty_next;
             rs_busy     <= rs_busy_next;
+            br_mis_tag <= br_mis_tag_next;
         end
     end
 
