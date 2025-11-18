@@ -47,7 +47,13 @@ module RS #(
 
     output  rs_entry_t     [RS_DEPTH-1:0]                          rs_entries_o,
     output  logic          [RS_DEPTH-1:0]                          rs_ready_o,  
-    output  fu_type_e                                              fu_type_o [RS_DEPTH]    
+    output  fu_type_e                                              fu_type_o [RS_DEPTH],
+
+    // =========================================================
+    // Branch mispredict recovery (flush)
+    // =========================================================  
+    input   logic                                                  br_mispredict_i,
+    input   logic                                                  branch_success_predict
 ); 
 
     // =========================================================
@@ -69,6 +75,43 @@ module RS #(
     int free_slots;
     bit rs_full;
 
+    // TODO: Br tag
+    logic br_mis_tag, br_mis_tag_next;
+    logic br_mis_tag_single;
+    logic clear_br_tag;
+
+    logic [RS_DEPTH-1:0] debug_br_tag;
+
+    always_comb begin
+        for (int i = 0; i < DISPATCH_WIDTH; i++) begin
+            if (rs_packets_i[i].disp_packet.fu_type == FU_BRANCH && rs_packets_i[i].valid) begin
+                br_mis_tag_next = 1'b1;
+            end else if (branch_success_predict | br_mispredict_i) begin
+                br_mis_tag_next = 1'b0;
+            end else begin
+                br_mis_tag_next = br_mis_tag;
+            end
+        end
+    end
+
+    always_comb begin 
+        if (branch_success_predict | br_mispredict_i) begin
+            clear_br_tag = 1'b1;
+        end else begin
+            clear_br_tag = 1'b0;
+        end 
+        
+    end
+
+    always_ff @(posedge clock) begin
+        if (reset) begin
+            br_mis_tag <= 0;
+        end else begin
+            br_mis_tag <= br_mis_tag_next;
+        end
+    end
+
+    assign br_mis_tag_single = (br_mis_tag || br_mis_tag_next);
     // =========================================================
     // Whole RS table
     // =========================================================
@@ -87,11 +130,18 @@ module RS #(
                 .rs_packets_i(rs_packets[i]),
                 .empty_o(rs_empty[i]),
                 .issue_i(issue_enable_i[i]),
+
+                .br_mis_tag_single_i(br_mis_tag_single),
+                .clear_br_tag_i(clear_br_tag),
+                .clear_wrong_instr_i(br_mispredict_i),
+
                 .rs_single_entry_o(rs_entries_o[i]),
                 .fu_type_o(fu_type_o[i]),
                 .ready_o(rs_ready_o[i]),
                 .cdb_valid_single_i(cdb_valid_i),
-                .cdb_tag_single_i(cdb_tag_i)
+                .cdb_tag_single_i(cdb_tag_i),
+
+                .debug_br_tag(debug_br_tag[i])
             );
         end
     endgenerate
@@ -113,11 +163,13 @@ module RS #(
     always_comb begin: disp_pkt
         rs_packets  = '0;
         disp_enable = '0;
-        for (int i = 0; i<DISPATCH_WIDTH; i++) begin
-            for (int j=0; j<RS_DEPTH; j++) begin
-                if (disp_grant_vec[i][j]) begin
-                    rs_packets[j]  = rs_packets_i[i]; // dispatch slot i allocates RS entry j
-                    disp_enable[j] = 1'b1;
+        if (!br_mispredict_i) begin  //### TODO: stop dispatch when flush misprecit (sychenn 11/6) ###//
+            for (int i = 0; i<DISPATCH_WIDTH; i++) begin
+                for (int j=0; j<RS_DEPTH; j++) begin
+                    if (disp_grant_vec[i][j]) begin
+                        rs_packets[j]  = rs_packets_i[i]; // dispatch slot i allocates RS entry j
+                        disp_enable[j] = 1'b1;
+                    end
                 end
             end
         end
@@ -167,31 +219,31 @@ module RS #(
 //         end
 //     endtask
 
-//   task automatic show_rs_output();
-//     for (int i = 0; i < RS_DEPTH; i++) begin
-//         if (!rs_empty[i]) begin
-//         $display("Entry %0d: i_imm = %0h, u_imm =%0h, opb_select=%0d, ready=%b, valid=%b, alu_func=%0d, rob_idx=%0d, fu_type=%0d, dest_reg_idx=%0d, dest_tag=%0d, src1_tag=%0d(%b), src2_tag=%0d(%b)", 
-//                     i, rs_entries_o[i].disp_packet.inst.i.imm, rs_entries_o[i].disp_packet.inst.u.imm, rs_entries_o[i].disp_packet.opb_select, rs_ready_o[i], rs_entries_o[i].valid, rs_entries_o[i].disp_packet.alu_func, rs_entries_o[i].rob_idx, rs_entries_o[i].disp_packet.fu_type, 
-//                     rs_entries_o[i].disp_packet.dest_reg_idx , rs_entries_o[i].dest_tag, rs_entries_o[i].src1_tag, rs_entries_o[i].src1_ready,
-//                     rs_entries_o[i].src2_tag, rs_entries_o[i].src2_ready);
-//         end else begin
-//             $display("Entry %0d:",i);
-//         end
-//     end
-//   endtask
+  task automatic show_rs_output();
+    for (int i = 0; i < RS_DEPTH; i++) begin
+        if (!rs_empty[i]) begin
+        $display("Entry %0d:br_tag=%b, i_imm = %0h, u_imm =%0h, opb_select=%0d, ready=%b, valid=%b, alu_func=%0d, rob_idx=%0d, fu_type=%0d, dest_reg_idx=%0d, dest_tag=%0d, src1_tag=%0d(%b), src2_tag=%0d(%b)", 
+                    i, debug_br_tag[i], rs_entries_o[i].disp_packet.inst.i.imm, rs_entries_o[i].disp_packet.inst.u.imm, rs_entries_o[i].disp_packet.opb_select, rs_ready_o[i], rs_entries_o[i].valid, rs_entries_o[i].disp_packet.alu_func, rs_entries_o[i].rob_idx, rs_entries_o[i].disp_packet.fu_type, 
+                    rs_entries_o[i].disp_packet.dest_reg_idx , rs_entries_o[i].dest_tag, rs_entries_o[i].src1_tag, rs_entries_o[i].src1_ready,
+                    rs_entries_o[i].src2_tag, rs_entries_o[i].src2_ready);
+        end else begin
+            $display("Entry %0d:",i);
+        end
+    end
+  endtask
   
-//   task automatic show_rs_input();
-//     for (int i = 0; i < RS_DEPTH; i++) begin
-//         if (!rs_empty[i]) begin
-//             $display("Entry %0d: i_imm = %0h, u_imm =%0h, ready=%b, valid=%b, alu_func=%0d, rob_idx=%0d, fu_type=%0d, dest_reg_idx=%0d, dest_tag=%0d, src1_tag=%0d(%b), src2_tag=%0d(%b)", 
-//                         i, rs_packets_i[i].disp_packet.inst.i.imm, rs_packets_i[i].disp_packet.inst.u.imm, rs_packets_i[i], rs_entries_o[i].valid, rs_packets_i[i].disp_packet.alu_func, rs_packets_i[i].rob_idx, rs_packets_i[i].disp_packet.fu_type, 
-//                         rs_packets_i[i].disp_packet.dest_reg_idx , rs_packets_i[i].dest_tag, rs_packets_i[i].src1_tag, rs_packets_i[i].src1_ready,
-//                         rs_packets_i[i].src2_tag, rs_packets_i[i].src2_ready);
-//         end else begin
-//             $display("Entry %0d:",i);
-//         end
-//     end
-//   endtask
+  task automatic show_rs_input();
+    for (int i = 0; i < DISPATCH_WIDTH; i++) begin
+        if (rs_packets_i[i].valid) begin
+            $display("rs_input: %0d: i_imm = %0h, u_imm =%0h, valid=%b, alu_func=%0d, rob_idx=%0d, fu_type=%0d, dest_reg_idx=%0d, dest_tag=%0d, src1_tag=%0d(%b), src2_tag=%0d(%b)", 
+                        i, rs_packets_i[i].disp_packet.inst.i.imm, rs_packets_i[i].disp_packet.inst.u.imm,rs_entries_o[i].valid, rs_packets_i[i].disp_packet.alu_func, rs_packets_i[i].rob_idx, rs_packets_i[i].disp_packet.fu_type, 
+                        rs_packets_i[i].disp_packet.dest_reg_idx , rs_packets_i[i].dest_tag, rs_packets_i[i].src1_tag, rs_packets_i[i].src1_ready,
+                        rs_packets_i[i].src2_tag, rs_packets_i[i].src2_ready);
+        end else begin
+            $display("rs_input");
+        end
+    end
+  endtask
 
 //   task automatic show_disp_instr();
 
@@ -238,8 +290,8 @@ module RS #(
             automatic rs_entry_t e = rs_entries_o[i];
             if (e.valid) begin
                 $fwrite(rs_trace_fd,
-                    "{\"idx\":%0d, \"valid\":%0d, \"ready\":%0d, \"alu_func\":%0d, \"rob_idx\":%0d, \"fu_type\":%0d, \"dest_reg_idx\":%0d, \"dest_tag\":%0d, \"src1_tag\":%0d, \"src1_ready\":%0d, \"src2_tag\":%0d, \"src2_ready\":%0d}",
-                    i, e.valid, rs_ready_o[i],
+                    "{\"idx\":%0d, \"br_tag\":%0b, \"valid\":%0d, \"ready\":%0d, \"alu_func\":%0d, \"rob_idx\":%0d, \"fu_type\":%0d, \"dest_reg_idx\":%0d, \"dest_tag\":%0d, \"src1_tag\":%0d, \"src1_ready\":%0d, \"src2_tag\":%0d, \"src2_ready\":%0d}",
+                    i, debug_br_tag[i], e.valid, rs_ready_o[i],
                     e.disp_packet.alu_func, e.rob_idx,
                     e.disp_packet.fu_type, e.disp_packet.dest_reg_idx,
                     e.dest_tag,
@@ -269,6 +321,7 @@ module RS #(
         end else begin
             cycle_count <= cycle_count + 1;
             dump_rs_state(cycle_count);
+            show_rs_output();   
         end
     end
 

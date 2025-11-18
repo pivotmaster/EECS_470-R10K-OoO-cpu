@@ -25,7 +25,7 @@
 `define CDB_SZ `N // This MUST match your superscalar width
 
 `ifndef XLEN
-  `define XLEN            32      // 64-bit processor width
+  `define XLEN            32      // 32-bit processor width
 `endif
 
 `ifndef OPCODE_N
@@ -520,4 +520,8 @@ typedef struct packed {
     logic [`XLEN-1:0]              value;      // result value
 } cdb_entry_t;
 
+typedef struct packed {
+    logic [$clog2(`PHYS_REGS)-1:0] phys;  // physical register tag
+    logic                         valid; // 1 = physical register holds valid data
+} map_entry_t;
 `endif // __SYS_DEFS_SVH__

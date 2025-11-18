@@ -28,9 +28,21 @@ module complete_stage #(
     output logic [WB_WIDTH-1:0]                    wb_exception_o,
     output logic [WB_WIDTH-1:0]                    wb_mispred_o,
 
+    //### 11/7 add sychenn ###//
+    output  logic [XLEN-1:0]          wb_value_o,
+
     // cdb
     output cdb_entry_t [CDB_WIDTH-1:0]             cdb_o
 );
+
+    //### 11/7 add sychenn ###//
+    always_comb begin : blockName
+        for (int i=0; i < WB_WIDTH; i ++) begin
+            if (fu_valid_i[i]) begin
+                wb_value_o = fu_value_i[i];
+            end
+        end
+    end
 
     always_comb begin
         prf_wr_en_o   = '0;

@@ -67,8 +67,7 @@ module retire_stage #(
     //         $display("free_valid_o=%d, commit_old_prf_i:%d | free_reg_o:%d",free_valid_o[i] ,commit_old_prf_i[i], free_reg_o[i]);
     //     end
     // end
-
-    // =========================================================
+   // =========================================================
     // For GUI Debugger (Retire Trace)
     // =========================================================
     integer retire_trace_fd;
@@ -127,6 +126,4 @@ module retire_stage #(
             dump_retire_state(cycle_count);
         end
     end
-
-
 endmodule
