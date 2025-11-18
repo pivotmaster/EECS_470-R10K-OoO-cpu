@@ -90,6 +90,7 @@ module rs_single_entry #(
             rs_busy_next  = 1'b1; 
             br_mis_tag_next = br_mis_tag_single_i;
         end else begin
+            
             // CDB wake up
             rs_entry_next.src1_ready = rs_entry.src1_ready | src1_hit;
             rs_entry_next.src2_ready = rs_entry.src2_ready | src2_hit;

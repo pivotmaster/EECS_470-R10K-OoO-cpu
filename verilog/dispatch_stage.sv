@@ -220,6 +220,29 @@ module dispatch_stage #(
 
     end
 
+/*
+  // =========================================================
+  // DEBUG
+  // =========================================================
+  integer cycle_count;
+  always_ff @(posedge clock) begin
+    if (reset)
+      cycle_count <= 0;
+    else
+      cycle_count <= cycle_count + 1;
+
+    for (int i = 0; i < DISPATCH_WIDTH; i++) begin
+      if (disp_rs_valid_o[i]) begin
+        $display("[Cycle=%0d] Dispatch %0d | ROB_idx=%0d | Dest=%0d | Src1=%0d (%b) | Src2=%0d (%b)",
+                 cycle_count, i,
+                 rs_packets_o[i].rob_idx,
+                 rs_packets_o[i].dest_tag,
+                 rs_packets_o[i].src1_tag, rs_packets_o[i].src1_ready,
+                 rs_packets_o[i].src2_tag, rs_packets_o[i].src2_ready);
+      end
+    end
+  end
+*/
 
   // =========================================================
   // DEBUG

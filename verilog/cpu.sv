@@ -386,6 +386,17 @@ module cpu #(
             end
         end
     end
+    // assign if_valid = (cycle < 45) ? 1'b1 : 1'b0; //###
+    // assign if_valid = 1'b1;
+    // assign if_flush = (wb_valid[3] & wb_mispred[3]); //###
+    // assign take_branch = wb_valid[3] & wb_mispred[3];
+    assign take_branch = 1'b0;
+    assign if_flush = 1'b0;
+    // always @(posedge clock) begin
+    //     $display("CPU. take_br, wb_valid, wb_mispred=%b %b %b", take_branch, wb_valid, wb_mispred);
+    // end
+    assign pred_taken_i = 1'b0; //###
+    assign pred_valid_i = 1'b0; //###
 
     //////////////////////////////////////////////////
     //                                              //
