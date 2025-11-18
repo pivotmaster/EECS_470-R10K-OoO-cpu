@@ -18,7 +18,7 @@ module dcache_tb;
     reset = 0;
   end
 
-  ADDR      test_addr;
+  ADDR      test_addr, test_add2;
   ADDR      addr0, addr1;
   MEM_BLOCK expect_block;
 
@@ -146,6 +146,8 @@ module dcache_tb;
   end
 
   $display("memory response: tag=%d | data=%d | data_tag =%d",mem2proc_transaction_tag,mem2proc_data,mem2proc_data_tag );
+   $display("Dcache_command_0 = %p Accept0=[%0b%0b%0b] valid0=%0d dat0=%h | Dcache_command_1 = %p accept1=%0d valid1=%0d dat1=%h",
+             dut.Dcache_command_0, Dcache_req_0_accept,dut.req_0_accept, dut.mshr_hit_0, Dcache_valid_out_0, Dcache_data_out_0.dbbl_level, dut.Dcache_command_1, Dcache_req_1_accept, Dcache_valid_out_1, Dcache_data_out_1.dbbl_level);
  $display("-------------------------------------------------------------------");
  endtask 
 
@@ -172,6 +174,7 @@ module dcache_tb;
     // ============================
     
     test_addr = 32'h0000_1000;
+    test_add2 = 32'h0000_1010;
 
     $display("[TB] Test1: first access (expect miss: valid_out_0=0)");
     // 第一次 load（會 miss）
@@ -179,15 +182,20 @@ module dcache_tb;
     Dcache_addr_0    = test_addr;
     Dcache_command_0 = MEM_LOAD;
     Dcache_size_0    = DOUBLE;
+
+    Dcache_addr_1    = test_add2;
+    Dcache_command_1 = MEM_LOAD;
+    Dcache_size_1    = DOUBLE;
+    #1
     show_status() ;
     @(posedge clock);
     @(negedge clock);
     Dcache_command_0 <= MEM_NONE;
-    $display("[TB]  after first load: accept=%0d valid=%0d data=%h",
-             Dcache_req_0_accept, Dcache_valid_out_0, Dcache_data_out_0.dbbl_level);
-
+    Dcache_command_1 <= MEM_NONE;
+    #1
     show_status() ;
     @(posedge clock);
+    #1
      show_status() ;
     @(posedge clock);
         show_status() ;
@@ -206,11 +214,11 @@ module dcache_tb;
     Dcache_size_0    <= DOUBLE;
 
     @(posedge clock);
+      #1
+    show_status() ;
     @(negedge clock);
     Dcache_command_0 <= MEM_NONE;
-    $display("[TB]  after second load: accept=%0d valid=%0d data=%h",
-             Dcache_req_0_accept, Dcache_valid_out_0, Dcache_data_out_0.dbbl_level);
-    
+    #1
     show_status() ;
     @(posedge clock);
      show_status() ;
