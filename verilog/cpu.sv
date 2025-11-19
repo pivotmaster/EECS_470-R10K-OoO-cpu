@@ -159,8 +159,8 @@ module cpu #(
 
      //### TODO: for debug only (sychenn 11/6) ###//
     logic flush_rob_debug;
-     logic [`ROB_DEPTH-1:0] flush_free_regs_valid;
-     logic [`PHYS_REGS] flush_free_regs;
+    logic [`ROB_DEPTH-1:0] flush_free_regs_valid;
+    logic [`PHYS_REGS-1:0] flush_free_regs;
 
 
 // RS
@@ -390,13 +390,13 @@ module cpu #(
     // assign if_valid = 1'b1;
     // assign if_flush = (wb_valid[3] & wb_mispred[3]); //###
     // assign take_branch = wb_valid[3] & wb_mispred[3];
-    assign take_branch = 1'b0;
-    assign if_flush = 1'b0;
+    // assign take_branch = 1'b0;
+    // assign if_flush = 1'b0;
     // always @(posedge clock) begin
     //     $display("CPU. take_br, wb_valid, wb_mispred=%b %b %b", take_branch, wb_valid, wb_mispred);
     // end
-    assign pred_taken_i = 1'b0; //###
-    assign pred_valid_i = 1'b0; //###
+    // assign pred_taken_i = 1'b0; //###
+    // assign pred_valid_i = 1'b0; //###
 
     //////////////////////////////////////////////////
     //                                              //
@@ -664,8 +664,15 @@ module cpu #(
     //### 11/10 sychenn ###// (for map table restore)
     always_ff @(posedge clock or posedge reset) begin : checkpoint
         if (reset) begin
-            snapshot_reg       <= '{default:'{phys:'0, valid:'0}};
-            snapshot_data_i    <= '{default:'{phys:'0, valid:'0}};
+            // snapshot_reg       <= '{default:'{phys:'0, valid:'0}};
+            // snapshot_data_i    <= '{default:'{phys:'0, valid:'0}};
+            for(int i =0 ; i < `ARCH_REGS ; i++)begin
+                snapshot_reg[i].phys <= '0;
+                snapshot_reg[i].valid <= '0;
+                // $display("snapshot_reg[%0d] = %d (%d)",i,snapshot_reg[i].phys,snapshot_reg[i].valid);
+            end
+            // snapshot_reg       <= '0;
+            // snapshot_data_i    <= '0;
             snapshot_restore_i <= 1'b0;
             has_snapshot       <= 1'b0;
         end else begin

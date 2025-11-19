@@ -165,7 +165,7 @@ module stage_if #(
         end
     endgenerate
 
-    always_ff @(posedge clock or posedge reset) begin
+    always_ff @(posedge clock) begin
         if (!reset) begin
             $display("PC_next=%h | Icache_valid=%b | if_valid=%b", PC_next, Icache_valid[0], if_packet_o[0].valid );
         end

@@ -340,7 +340,7 @@ module rob #(
     logic wb_valid;
     COMMIT_PACKET [`N-1:0] wb_packet;
 
-    always_ff @(posedge clock or posedge reset) begin
+    always_ff @(posedge clock) begin
         wb_valid <= 1'b0;
         for (int i = 0; i < COMMIT_WIDTH; i++) begin
             if (retire_en[i]) begin    

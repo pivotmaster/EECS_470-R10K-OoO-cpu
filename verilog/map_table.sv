@@ -153,7 +153,7 @@ module map_table#(
     // arch reg i -> phys i, and mark valid = 1
     // (this assumes PHYS_REGS >= ARCH_REGS)
     // =======================================================
-    always_ff @(posedge clock or posedge reset)begin
+    always_ff @(posedge clock)begin
         if(reset)begin
             for(int i =0; i< ARCH_REGS; i++)begin
                 table_reg[i].phys <= i;
@@ -174,57 +174,57 @@ module map_table#(
                 end
             end else begin
                 for(int i =0 ; i < DISPATCH_WIDTH ; i++)begin
-                        if(disp_valid_i[i])begin
-                            $display("disp_arch_i = %d | old_phys = %d | disp_old_phys_o = %d ", disp_arch_i[i],table_reg[disp_arch_i[i]].phys,disp_old_phys_o[i] );
-                            table_reg[disp_arch_i[i]].phys <= disp_new_phys_i[i];
-                            table_reg[disp_arch_i[i]].valid <= 1'b0; 
-                        end
+                    if(disp_valid_i[i])begin
+                        $display("disp_arch_i = %d | old_phys = %d | disp_old_phys_o = %d ", disp_arch_i[i],table_reg[disp_arch_i[i]].phys,disp_old_phys_o[i] );
+                        table_reg[disp_arch_i[i]].phys <= disp_new_phys_i[i];
+                        table_reg[disp_arch_i[i]].valid <= 1'b0; 
                     end
                 end
             end
-
-            // ===================================================
-            //  Writeback(aka complete stage): any WB that writes a physical tag should mark 
-            //  every architectural mapping that references that physical tag as valid.
-            // ===================================================
-            for (int i = 0 ; i < WB_WIDTH; i ++)begin
-                if(wb_valid_i[i])begin
-                    // table_reg[wb_phys_i[i]].valid <= 1'b1;
-                    for(int j = 0 ; j < ARCH_REGS ; j++)begin
-                        //###11/15 sychenn prevent wb and dispatch write to the same reg at the same cycle###//
-                        for(int k =0 ; k < DISPATCH_WIDTH ; k++)begin
-                            if ((table_reg[j].phys == wb_phys_i[i]) && (disp_arch_i[k] != j))begin 
-                                table_reg[j].valid <= 1'b1;
-                            end
-                        end
-                    end
-                end
-            end
-
-            // ===================================================
-            // Snapshot restore takes highest priority:
-            // If restore asserted, overwrite the table with the provided snapshot.
-            // We also mark valid = 1 for restored (AMT state is committed).
-            // ===================================================
-
-            // if(snapshot_restore_valid_i) begin
-            //     for(int i =0; i < ARCH_REGS ; i++)begin
-            //         table_reg[i].phys <= snapshot_data_i[i];
-            //         table_reg[i].valid <= 1'b1;
-            //     end
-            // end
-
-            // // ===================================================
-            // // 4) Optional flush: if flush asserted, reset to identity mapping.
-            // //    Depending on your microarchitecture you might instead restore from AMT.
-            // // ===================================================
-            // if(flush_i)begin
-            //     for(int i =0 ; i<ARCH_REGS ; i++)begin
-            //         table_reg[i].phys <= i;
-            //         table_reg[i].valid <= 1'b1;
-            //     end
-            // end
         end
+
+        // ===================================================
+        //  Writeback(aka complete stage): any WB that writes a physical tag should mark 
+        //  every architectural mapping that references that physical tag as valid.
+        // ===================================================
+        for (int i = 0 ; i < WB_WIDTH; i ++)begin
+            if(wb_valid_i[i])begin
+                // table_reg[wb_phys_i[i]].valid <= 1'b1;
+                for(int j = 0 ; j < ARCH_REGS ; j++)begin
+                    //###11/15 sychenn prevent wb and dispatch write to the same reg at the same cycle###//
+                    for(int k =0 ; k < DISPATCH_WIDTH ; k++)begin
+                        if ((table_reg[j].phys == wb_phys_i[i]) && (disp_arch_i[k] != j))begin 
+                            table_reg[j].valid <= 1'b1;
+                        end
+                    end
+                end
+            end
+        end
+
+        // ===================================================
+        // Snapshot restore takes highest priority:
+        // If restore asserted, overwrite the table with the provided snapshot.
+        // We also mark valid = 1 for restored (AMT state is committed).
+        // ===================================================
+
+        // if(snapshot_restore_valid_i) begin
+        //     for(int i =0; i < ARCH_REGS ; i++)begin
+        //         table_reg[i].phys <= snapshot_data_i[i];
+        //         table_reg[i].valid <= 1'b1;
+        //     end
+        // end
+
+        // // ===================================================
+        // // 4) Optional flush: if flush asserted, reset to identity mapping.
+        // //    Depending on your microarchitecture you might instead restore from AMT.
+        // // ===================================================
+        // if(flush_i)begin
+        //     for(int i =0 ; i<ARCH_REGS ; i++)begin
+        //         table_reg[i].phys <= i;
+        //         table_reg[i].valid <= 1'b1;
+        //     end
+        // end
+    end
 
 
     // =======================================================
