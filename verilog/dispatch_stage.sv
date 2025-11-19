@@ -119,12 +119,12 @@ module dispatch_stage #(
         if (free_regs_i < disp_n)      disp_n = free_regs_i;
     end
 
-    always_ff @(posedge clock) begin
-      if (!reset) begin
-        $display("[%0t] DISPATCH: now valid=%b | RS=%0d ROB=%0d REG=%0d  W=%0d  -> disp_n=%0d",
-                $time, if_packet_i[0].valid, free_rs_slots_i, free_rob_slots_i, free_regs_i, DISPATCH_WIDTH, disp_n);
-      end
-    end
+    // always_ff @(posedge clock) begin
+    //   if (!reset) begin
+    //     $display("[%0t] DISPATCH: now valid=%b | RS=%0d ROB=%0d REG=%0d  W=%0d  -> disp_n=%0d",
+    //             $time, if_packet_i[0].valid, free_rs_slots_i, free_rob_slots_i, free_regs_i, DISPATCH_WIDTH, disp_n);
+    //   end
+    // end
 
 
 
@@ -254,17 +254,17 @@ module dispatch_stage #(
     else
       cycle_count <= cycle_count + 1;
 
-    for (int i = 0; i < DISPATCH_WIDTH; i++) begin
-      $display("disp_rs_valid_o=%b | rs_packets_o valid=%b", disp_rs_valid_o[0], rs_packets_o[0].valid);
-      if (disp_rs_valid_o[i]) begin
-        $display("Dispatch %0d | ROB_idx=%0d | Dest=%0d | Src1=%0d (%b) | Src2=%0d (%b)",
-                 i,
-                 rs_packets_o[i].rob_idx,
-                 rs_packets_o[i].dest_tag,
-                 rs_packets_o[i].src1_tag, rs_packets_o[i].src1_ready,
-                 rs_packets_o[i].src2_tag, rs_packets_o[i].src2_ready);
-      end
-    end
+    // for (int i = 0; i < DISPATCH_WIDTH; i++) begin
+    //   $display("disp_rs_valid_o=%b | rs_packets_o valid=%b", disp_rs_valid_o[0], rs_packets_o[0].valid);
+    //   if (disp_rs_valid_o[i]) begin
+    //     $display("Dispatch %0d | ROB_idx=%0d | Dest=%0d | Src1=%0d (%b) | Src2=%0d (%b)",
+    //              i,
+    //              rs_packets_o[i].rob_idx,
+    //              rs_packets_o[i].dest_tag,
+    //              rs_packets_o[i].src1_tag, rs_packets_o[i].src1_ready,
+    //              rs_packets_o[i].src2_tag, rs_packets_o[i].src2_ready);
+    //   end
+    // end
   end
 
 

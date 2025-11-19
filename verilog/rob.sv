@@ -340,7 +340,7 @@ module rob #(
     logic wb_valid;
     COMMIT_PACKET [`N-1:0] wb_packet;
 
-    always_ff @(posedge clock or posedge reset) begin
+    always_ff @(posedge clock) begin
         wb_valid <= 1'b0;
         for (int i = 0; i < COMMIT_WIDTH; i++) begin
             if (retire_en[i]) begin    
@@ -435,7 +435,7 @@ module rob #(
 
     // ===== Sequential Block =====
     // TODO:  When flush mispredict: ### only writeback still need to work ###,  STOP commit and dispatch
-    always_ff @(posedge clock or posedge reset) begin
+    always_ff @(posedge clock) begin
         if (reset) begin
             head   <= '0;
             tail   <= '0;
@@ -467,7 +467,7 @@ module rob #(
             // update tail and count
             tail  <= (mispredict_rob_idx_i) % DEPTH;
             count <= count - flush_count;
-            $display("flush misprdicted count=%d",flush_count);
+            // $display("flush misprdicted count=%d",flush_count);
 
             // stop commit
             for (int i = 0; i < COMMIT_WIDTH; i++) begin
@@ -571,75 +571,75 @@ module rob #(
     //    $display("disp_rob_idx_o=%d | commit_old_prf_o: %d", disp_rob_idx_o[0], commit_old_prf_o[0]);
     // end
 
-task automatic show_rob_output();
-    $display("============================================");
-    $display("                 ROB STATUS                 ");
-    $display("============================================");
-    $display("Head = %0d | Tail = %0d | Count = %0d | Full = %b | Empty = %b", 
-             head, tail, count, full, empty);
-    for (int i = 0; i < DEPTH; i++) begin
-        if (rob_table[i].valid) begin
-            $display("Entry %0d: Value=%h, PC=%h , valid=%b, ready=%b, rd_wen=%b, rd_arch=%0d, new_prf=%0d, old_prf=%0d, exception=%b, mispred=%b",
-                     i, 
-                     rob_table[i].value,
-                     rob_table[i].PC,
-                     rob_table[i].valid,
-                     rob_table[i].ready,
-                     rob_table[i].rd_wen,
-                     rob_table[i].rd_arch,
-                     rob_table[i].new_prf,
-                     rob_table[i].old_prf,
-                     rob_table[i].exception,
-                     rob_table[i].mispred);
-        end else begin
-            $display("Entry %0d: --- empty ---", i);
-        end
-    end
-    $display("============================================");
-endtask
+// task automatic show_rob_output();
+//     $display("============================================");
+//     $display("                 ROB STATUS                 ");
+//     $display("============================================");
+//     $display("Head = %0d | Tail = %0d | Count = %0d | Full = %b | Empty = %b", 
+//              head, tail, count, full, empty);
+//     for (int i = 0; i < DEPTH; i++) begin
+//         if (rob_table[i].valid) begin
+//             $display("Entry %0d: Value=%h, PC=%h , valid=%b, ready=%b, rd_wen=%b, rd_arch=%0d, new_prf=%0d, old_prf=%0d, exception=%b, mispred=%b",
+//                      i, 
+//                      rob_table[i].value,
+//                      rob_table[i].PC,
+//                      rob_table[i].valid,
+//                      rob_table[i].ready,
+//                      rob_table[i].rd_wen,
+//                      rob_table[i].rd_arch,
+//                      rob_table[i].new_prf,
+//                      rob_table[i].old_prf,
+//                      rob_table[i].exception,
+//                      rob_table[i].mispred);
+//         end else begin
+//             $display("Entry %0d: --- empty ---", i);
+//         end
+//     end
+//     $display("============================================");
+// endtask
 
-   // =========================================================
-    // For GUI Debugger
-    // =========================================================
-    integer rob_trace_fd;
+//    // =========================================================
+//     // For GUI Debugger
+//     // =========================================================
+//     integer rob_trace_fd;
 
-    initial begin
-        rob_trace_fd = $fopen("dump_files/rob_trace.json", "w");
-        if (rob_trace_fd == 0)
-            $fatal("Failed to open dump_files/rob_trace.json!");
-    end
+//     initial begin
+//         rob_trace_fd = $fopen("dump_files/rob_trace.json", "w");
+//         if (rob_trace_fd == 0)
+//             $fatal("Failed to open dump_files/rob_trace.json!");
+//     end
 
-    task automatic dump_rob_state(int cycle);
-        $fwrite(rob_trace_fd, "{ \"cycle\": %0d, \"ROB\": [", cycle);
-        for (int i = 0; i < DEPTH; i++) begin
-            if (rob_table[i].valid) begin
-                automatic rob_entry_t e = rob_table[i];
-                $fwrite(rob_trace_fd,
-                    "{\"idx\":%0d, \"valid\":%0d, \"ready\":%0d, \"rd_wen\":%0d,\"rd_arch\":%0d, \"new_prf\":%0d, \"old_prf\":%0d,\"exception\":%0d, \"mispred\":%0d}",
-                    i, e.valid, e.ready, e.rd_wen, e.rd_arch,
-                    e.new_prf, e.old_prf, e.exception, e.mispred);
-            end else begin
-                $fwrite(rob_trace_fd, "{\"idx\":%0d, \"valid\":0}", i);
-            end
+//     task automatic dump_rob_state(int cycle);
+//         $fwrite(rob_trace_fd, "{ \"cycle\": %0d, \"ROB\": [", cycle);
+//         for (int i = 0; i < DEPTH; i++) begin
+//             if (rob_table[i].valid) begin
+//                 automatic rob_entry_t e = rob_table[i];
+//                 $fwrite(rob_trace_fd,
+//                     "{\"idx\":%0d, \"valid\":%0d, \"ready\":%0d, \"rd_wen\":%0d,\"rd_arch\":%0d, \"new_prf\":%0d, \"old_prf\":%0d,\"exception\":%0d, \"mispred\":%0d}",
+//                     i, e.valid, e.ready, e.rd_wen, e.rd_arch,
+//                     e.new_prf, e.old_prf, e.exception, e.mispred);
+//             end else begin
+//                 $fwrite(rob_trace_fd, "{\"idx\":%0d, \"valid\":0}", i);
+//             end
 
-            if (i != DEPTH - 1)
-                $fwrite(rob_trace_fd, ",");
-        end
-        $fwrite(rob_trace_fd, "]}\n");
-        $fflush(rob_trace_fd); 
-    endtask
+//             if (i != DEPTH - 1)
+//                 $fwrite(rob_trace_fd, ",");
+//         end
+//         $fwrite(rob_trace_fd, "]}\n");
+//         $fflush(rob_trace_fd); 
+//     endtask
 
 
-    int cycle_count;
-    always_ff @(posedge clock) begin
-        if (reset) begin
-            cycle_count <= 0;
-        end else begin
-            cycle_count <= cycle_count + 1;
-            dump_rob_state(cycle_count);
-            show_rob_output();
-        end
-    end
+//     int cycle_count;
+//     always_ff @(posedge clock) begin
+//         if (reset) begin
+//             cycle_count <= 0;
+//         end else begin
+//             cycle_count <= cycle_count + 1;
+//             dump_rob_state(cycle_count);
+//             show_rob_output();
+//         end
+//     end
 
 
 endmodule

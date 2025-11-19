@@ -160,7 +160,7 @@ module cpu #(
      //### TODO: for debug only (sychenn 11/6) ###//
     logic flush_rob_debug;
      logic [`ROB_DEPTH-1:0] flush_free_regs_valid;
-     logic [`PHYS_REGS] flush_free_regs;
+     logic [`PHYS_REGS-1:0] flush_free_regs;
 
 
 // RS
@@ -348,9 +348,9 @@ module cpu #(
 
     // valid bit will cycle through the pipeline and come back from the wb stage
     // assign if_valid = ((!stall) && (if_packet[0].inst != 32'h10500073)) ? 1'b1 : 1'b0;//###
-    always_ff @(negedge clock) begin
-        $display("inst : %h", if_packet[0].inst);
-    end
+    // always_ff @(negedge clock) begin
+    //     $display("inst : %h", if_packet[0].inst);
+    // end
     // assign if_valid = 1'b1;
     assign if_valid = !stall;
     //###
@@ -664,8 +664,13 @@ module cpu #(
     //### 11/10 sychenn ###// (for map table restore)
     always_ff @(posedge clock or posedge reset) begin : checkpoint
         if (reset) begin
-            snapshot_reg       <= '{default:'{phys:'0, valid:'0}};
-            snapshot_data_i    <= '{default:'{phys:'0, valid:'0}};
+            for(int i =0 ; i <`ARCH_REGS ; i++)begin
+                snapshot_data_i[i].phys <= '0;
+                snapshot_data_i[i].valid <= '0;
+            end
+
+            // snapshot_reg       <= '{default:'{phys:'0, valid:'0}};
+            // snapshot_data_i    <= '{default:'{phys:'0, valid:'0}};
             snapshot_restore_i <= 1'b0;
             has_snapshot       <= 1'b0;
         end else begin
@@ -1184,21 +1189,21 @@ module cpu #(
 
     // Output the committed instruction to the testbench for counting
     assign committed_insts = wb_packet;
-always_ff @(posedge clock) begin
-    if (!reset) begin
-        integer i;
-        for (i = 0; i < `N; i++) begin
-            $display("Commit[%0d]: valid=%b halt=%b illegal=%b reg=%0d data=%h NPC=%h",
-                     i,
-                     committed_insts[i].valid,
-                     committed_insts[i].halt,
-                     committed_insts[i].illegal,
-                     committed_insts[i].reg_idx,
-                     committed_insts[i].data,
-                     committed_insts[i].NPC);
-        end
-        $display("-------------------\n");
-    end
-end
+// always_ff @(posedge clock) begin
+//     if (!reset) begin
+//         integer i;
+//         for (i = 0; i < `N; i++) begin
+//             $display("Commit[%0d]: valid=%b halt=%b illegal=%b reg=%0d data=%h NPC=%h",
+//                      i,
+//                      committed_insts[i].valid,
+//                      committed_insts[i].halt,
+//                      committed_insts[i].illegal,
+//                      committed_insts[i].reg_idx,
+//                      committed_insts[i].data,
+//                      committed_insts[i].NPC);
+//         end
+//         $display("-------------------\n");
+//     end
+// end
 
 endmodule // pipeline

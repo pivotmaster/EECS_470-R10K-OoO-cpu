@@ -229,13 +229,13 @@ end
     end 
     
 
-    always_ff @(negedge clock)begin 
-        $display("free_phys = %0d , free_valid = %d\n", free_phys_i , free_valid_i);
-        $display("head: %d , tail: %d\n" , head, tail);
-        for(int i =0 ; i< (PHYS_REGS-ARCH_REGS); i++)begin
-            $display("free_fifo[%d] = %0d | flush_free_regs_valid = %d", i, free_fifo[i], flush_free_regs_valid[i]);
-        end
-    end
+    // always_ff @(negedge clock)begin 
+    //     $display("free_phys = %0d , free_valid = %d\n", free_phys_i , free_valid_i);
+    //     $display("head: %d , tail: %d\n" , head, tail);
+    //     for(int i =0 ; i< (PHYS_REGS-ARCH_REGS); i++)begin
+    //         $display("free_fifo[%d] = %0d | flush_free_regs_valid = %d", i, free_fifo[i], flush_free_regs_valid[i]);
+    //     end
+    // end
     
     // always_ff @(posedge clock) begin 
     //     $display("total_available = %0d", total_available);

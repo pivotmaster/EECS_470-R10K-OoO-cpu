@@ -290,7 +290,7 @@ endtask
         cycle_count <= 0;
     else
       cycle_count <= cycle_count + 1;
-      $display("// ---------------- CYCLE = %d ---------------- //",cycle_count);
+    //   $display("// ---------------- CYCLE = %d ---------------- //",cycle_count);
       //test_reqs();
       //test_grant_vector(cycle_count);
       //show_rs_input();

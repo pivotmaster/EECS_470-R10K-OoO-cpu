@@ -48,22 +48,22 @@ module cdb #(
 );
 
 
-always_ff @(posedge clock) begin
-    if (!reset) begin
-        for (int i = 0; i < CDB_WIDTH; i++) begin
-            if (cdb_packets_i[i].valid) begin
-                $display("[CDB %0t] lane=%0d | arch=%0d | phys=%0d | value=0x%0h | cdb out valid, tag=%0d, %0d",
-                         $time,
-                         i,
-                         cdb_packets_i[i].dest_arch,
-                         cdb_packets_i[i].phys_tag,
-                         cdb_packets_i[i].value,
-                         cdb_valid_mp_o[i], 
-                         cdb_tag_rs_o[i]);
-            end
-        end
-    end
-end
+// always_ff @(posedge clock) begin
+//     if (!reset) begin
+//         for (int i = 0; i < CDB_WIDTH; i++) begin
+//             if (cdb_packets_i[i].valid) begin
+//                 $display("[CDB %0t] lane=%0d | arch=%0d | phys=%0d | value=0x%0h | cdb out valid, tag=%0d, %0d",
+//                          $time,
+//                          i,
+//                          cdb_packets_i[i].dest_arch,
+//                          cdb_packets_i[i].phys_tag,
+//                          cdb_packets_i[i].value,
+//                          cdb_valid_mp_o[i], 
+//                          cdb_tag_rs_o[i]);
+//             end
+//         end
+//     end
+// end
 
     // =========================================================
     // Internal signals
@@ -128,104 +128,104 @@ end
     end 
 
     
-    // =========================================================
-    // For GUI Debugger (CDB Trace)
-    // =========================================================
-    integer cdb_trace_fd;
+    // // =========================================================
+    // // For GUI Debugger (CDB Trace)
+    // // =========================================================
+    // integer cdb_trace_fd;
 
-    initial begin
-        cdb_trace_fd = $fopen("dump_files/cdb_trace.json", "w");
-        if (cdb_trace_fd == 0)
-            $fatal("Failed to open dump_files/cdb_trace.json!");
-    end
+    // initial begin
+    //     cdb_trace_fd = $fopen("dump_files/cdb_trace.json", "w");
+    //     if (cdb_trace_fd == 0)
+    //         $fatal("Failed to open dump_files/cdb_trace.json!");
+    // end
 
-    task automatic dump_cdb_state(int cycle);
-        $fwrite(cdb_trace_fd, "{ \"cycle\": %0d, \"CDB\": [", cycle);
-        for (int i = 0; i < CDB_WIDTH; i++) begin
-            automatic cdb_entry_t e = cdb_packets_i[i];
-            if (e.valid) begin
-                $fwrite(cdb_trace_fd,
-                    "{\"idx\":%0d, \"valid\":1, \"dest_arch\":%0d, \"phys_tag\":%0d, \"value\":%0d, \"grant\":%0d, \"stall\":%0d}",
-                    i,
-                    e.dest_arch,
-                    e.phys_tag,
-                    e.value,
-                    arb_grant[i],
-                    cdb_stall
-                );
-            end else begin
-                $fwrite(cdb_trace_fd, "{\"idx\":%0d, \"valid\":0}", i);
-            end
+    // task automatic dump_cdb_state(int cycle);
+    //     $fwrite(cdb_trace_fd, "{ \"cycle\": %0d, \"CDB\": [", cycle);
+    //     for (int i = 0; i < CDB_WIDTH; i++) begin
+    //         automatic cdb_entry_t e = cdb_packets_i[i];
+    //         if (e.valid) begin
+    //             $fwrite(cdb_trace_fd,
+    //                 "{\"idx\":%0d, \"valid\":1, \"dest_arch\":%0d, \"phys_tag\":%0d, \"value\":%0d, \"grant\":%0d, \"stall\":%0d}",
+    //                 i,
+    //                 e.dest_arch,
+    //                 e.phys_tag,
+    //                 e.value,
+    //                 arb_grant[i],
+    //                 cdb_stall
+    //             );
+    //         end else begin
+    //             $fwrite(cdb_trace_fd, "{\"idx\":%0d, \"valid\":0}", i);
+    //         end
 
-            if (i != CDB_WIDTH - 1)
-                $fwrite(cdb_trace_fd, ",");
-        end
-        $fwrite(cdb_trace_fd, "]}\n");
-        $fflush(cdb_trace_fd);
-    endtask
+    //         if (i != CDB_WIDTH - 1)
+    //             $fwrite(cdb_trace_fd, ",");
+    //     end
+    //     $fwrite(cdb_trace_fd, "]}\n");
+    //     $fflush(cdb_trace_fd);
+    // endtask
 
-    // =========================================================
-    // Auto Dump per Cycle
-    // =========================================================
-    int cycle_count;
-    always_ff @(posedge clock) begin
-        if (reset) begin
-            cycle_count <= 0;
-        end else begin
-            cycle_count <= cycle_count + 1;
-            dump_cdb_state(cycle_count);
-        end
-    end
+    // // =========================================================
+    // // Auto Dump per Cycle
+    // // =========================================================
+    // int cycle_count;
+    // always_ff @(posedge clock) begin
+    //     if (reset) begin
+    //         cycle_count <= 0;
+    //     end else begin
+    //         cycle_count <= cycle_count + 1;
+    //         dump_cdb_state(cycle_count);
+    //     end
+    // end
 
 
-    // =========================================================
-    // For GUI Debugger (CDB Trace)
-    // =========================================================
-    integer cdb_trace_fd;
+    // // =========================================================
+    // // For GUI Debugger (CDB Trace)
+    // // =========================================================
+    // integer cdb_trace_fd;
 
-    initial begin
-        cdb_trace_fd = $fopen("dump_files/cdb_trace.json", "w");
-        if (cdb_trace_fd == 0)
-            $fatal("Failed to open dump_files/cdb_trace.json!");
-    end
+    // initial begin
+    //     cdb_trace_fd = $fopen("dump_files/cdb_trace.json", "w");
+    //     if (cdb_trace_fd == 0)
+    //         $fatal("Failed to open dump_files/cdb_trace.json!");
+    // end
 
-    task automatic dump_cdb_state(int cycle);
-        $fwrite(cdb_trace_fd, "{ \"cycle\": %0d, \"CDB\": [", cycle);
-        for (int i = 0; i < CDB_WIDTH; i++) begin
-            automatic cdb_entry_t e = cdb_packets_i[i];
-            if (e.valid) begin
-                $fwrite(cdb_trace_fd,
-                    "{\"idx\":%0d, \"valid\":1, \"dest_arch\":%0d, \"phys_tag\":%0d, \"value\":%0d, \"grant\":%0d, \"stall\":%0d}",
-                    i,
-                    e.dest_arch,
-                    e.phys_tag,
-                    e.value,
-                    arb_grant[i],
-                    cdb_stall
-                );
-            end else begin
-                $fwrite(cdb_trace_fd, "{\"idx\":%0d, \"valid\":0}", i);
-            end
+    // task automatic dump_cdb_state(int cycle);
+    //     $fwrite(cdb_trace_fd, "{ \"cycle\": %0d, \"CDB\": [", cycle);
+    //     for (int i = 0; i < CDB_WIDTH; i++) begin
+    //         automatic cdb_entry_t e = cdb_packets_i[i];
+    //         if (e.valid) begin
+    //             $fwrite(cdb_trace_fd,
+    //                 "{\"idx\":%0d, \"valid\":1, \"dest_arch\":%0d, \"phys_tag\":%0d, \"value\":%0d, \"grant\":%0d, \"stall\":%0d}",
+    //                 i,
+    //                 e.dest_arch,
+    //                 e.phys_tag,
+    //                 e.value,
+    //                 arb_grant[i],
+    //                 cdb_stall
+    //             );
+    //         end else begin
+    //             $fwrite(cdb_trace_fd, "{\"idx\":%0d, \"valid\":0}", i);
+    //         end
 
-            if (i != CDB_WIDTH - 1)
-                $fwrite(cdb_trace_fd, ",");
-        end
-        $fwrite(cdb_trace_fd, "]}\n");
-        $fflush(cdb_trace_fd);
-    endtask
+    //         if (i != CDB_WIDTH - 1)
+    //             $fwrite(cdb_trace_fd, ",");
+    //     end
+    //     $fwrite(cdb_trace_fd, "]}\n");
+    //     $fflush(cdb_trace_fd);
+    // endtask
 
-    // =========================================================
-    // Auto Dump per Cycle
-    // =========================================================
-    int cycle_count;
-    always_ff @(posedge clock) begin
-        if (reset) begin
-            cycle_count <= 0;
-        end else begin
-            cycle_count <= cycle_count + 1;
-            dump_cdb_state(cycle_count);
-        end
-    end
+    // // =========================================================
+    // // Auto Dump per Cycle
+    // // =========================================================
+    // int cycle_count;
+    // always_ff @(posedge clock) begin
+    //     if (reset) begin
+    //         cycle_count <= 0;
+    //     end else begin
+    //         cycle_count <= cycle_count + 1;
+    //         dump_cdb_state(cycle_count);
+    //     end
+    // end
 
 
 endmodule
