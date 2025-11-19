@@ -190,7 +190,8 @@ GREP = grep -E --color=auto
 # ---- Modules to Test ---- #
 
 # TODO: add more modules here
-MODULES = cpu  
+# MODULES = cpu  
+MODULES = dcache 
 
 # TODO: update this if you add more header files
 ALL_HEADERS = $(CPU_HEADERS)
@@ -220,6 +221,13 @@ CPU_FILES = verilog/mult.sv \
 build/cpu.simv: $(CPU_FILES)
 build/cpu.cov: $(CPU_FILES)
 synth/cpu.vg: $(CPU_FILES)
+
+DCACHE_FILES = verilog/sys_defs.svh \
+               verilog/memDP.sv \
+               test/mem.sv
+build/dcache.simv: $(DCACHE_FILES)
+build/dcache.cov: $(DCACHE_FILES)
+synth/dcache.vg: $(DCACHE_FILES)
 
 MULT_FILES = verilog/sys_defs.svh
 build/mult.simv: $(MULT_FILES)
