@@ -177,12 +177,12 @@ module branch_fu #(
   logic take;
   always_comb begin
           case (req_i.disp_packet.inst.b.funct3)
-              3'b000:  take = signed'(req_i.src1_val) == signed'(req_i.src2_val); // BEQ
-              3'b001:  take = signed'(req_i.src1_val) != signed'(req_i.src2_val); // BNE
-              3'b100:  take = signed'(req_i.src1_val) <  signed'(req_i.src2_val); // BLT
-              3'b101:  take = signed'(req_i.src1_val) >= signed'(req_i.src2_val); // BGE
-              3'b110:  take = req_i.src1_val < req_i.src2_val;                    // BLTU
-              3'b111:  take = req_i.src1_val >= req_i.src2_val;                   // BGEU
+              3'b000:  take = signed'(req_i.src1_mux) == signed'(req_i.src2_mux); // BEQ
+              3'b001:  take = signed'(req_i.src1_mux) != signed'(req_i.src2_mux); // BNE
+              3'b100:  take = signed'(req_i.src1_mux) <  signed'(req_i.src2_mux); // BLT
+              3'b101:  take = signed'(req_i.src1_mux) >= signed'(req_i.src2_mux); // BGE
+              3'b110:  take = req_i.src1_mux < req_i.src2_mux;                    // BLTU
+              3'b111:  take = req_i.src1_mux >= req_i.src2_mux;                   // BGEU
               default: take = `FALSE;
           endcase
       end
