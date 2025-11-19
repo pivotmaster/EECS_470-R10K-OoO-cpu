@@ -982,6 +982,8 @@ module cpu #(
             br_req_reg[0].dest_tag <= br_req[0].dest_tag;
             br_req_reg[0].src2_valid <= br_req[0].src2_valid;
             br_req_reg[0].disp_packet <= br_req[0].disp_packet;
+            br_req_reg[0].src1_val <= br_req[0].src1_val;
+            br_req_reg[0].src2_val <= br_req[0].src2_val;
         end
     end
 
@@ -1012,8 +1014,6 @@ module cpu #(
     assign load_req_reg[0].src2_val = load_req_reg_org[0].src2_valid ? rdata[5] : load_req_reg_org[0].src2_val;
     assign br_req_reg[0].src1_mux = rdata[6];
     assign br_req_reg[0].src2_mux = br_req_reg_org[0].src2_valid ? rdata[7] : br_req_reg_org[0].src2_mux;
-    assign br_req_reg[0].src1_val = br_req[0].src1_val;
-    assign br_req_reg[0].src2_val = br_req[0].src2_val;
 
     
     fu fu_0(
