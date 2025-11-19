@@ -208,8 +208,8 @@ module cpu #(
         raddr[3] <= mul_req[0].src2_val; 
         raddr[4] <= load_req[0].src1_val; 
         raddr[5] <= load_req[0].src2_val; 
-        raddr[6] <= br_req[0].src1_val; 
-        raddr[7] <= br_req[0].src2_val;
+        raddr[6] <= br_req[0].src1_mux; 
+        raddr[7] <= br_req[0].src2_mux;
     end
 
 // S/EX
@@ -390,6 +390,7 @@ module cpu #(
     // assign if_valid = 1'b1;
     // assign if_flush = (wb_valid[3] & wb_mispred[3]); //###
     // assign take_branch = wb_valid[3] & wb_mispred[3];
+
     // assign take_branch = 1'b0;
     // assign if_flush = 1'b0;
     // always @(posedge clock) begin
@@ -397,6 +398,15 @@ module cpu #(
     // end
     // assign pred_taken_i = 1'b0; //###
     // assign pred_valid_i = 1'b0; //###
+
+    //assign take_branch = 1'b0;
+    //assign if_flush = 1'b0;
+    // always @(posedge clock) begin
+    //     $display("CPU. take_br, wb_valid, wb_mispred=%b %b %b", take_branch, wb_valid, wb_mispred);
+    // end
+    //assign pred_taken_i = 1'b0; //###
+    //assign pred_valid_i = 1'b0; //###
+
 
     //////////////////////////////////////////////////
     //                                              //
@@ -989,6 +999,8 @@ module cpu #(
             br_req_reg[0].dest_tag <= br_req[0].dest_tag;
             br_req_reg[0].src2_valid <= br_req[0].src2_valid;
             br_req_reg[0].disp_packet <= br_req[0].disp_packet;
+            br_req_reg[0].src1_val <= br_req[0].src1_val;
+            br_req_reg[0].src2_val <= br_req[0].src2_val;
         end
     end
 
@@ -1017,11 +1029,15 @@ module cpu #(
     assign mul_req_reg[0].src2_val = mul_req_reg_org[0].src2_valid ? rdata[3] : mul_req_reg_org[0].src2_val;
     assign load_req_reg[0].src1_val = rdata[4];
     assign load_req_reg[0].src2_val = load_req_reg_org[0].src2_valid ? rdata[5] : load_req_reg_org[0].src2_val;
-    assign br_req_reg[0].src1_val = rdata[6];
-    assign br_req_reg[0].src2_val = br_req_reg_org[0].src2_valid ? rdata[7] : br_req_reg_org[0].src2_val;
+    assign br_req_reg[0].src1_mux = rdata[6];
+    assign br_req_reg[0].src2_mux = br_req_reg_org[0].src2_valid ? rdata[7] : br_req_reg_org[0].src2_mux;
+
     
     fu fu_0(
         //Inputs
+        .clock(clock),
+        .reset(reset),
+        
         .alu_req(alu_req_reg),
         .mul_req(mul_req_reg),
         .load_req(load_req_reg),

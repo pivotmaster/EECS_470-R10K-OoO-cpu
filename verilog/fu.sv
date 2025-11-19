@@ -9,6 +9,7 @@ module alu_fu #(
   input  issue_packet_t req_i,
   output fu_resp_t      resp_o,
   output logic          ready_o
+
 );
   logic [XLEN-1:0] result;
     always_comb begin
@@ -178,12 +179,12 @@ module branch_fu #(
   
   always_comb begin
           case (req_i.disp_packet.inst.b.funct3)
-              3'b000:  take = signed'(req_i.src1_val) == signed'(req_i.src2_val); // BEQ
-              3'b001:  take = signed'(req_i.src1_val) != signed'(req_i.src2_val); // BNE
-              3'b100:  take = signed'(req_i.src1_val) <  signed'(req_i.src2_val); // BLT
-              3'b101:  take = signed'(req_i.src1_val) >= signed'(req_i.src2_val); // BGE
-              3'b110:  take = req_i.src1_val < req_i.src2_val;                    // BLTU
-              3'b111:  take = req_i.src1_val >= req_i.src2_val;                   // BGEU
+              3'b000:  take = signed'(req_i.src1_mux) == signed'(req_i.src2_mux); // BEQ
+              3'b001:  take = signed'(req_i.src1_mux) != signed'(req_i.src2_mux); // BNE
+              3'b100:  take = signed'(req_i.src1_mux) <  signed'(req_i.src2_mux); // BLT
+              3'b101:  take = signed'(req_i.src1_mux) >= signed'(req_i.src2_mux); // BGE
+              3'b110:  take = req_i.src1_mux < req_i.src2_mux;                    // BLTU
+              3'b111:  take = req_i.src1_mux >= req_i.src2_mux;                   // BGEU
               default: take = `FALSE;
           endcase
       end
@@ -210,6 +211,10 @@ module fu #(
   parameter int LOAD_COUNT  = 1,
   parameter int BR_COUNT    = 1
 )(
+
+    input  logic clock,     
+    input  logic reset,
+
     // Issue → FU
     input  issue_packet_t alu_req  [ALU_COUNT],
     input  issue_packet_t mul_req  [MUL_COUNT],
@@ -296,6 +301,64 @@ module fu #(
       fu_mispred_o  [k] = fu_resp_bus[k].mispred;
     end
   end
+
+        // =========================================================
+    // For GUI Debugger (FU Trace)
+    // =========================================================
+    integer fu_trace_fd;
+
+    initial begin
+        fu_trace_fd = $fopen("dump_files/fu_trace.json", "w");
+        if (fu_trace_fd == 0)
+            $fatal("Failed to open dump_files/fu_trace.json!");
+    end
+
+    task automatic dump_fu_state(int cycle);
+        $fdisplay(fu_trace_fd, "FU TRACE DUMP TRIGGERED AT CYCLE %0d", cycle);
+        $fwrite(fu_trace_fd, "{ \"cycle\": %0d, \"FU\": [", cycle);
+        for (int i = 0; i < TOTAL_FU; i++) begin
+            automatic issue_packet_t req;
+
+            // Identify FU input source by index
+            if (i < ALU_COUNT)
+                req = alu_req[i];
+            else if (i < ALU_COUNT + MUL_COUNT)
+                req = mul_req[i - ALU_COUNT];
+            else if (i < ALU_COUNT + MUL_COUNT + LOAD_COUNT)
+                req = load_req[i - ALU_COUNT - MUL_COUNT];
+            else
+                req = br_req[i - ALU_COUNT - MUL_COUNT - LOAD_COUNT];
+
+            if (req.valid) begin
+                $fwrite(fu_trace_fd,
+                    "{\"idx\":%0d, \"valid\":1, \"dest_tag\":%0d, \"rob_idx\":%0d, \"src1_val\":%0d, \"src2_val\":%0d}",
+                    i, req.dest_tag, req.rob_idx, req.src1_val, req.src2_val
+                );
+            end else begin
+                $fwrite(fu_trace_fd, "{\"idx\":%0d, \"valid\":0}", i);
+            end
+
+            if (i != TOTAL_FU - 1)
+                $fwrite(fu_trace_fd, ",");
+        end
+        $fwrite(fu_trace_fd, "]}\n");
+        $fflush(fu_trace_fd);
+    endtask
+
+    // =========================================================
+    // Auto Dump per Cycle
+    // =========================================================
+    int fu_cycle_count;
+    always_ff @(posedge clock) begin
+        if (reset) begin
+            fu_cycle_count <= 0;
+        end else begin
+            fu_cycle_count <= fu_cycle_count + 1;
+            dump_fu_state(fu_cycle_count);
+        end
+    end
+
+
 
 
 endmodule
