@@ -1018,6 +1018,9 @@ module cpu #(
     
     fu fu_0(
         //Inputs
+        .clock(clock),
+        .reset(reset),
+        
         .alu_req(alu_req_reg),
         .mul_req(mul_req_reg),
         .load_req(load_req_reg),
