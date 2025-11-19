@@ -134,10 +134,10 @@ module issue_logic #(
                 case (rs_entries_i[i].disp_packet.opb_select)
                     OPB_IS_RS2:   src2_valid =  1;
                     OPB_IS_I_IMM: src2_valid = 0;
-                    // OPB_IS_S_IMM: src2_mux = 0;
-                    // OPB_IS_B_IMM: src2_mux = 0;
+                    OPB_IS_S_IMM: src2_valid = 0;
+                    OPB_IS_B_IMM: src2_valid = 0;
                     OPB_IS_U_IMM: src2_valid = 0;
-                    //OPB_IS_J_IMM: src2_mux = 0;
+                    OPB_IS_J_IMM: src2_valid = 0;
                     default:      src2_valid = 1; // face feed
                 endcase
                  //$display("imm = %d", src2_mux);
