@@ -37,6 +37,7 @@ module complete_stage #(
 
     //### 11/7 add sychenn ###//
     always_comb begin : blockName
+        wb_value_o = '0;
         for (int i=0; i < WB_WIDTH; i ++) begin
             if (fu_valid_i[i]) begin
                 wb_value_o = fu_value_i[i];

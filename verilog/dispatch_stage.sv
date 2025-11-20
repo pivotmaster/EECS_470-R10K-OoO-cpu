@@ -175,6 +175,9 @@ module dispatch_stage #(
         disp_rd_arch_o = '0;
         disp_rd_new_prf_o = '0;
         disp_rd_old_prf_o = '0;
+        src1_arch_o = '0;
+        src2_arch_o = '0;
+        dest_arch_o = '0;
 
         for (int i = 0; i < DISPATCH_WIDTH; i++) begin
             if (if_packet_i[i].valid) begin //### Account for icache miss (valid = 0)
@@ -247,6 +250,7 @@ module dispatch_stage #(
   // =========================================================
   // DEBUG
   // =========================================================
+  `ifndef SYNTHESIS
   integer cycle_count;
   always_ff @(posedge clock) begin
     if (reset)
@@ -266,7 +270,7 @@ module dispatch_stage #(
       end
     end
   end
-
+`endif
 
 endmodule
 
