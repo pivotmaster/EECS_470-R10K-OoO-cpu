@@ -178,6 +178,9 @@ module branch_fu #(
   logic take;
   
   always_comb begin
+    // if(req_i.disp_packet.uncond_branch == 1'b1) begin
+    //       take = `TRUE;
+    // end else begin
           case (req_i.disp_packet.inst.b.funct3)
               3'b000:  take = signed'(req_i.src1_mux) == signed'(req_i.src2_mux); // BEQ
               3'b001:  take = signed'(req_i.src1_mux) != signed'(req_i.src2_mux); // BNE
@@ -187,7 +190,8 @@ module branch_fu #(
               3'b111:  take = req_i.src1_mux >= req_i.src2_mux;                   // BGEU
               default: take = `FALSE;
           endcase
-      end
+    // end
+  end
 
   // assign ready_o = 1'b1;
 

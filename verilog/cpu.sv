@@ -363,6 +363,7 @@ module cpu #(
     end
     // assign if_valid = (cycle < 45) ? 1'b1 : 1'b0; //###
     // assign if_valid = 1'b1;
+    assign correct_pc_target_o = fu_value_reg[3];
     assign correct_predict = (wb_valid[3] & !wb_mispred[3]); //###TODO: CORRECT PREDICT 
     assign if_flush = (wb_valid[3] & wb_mispred[3]); //### open flush
     // assign take_branch = wb_valid[3] & wb_mispred[3];
