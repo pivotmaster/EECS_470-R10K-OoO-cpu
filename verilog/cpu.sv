@@ -444,7 +444,10 @@ module cpu #(
     //////////////////////////////////////////////////
 
 
-    stage_if stage_if_0(
+    stage_if #(
+        .FETCH_WIDTH (`FETCH_WIDTH),
+        .ADDR_WIDTH  (`ADDR_WIDTH)
+    )stage_if_0(
         .clock (clock),
         .reset (reset),
 
@@ -532,7 +535,14 @@ module cpu #(
     assign disp_rob_space = (free_rob_slots > `DISPATCH_WIDTH) ? `DISPATCH_WIDTH : free_rob_slots[`DISPATCH_WIDTH-1:0]; 
     assign disp_free_space = (free_count > `DISPATCH_WIDTH) ? `DISPATCH_WIDTH : free_count[`DISPATCH_WIDTH-1:0];
     // assign disp_free_space = 1'b1; //###
-    dispatch_stage dispatch_stage_0(
+    dispatch_stage  #(
+        .FETCH_WIDTH(`FETCH_WIDTH),
+        .DISPATCH_WIDTH(`DISPATCH_WIDTH),
+        .PHYS_REGS(`PHYS_REGS),
+        .ARCH_REGS(`ARCH_REGS),
+        .DEPTH(`ROB_DEPTH),
+        .ADDR_WIDTH(`ADDR_WIDTH)
+    )dispatch_stage_0(
         .clock (clock),
         .reset (reset),
 
@@ -591,7 +601,16 @@ module cpu #(
     //                                              //
     //////////////////////////////////////////////////
 
-    rob rob_0(
+    rob #(
+        .DEPTH(`ROB_DEPTH),
+        .INST_W(`INST_W),
+        .DISPATCH_WIDTH(`DISPATCH_WIDTH),
+        .COMMIT_WIDTH(`COMMIT_WIDTH),
+        .WB_WIDTH(`WB_WIDTH),
+        .ARCH_REGS(`ARCH_REGS),
+        .PHYS_REGS(`PHYS_REGS),
+        .XLEN(`XLEN)
+    )rob_0(
         .clock(clock),
         .reset(reset),
 
@@ -642,7 +661,13 @@ module cpu #(
     //                                              //
     //////////////////////////////////////////////////
 
-    map_table map_table_0(
+    map_table #(
+        .ARCH_REGS(`ARCH_REGS),           // Number of architectural registers
+        .PHYS_REGS(`PHYS_REGS),          // Number of physical registers
+        .DISPATCH_WIDTH(`DISPATCH_WIDTH),       // Number of instructions dispatched per cycle
+        .WB_WIDTH(`WB_WIDTH),         // Number of writeback ports
+        .COMMIT_WIDTH(`COMMIT_WIDTH)         // Number of commit ports
+    )map_table_0(
         .clock(clock),
         .reset(reset),
 
@@ -715,7 +740,12 @@ module cpu #(
     //                                              //
     //////////////////////////////////////////////////
 
-    free_list free_list_0(
+    free_list #(
+        .DISPATCH_WIDTH(`DISPATCH_WIDTH),
+        .COMMIT_WIDTH(`COMMIT_WIDTH),
+        .ARCH_REGS(`ARCH_REGS),
+        .PHYS_REGS(`PHYS_REGS)
+    ) free_list_0(
         .clock(clock),
         .reset(reset),
         //Inputs
@@ -743,7 +773,13 @@ module cpu #(
     //                                              //
     //////////////////////////////////////////////////
 
-    pr pr_0(
+    pr #(
+        .PHYS_REGS(`PHYS_REGS),
+        .XLEN(`XLEN),
+        .READ_PORTS(`READ_PORTS),
+        .WRITE_PORTS(`FU_ALU + `FU_MUL + `FU_LOAD + `FU_BRANCH),
+        .BYPASS_EN(1'b1)
+    ) pr_0(
         .clock (clock),
         .reset (reset),
         //Inputs    
@@ -762,7 +798,11 @@ module cpu #(
     //                                              //
     //////////////////////////////////////////////////
 
-    arch_map_table arch_map_table_0(
+    arch_map_table #(
+        .ARCH_REGS(`ARCH_REGS),
+        .PHYS_REGS(`PHYS_REGS),
+        .COMMIT_WIDTH(`COMMIT_WIDTH)
+    ) arch_map_table_0(
         .clock (clock),
         .reset (reset),
 
@@ -784,7 +824,13 @@ module cpu #(
     //                                              //
     //////////////////////////////////////////////////
 
-    cdb cdb_0(
+    cdb #(
+        .CDB_WIDTH(`CDB_WIDTH),
+        .PHYS_REGS(`PHYS_REGS),
+        .ARCH_REGS(`ARCH_REGS),
+        .ROB_DEPTH(`ROB_DEPTH),
+        .XLEN(`XLEN)
+    )cdb_0(
         .clock (clock),
         .reset (reset),
 
@@ -809,7 +855,15 @@ module cpu #(
     //                                              //
     //////////////////////////////////////////////////
 
-    RS rs_0(
+    RS #(
+        .RS_DEPTH(`RS_DEPTH), //RS entry numbers
+        .DISPATCH_WIDTH(`DISPATCH_WIDTH),
+        .CDB_WIDTH(`CDB_WIDTH),
+        .PHYS_REGS(`PHYS_REGS),
+        .OPCODE_N(8),  //number of opcodes
+        .FU_NUM(`FU_ALU + `FU_MUL + `FU_LOAD + `FU_BRANCH),  // how many different FU
+        .XLEN(`XLEN)
+    )rs_0(
         .clock (clock),
         .reset (reset),
         // .flush('0),
@@ -874,7 +928,20 @@ module cpu #(
     //                Issue-Stage                   //
     //                                              //
     //////////////////////////////////////////////////
-    issue_logic issue_0(
+    issue_logic #(
+        .RS_DEPTH(`RS_DEPTH), //RS entry numbers
+        .DISPATCH_WIDTH(`DISPATCH_WIDTH),
+        .ISSUE_WIDTH(`ISSUE_WIDTH),
+        .CDB_WIDTH(`CDB_WIDTH),
+        .PHYS_REGS(`PHYS_REGS),
+        .OPCODE_N(8),  //number of opcodes
+        .FU_NUM(`FU_ALU + `FU_MUL + `FU_LOAD + `FU_BRANCH),  // how many different FU
+        .XLEN(`XLEN),
+        .ALU_COUNT(`FU_ALU),
+        .MUL_COUNT(`FU_MUL),
+        .LOAD_COUNT(`FU_LOAD),
+        .BR_COUNT(`FU_BRANCH)
+    )issue_0(
         .clock(clock),
         .reset(reset),
         // Inputs
@@ -1034,7 +1101,15 @@ module cpu #(
     assign br_req_reg[0].src2_mux = br_req_reg_org[0].src2_valid ? rdata[7] : br_req_reg_org[0].src2_mux;
 
     
-    fu fu_0(
+    fu #(
+        .XLEN(`XLEN),
+        .PHYS_REGS(`PHYS_REGS),
+        .ROB_DEPTH(`ROB_DEPTH),
+        .ALU_COUNT(`FU_ALU),
+        .MUL_COUNT(`FU_MUL),
+        .LOAD_COUNT(`FU_LOAD),
+        .BR_COUNT(`FU_BRANCH)
+    ) fu_0(
         //Inputs
         .clock(clock),
         .reset(reset),
@@ -1111,7 +1186,13 @@ module cpu #(
     //                                              //
     //////////////////////////////////////////////////
 
-    complete_stage complete_stage0(
+    complete_stage #(
+        .XLEN(`XLEN),
+        .PHYS_REGS(`PHYS_REGS),
+        .ROB_DEPTH(`ROB_DEPTH),
+        .WB_WIDTH(`WB_WIDTH),
+        .CDB_WIDTH(`CDB_WIDTH)
+    ) complete_stage0(
         .clock(clock),
         .reset(reset),
 
@@ -1148,7 +1229,11 @@ module cpu #(
     //                                              //
     //////////////////////////////////////////////////
 
-    retire_stage retire_stage_0(
+    retire_stage #(
+        .ARCH_REGS(`ARCH_REGS),
+        .PHYS_REGS(`PHYS_REGS),
+        .COMMIT_WIDTH(`COMMIT_WIDTH)
+    ) retire_stage_0(
         .clock(clock),
         .reset(reset),
 

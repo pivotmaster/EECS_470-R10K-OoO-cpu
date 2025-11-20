@@ -12,12 +12,10 @@
 module RS #(
     parameter int unsigned RS_DEPTH        = 64, //RS entry numbers
     parameter int unsigned DISPATCH_WIDTH  = 1,
-    parameter int unsigned ISSUE_WIDTH     = 1,
     parameter int unsigned CDB_WIDTH       = 4,
     parameter int unsigned PHYS_REGS       = 128,
     parameter int unsigned OPCODE_N        = 8,  //number of opcodes
     parameter int unsigned FU_NUM          = 8,  // how many different FU
-    parameter int unsigned MAX_FU_PER_TYPE = 4,  // how many Fu per each FU type
     parameter int unsigned XLEN            = 32
 )(
     input   logic                                                  clock,
