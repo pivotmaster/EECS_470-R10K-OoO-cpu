@@ -181,6 +181,10 @@ module rob #(
         end
 
     end
+    // always_ff @(negedge clock)begin
+    //    // $display("head = %0d  , tail = %0d\n" , head, tail);
+    //    $display("disp_rob_idx_o=%d | commit_old_prf_o: %d", disp_rob_idx_o[0], commit_old_prf_o[0]);
+    // end
 
 task automatic show_rob_output();
     $display("============================================");
@@ -289,11 +293,12 @@ module rob #(
         logic [$clog2(ARCH_REGS)-1:0] rd_arch;
         logic [$clog2(PHYS_REGS)-1:0] new_prf;
         logic [$clog2(PHYS_REGS)-1:0] old_prf;
+        logic halt;
         logic exception;
         logic mispred;
-         ADDR NPC;
-         ADDR PC;
-         INST inst;
+        ADDR NPC;
+        ADDR PC;
+        INST inst;
         logic [XLEN-1:0] value;
     } rob_entry_t;
 
@@ -336,7 +341,7 @@ module rob #(
     logic wb_valid;
     COMMIT_PACKET [`N-1:0] wb_packet;
 
-    always_ff @(posedge clock or posedge reset) begin
+    always_ff @(posedge clock) begin
         wb_valid <= 1'b0;
         for (int i = 0; i < COMMIT_WIDTH; i++) begin
             if (retire_en[i]) begin    
@@ -348,6 +353,7 @@ module rob #(
     end
 
     always_comb begin 
+        wb_packet_o = '0;
         if  (wb_valid) begin
             for (int i = 0; i < COMMIT_WIDTH; i++) begin
             wb_packet_o[i].data = wb_packet[i].data;
@@ -494,6 +500,8 @@ module rob #(
                     rob_table[disp_rob_idx_o[i]].NPC   <= disp_packet_i[i].NPC;
                     rob_table[disp_rob_idx_o[i]].PC    <= disp_packet_i[i].PC;
                     rob_table[disp_rob_idx_o[i]].inst  <= disp_packet_i[i].inst;
+
+                    rob_table[disp_rob_idx_o[i]].halt  <= disp_packet_i[i].halt;
                 end
             end
 
@@ -529,7 +537,7 @@ module rob #(
                         // wb file
                         wb_packet[i].data <= rob_table[head + i].value;
                         wb_packet[i].reg_idx <= rob_table[head + i].rd_arch;
-                        wb_packet[i].halt <= 0;
+                        wb_packet[i].halt <= rob_table[head + i].halt;
                         wb_packet[i].illegal <=0;
                         wb_packet[i].valid <=1;
                         wb_packet[i].NPC <= rob_table[head + i].NPC;
