@@ -454,17 +454,6 @@ typedef struct packed {
     DISP_PACKET                   disp_packet; //decoder_o 
 } rs_entry_t;
 
-typedef struct packed {
-    logic                         valid;
-    logic                         done;
-    logic                         exception;
-    logic [$clog2(`ARCH_REGS)-1:0] dest_arch;
-    logic [$clog2(`PHYS_REGS)-1:0] dest_prf;
-    logic [$clog2(`PHYS_REGS)-1:0] old_prf;
-    logic [$clog2(`ROB_DEPTH)-1:0] rob_idx;
-    logic                         is_branch;
-    logic                         mispredicted;
-} rob_entry_t;
 
 typedef struct packed {
     logic                         valid;      // broadcast valid

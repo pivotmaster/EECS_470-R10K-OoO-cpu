@@ -352,12 +352,12 @@ module testbench;
         //);
     endtask
 
-    always_ff @(negedge clock) begin
-        if(proc2mem_addr >= 32'd880) begin
-            $display("forced finished");
-            $finish;
-        end
-    end
+    // always_ff @(negedge clock) begin
+    //     if(proc2mem_addr >= 32'd880) begin
+    //         $display("forced finished");
+    //         $finish;
+    //     end
+    // end
 
     always_ff @(negedge clock) begin
         if(clock_count > 800) begin
