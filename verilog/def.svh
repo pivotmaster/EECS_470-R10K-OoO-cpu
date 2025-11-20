@@ -39,6 +39,8 @@ typedef struct packed {
     fu_type_e                      fu_type;       // functional unit type
     logic [3:0]                    opcode;        // operation code
     logic [$clog2(`PHYS_REGS)-1:0] dest_tag;      // destination physical reg tag
+    logic [`XLEN-1:0]               src1_mux;
+    logic [`XLEN-1:0]               src2_mux;
     logic [`XLEN-1:0]               src1_val;      // actual operand value 1
     logic [`XLEN-1:0]               src2_val;      // actual operand value 2
     logic                           src2_valid;      // if src2_valid = 1 用rs2 ;  if src2_valid = 0 用imm
@@ -452,17 +454,6 @@ typedef struct packed {
     DISP_PACKET                   disp_packet; //decoder_o 
 } rs_entry_t;
 
-typedef struct packed {
-    logic                         valid;
-    logic                         done;
-    logic                         exception;
-    logic [$clog2(`ARCH_REGS)-1:0] dest_arch;
-    logic [$clog2(`PHYS_REGS)-1:0] dest_prf;
-    logic [$clog2(`PHYS_REGS)-1:0] old_prf;
-    logic [$clog2(`ROB_DEPTH)-1:0] rob_idx;
-    logic                         is_branch;
-    logic                         mispredicted;
-} rob_entry_t;
 
 typedef struct packed {
     logic                         valid;      // broadcast valid
@@ -473,16 +464,16 @@ typedef struct packed {
 
 
 
-typedef struct packed {
-    logic                          valid;    
-    fu_type_e                      fu_type;       // functional unit type
-    logic [3:0]                    opcode;        // operation code
-    logic [$clog2(`PHYS_REGS)-1:0] dest_tag;      // destination physical reg tag
-    logic [XLEN-1:0]               src1_val;      // actual operand value 1
-    logic [XLEN-1:0]               src2_val;      // actual operand value 2
-    logic [$clog2(`ROB_DEPTH)-1:0] rob_idx;       // reorder buffer index
-    DISP_PACKET                    disp_packet; //decoder_o 
-} issue_packet_t;
+// typedef struct packed {
+//     logic                          valid;    
+//     fu_type_e                      fu_type;       // functional unit type
+//     logic [3:0]                    opcode;        // operation code
+//     logic [$clog2(`PHYS_REGS)-1:0] dest_tag;      // destination physical reg tag
+//     logic [XLEN-1:0]               src1_val;      // actual operand value 1
+//     logic [XLEN-1:0]               src2_val;      // actual operand value 2
+//     logic [$clog2(`ROB_DEPTH)-1:0] rob_idx;       // reorder buffer index
+//     DISP_PACKET                    disp_packet; //decoder_o 
+// } issue_packet_t;
 
 typedef struct packed {
     logic                         valid;
