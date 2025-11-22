@@ -153,7 +153,7 @@ module map_table#(
     // arch reg i -> phys i, and mark valid = 1
     // (this assumes PHYS_REGS >= ARCH_REGS)
     // =======================================================
-    always_ff @(posedge clock or posedge reset)begin
+    always_ff @(posedge clock)begin
         if(reset)begin
             for(int i =0; i< ARCH_REGS; i++)begin
                 table_reg[i].phys <= i;

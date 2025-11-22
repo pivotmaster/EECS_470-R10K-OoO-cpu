@@ -22,31 +22,35 @@
 
 // superscalar width
 `define N 1
+`define SINGLE_FU_NUM 2
+`define RS_DEPTH 16
+`define ROB_DEPTH 32
+
+
+// fixed data
+`define FU_ALU `SINGLE_FU_NUM
+`define FU_MUL `SINGLE_FU_NUM
+`define FU_LOAD `SINGLE_FU_NUM
+`define FU_BRANCH `SINGLE_FU_NUM
+`define ALU_COUNT `FU_ALU
+`define MUL_COUNT `FU_MUL
+`define LOAD_COUNT `FU_LOAD
+`define BR_COUNT `FU_BRANCH
+`define FU_NUM (`ALU_COUNT + `MUL_COUNT + `LOAD_COUNT + `BR_COUNT)
+`define CDB_WIDTH `FU_NUM
+`define WB_WIDTH `FU_NUM
+`define READ_PORTS (2 * `FU_NUM)
+`define DISPATCH_WIDTH `N
+`define COMMIT_WIDTH `N
+`define FETCH_WIDTH `N
+`define ISSUE_WIDTH `N
 `define CDB_SZ `N
-`define XLEN 32
-`define OPCODE_N 7
-`define FU_ALU 1
-`define FU_MUL 1
-`define FU_LOAD 1
-`define FU_BRANCH 1
-`define ISSUE_WIDTH 1
-`define READ_PORTS 8
 `define INST_W 16
 `define ADDR_WIDTH 32
-`define FETCH_WIDTH 1
-`define CDB_WIDTH 4
-`define DISPATCH_WIDTH 1
-`define COMMIT_WIDTH 1
-`define WB_WIDTH 4
-`define ALU_COUNT 1
-`define MUL_COUNT 1
-`define LOAD_COUNT 1
-`define BR_COUNT 1
-`define FU_NUM 4
-`define RS_DEPTH 32
-`define ROB_DEPTH 64
 `define PHYS_REGS 64
 `define ARCH_REGS 32
+`define XLEN 32
+`define OPCODE_N 7
 
 // number of mult stages (2, 4) (you likely don't need 8)
 `define MULT_STAGES 4

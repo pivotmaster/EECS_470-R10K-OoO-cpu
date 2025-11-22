@@ -444,7 +444,7 @@ module rob #(
 
     // ===== Sequential Block =====
     // TODO:  When flush mispredict: ### only writeback still need to work ###,  STOP commit and dispatch
-    always_ff @(posedge clock or posedge reset) begin
+    always_ff @(posedge clock) begin
         if (reset) begin
             head   <= '0;
             tail   <= '0;
