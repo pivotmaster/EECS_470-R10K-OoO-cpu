@@ -258,7 +258,7 @@ module rob #(
     input  logic [WB_WIDTH-1:0] wb_exception_i,
     input  logic [WB_WIDTH-1:0] wb_mispred_i,
     //### 11/7 add sychenn ###//
-    input  logic [XLEN-1:0]          fu_value_wb_i,
+    input  logic [WB_WIDTH-1:0][XLEN-1:0]          fu_value_wb_i,
 
     // Commit
     output logic [COMMIT_WIDTH-1:0] commit_valid_o,
@@ -418,21 +418,28 @@ module rob #(
         flushed_mask = '0;
         if (mispredict_i) begin
             for (int j = 1; j < DEPTH; j++) begin
+                $display("m=%d,j=%d | valid=%b | rob_table[j].old_prf=%0d",mispredict_rob_idx_i, (mispredict_rob_idx_i + j) % DEPTH,rob_table[(mispredict_rob_idx_i + j) % DEPTH].valid,rob_table[(mispredict_rob_idx_i + j) % DEPTH].old_prf);
                 // (mispredict_rob_idx_i + 1 + j) % DEPTH = idx (but cannot 2 int in one block?)
                 if ((mispredict_rob_idx_i + j) % DEPTH == tail) begin
                     break;
-                end else if ((rob_table[(mispredict_rob_idx_i + j) % DEPTH].valid) && (rob_table[(mispredict_rob_idx_i + j) % DEPTH].old_prf != 0)) begin
-                    // $display("j=%d | rob_table[j].old_prf=%0d", (mispredict_rob_idx_i + j) % DEPTH,rob_table[j].old_prf);
-                    // flush mispredict instructions
-                    flush_count++;
+                end else if ((rob_table[(mispredict_rob_idx_i + j) % DEPTH].valid)) begin
+                    // this is to update ROB
+                    flush_count++; 
                     flushed_mask |= (1 << (mispredict_rob_idx_i + j) % DEPTH);
-                    //free regs
-                    flush_free_regs_valid[j] = 1'b1;
-                    flush_free_regs       |= (1 << rob_table[(mispredict_rob_idx_i + j) % DEPTH].old_prf);
+                    // this is to update free list
+                    if ((rob_table[(mispredict_rob_idx_i + j) % DEPTH].old_prf != 0)) begin
+                        // flush mispredict instructions                        
+                        //free regs
+                        flush_free_regs_valid[j] = 1'b1;
+                        flush_free_regs       |= (1 << rob_table[(mispredict_rob_idx_i + j) % DEPTH].old_prf);
+                    end
                 end
             end
+            
+           
         end
         flush_i = |flush_free_regs_valid;
+        $display("flush_count=%d",flush_count);
     end
 
     // ===== Sequential Block =====
@@ -458,29 +465,27 @@ module rob #(
             end
         
         //################## (sychenn 11/6) ######################
-        end else if (mispredict_i) begin  
-            // Flush to tail
+        end else begin  
             if (mispredict_i) begin
-                for (int j = 0; j < DEPTH; j++) begin
-                    if (flushed_mask[j])
-                        rob_table[j].valid <= 1'b0;
+                // Flush to tail
+                if (mispredict_i) begin
+                    for (int j = 0; j < DEPTH; j++) begin
+                        if (flushed_mask[j])
+                            rob_table[j].valid <= 1'b0;
+                    end
                 end
-            end
-            // update tail and count
-            tail  <= (mispredict_rob_idx_i) % DEPTH;
-            count <= count - flush_count;
-            $display("flush misprdicted count=%d",flush_count);
+                // update tail and count
+                tail  <= (mispredict_rob_idx_i+1) % DEPTH;
+                count <= count - flush_count;
+                
 
-            // stop commit
-            for (int i = 0; i < COMMIT_WIDTH; i++) begin
-                commit_valid_o[i]   <= 1'b0;
-                commit_old_prf_o[i] <= '0;
-            end
-            // output 
-            // flush_o              <= 1'b1;
-            // flush_upto_rob_idx_o <= mispredict_rob_idx_i;
+                // stop commit
+                for (int i = 0; i < COMMIT_WIDTH; i++) begin
+                    commit_valid_o[i]   <= 1'b0;
+                    commit_old_prf_o[i] <= '0;
+                end
+
         //################## (sychenn 11/6) ######################
-
         end else begin
             flush_o <= 1'b0; // default
 
@@ -535,12 +540,16 @@ module rob #(
                         commit_new_prf_o[i] <= rob_table[head + i].new_prf;
                         commit_old_prf_o[i] <= rob_table[head + i].old_prf;
                         // wb file
-                        wb_packet[i].data <= rob_table[head + i].value;
-                        wb_packet[i].reg_idx <= rob_table[head + i].rd_arch;
-                        wb_packet[i].halt <= rob_table[head + i].halt;
-                        wb_packet[i].illegal <=0;
-                        wb_packet[i].valid <=1;
-                        wb_packet[i].NPC <= rob_table[head + i].NPC;
+                        if(rob_table[head].valid) begin
+                            wb_packet[i].data <= rob_table[head + i].value;
+                            wb_packet[i].reg_idx <= rob_table[head + i].rd_arch;
+                            wb_packet[i].halt <= rob_table[head + i].halt;
+                            wb_packet[i].illegal <=0;
+                            wb_packet[i].valid <=1;
+                            wb_packet[i].NPC <= rob_table[head + i].NPC;
+                        end else begin
+                            wb_packet[i].valid <=0;
+                        end
                         // $display("npc1=%h | npc2=%h",rob_table[head + i].NPC, disp_packet_i[0].NPC);
 
                 end else begin
@@ -553,22 +562,22 @@ module rob #(
                 count <= count + $countones(disp_alloc_o) - $countones(retire_en);
                 tail  <= next_tail;
             end
-            
+        end    
             // ==== Writeback ====
-            if (!reset) begin
-                for (int i = 0; i < WB_WIDTH; i++) begin
-                    if (wb_valid_i[i]) begin
-                        rob_table[wb_rob_idx_i[i]].ready     <= 1'b1;
-                        rob_table[wb_rob_idx_i[i]].exception <= wb_exception_i[i];
-                        rob_table[wb_rob_idx_i[i]].mispred   <= wb_mispred_i[i];
-                        rob_table[wb_rob_idx_i[i]].value   <= fu_value_wb_i; //### sychenn 11/7 ###/
-                    end
+
+
+        if (!reset) begin
+            for (int i = 0; i < WB_WIDTH; i++) begin
+                if (wb_valid_i[i]) begin  
+                    rob_table[wb_rob_idx_i[i]].ready     <= 1'b1;
+                    rob_table[wb_rob_idx_i[i]].exception <= wb_exception_i[i];
+                    rob_table[wb_rob_idx_i[i]].mispred   <= wb_mispred_i[i];
+                    rob_table[wb_rob_idx_i[i]].value   <= fu_value_wb_i[i]; //### sychenn 11/7 ###/
+                    
                 end
             end
-
-
         end
-
+    end
     end
     // always_ff @(negedge clock)begin
     //    // $display("head = %0d  , tail = %0d\n" , head, tail);
