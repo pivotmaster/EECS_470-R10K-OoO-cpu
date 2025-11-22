@@ -121,6 +121,7 @@ module cpu #(
     logic free_full;      // true if no free regs left
     logic [$clog2(`PHYS_REGS+1)-1:0] free_count; // number of free regs
 
+
 // Arch map table
     logic [`ARCH_REGS-1:0][$clog2(`PHYS_REGS)-1:0] snapshot; // Full snapshot of current architectural-to-physical map
     logic restore_valid_i;  // Asserted when restoring the AMT from a saved snapshot
@@ -258,7 +259,7 @@ module cpu #(
     logic [`WB_WIDTH-1:0][$clog2(`ROB_DEPTH)-1:0] wb_rob_idx;
     logic [`WB_WIDTH-1:0] wb_exception;
     logic [`WB_WIDTH-1:0] wb_mispred;
-    logic [`XLEN-1:0]          fu_value_wb; //### sychenn 11/7 ###///
+    logic [`WB_WIDTH-1:0][`XLEN-1:0]          fu_value_wb; //### sychenn 11/7 ###///
     cdb_entry_t [`CDB_WIDTH-1:0] cdb_packets;
 
 // Retire-stage
@@ -345,6 +346,40 @@ module cpu #(
     logic [$clog2(`FETCH_WIDTH)-1:0] pred_lane_i;   // which instruction is branch    
     ADDR pred_target_i; // predicted target PC Addr
 
+// ---------- Branch Stall ---------- 
+    logic has_branch_in_pipline; // register (Store the branch info)
+    logic branch_stall, branch_stall_reg, branch_stall_next;   // branch_stall_next is to let stall at the same cycle
+    logic branch_resolve;
+
+    always_ff @(posedge clock or posedge reset) begin
+        if (reset) begin
+            has_branch_in_pipline <= '0;
+            branch_stall_reg <= '0; 
+        end else begin
+            if (branch_resolve) begin
+                has_branch_in_pipline <= '0;
+                branch_stall_reg <= '0;
+            end
+            if (|is_branch && !has_branch_in_pipline) begin
+                has_branch_in_pipline <= 1;
+            end else if (branch_stall_next) begin
+                branch_stall_reg <= 1;
+            end
+        end
+    end
+
+    assign branch_stall_next = (|is_branch && has_branch_in_pipline && !branch_resolve);
+    assign branch_stall = branch_stall_reg || branch_stall_next;
+    // assign branch_stall = 0;
+    assign branch_resolve = wb_valid[3]; // no matter it is mispredict or not
+
+
+    always_ff @(posedge clock or posedge reset) begin
+        if(!reset) begin
+            $display("|is_branch=%b | has_branch_in_pipline=%b | branch_stall=%b | branch_resolve=%b", |is_branch, has_branch_in_pipline, branch_stall, branch_resolve);
+            $display("branch_stall_reg=%b |branch_stall_next=%b",branch_stall_reg,branch_stall_next);
+        end
+    end
 
     // valid bit will cycle through the pipeline and come back from the wb stage
     // assign if_valid = ((!stall) && (if_packet[0].inst != 32'h10500073)) ? 1'b1 : 1'b0;//###
@@ -352,7 +387,7 @@ module cpu #(
         $display("inst : %h", if_packet[0].inst);
     end
     // assign if_valid = 1'b1;
-    assign if_valid = !stall;
+    assign if_valid = !stall && !branch_stall;
     //###
     logic [16:0] cycle;
     always @(posedge clock) begin
@@ -381,7 +416,7 @@ module cpu #(
             cycle_count <= 0;
         end else begin
             if (if_flush) begin
-                $display("if_flush=%b | wb_valid=%b | wb_mispred=%b | wb_rob_idx=%d", if_flush, wb_valid, wb_mispred, wb_rob_idx[3]);
+                $display("cycle[%d]| if_flush=%b | wb_valid=%b | wb_mispred=%b | wb_rob_idx=%d", cycle_count, if_flush, wb_valid, wb_mispred, wb_rob_idx[3]);
             end else begin
             cycle_count <= cycle_count + 1;
             end
@@ -493,14 +528,14 @@ module cpu #(
     //                                              //
     //////////////////////////////////////////////////
 
-    assign if_id_enable = !stall;
+    assign if_id_enable = !stall && !branch_stall;
     // assign if_id_enable = 1'b1;//###
 
     always_ff @(posedge clock) begin
         if (reset) begin
             for(int i=0;i<`FETCH_WIDTH;i++) begin
                 if_id_reg[i].inst  <= `NOP;
-                if_id_reg[i].valid <= `FALSE;
+                if_id_reg[i].valid <= `FALSE; //close this valid
                 if_id_reg[i].NPC   <= 0;
                 if_id_reg[i].PC    <= 0;
             end
@@ -590,6 +625,8 @@ module cpu #(
         .disp_rd_arch_o(disp_rd_arch),
         .disp_rd_new_prf_o(disp_rd_new_prf),
         .disp_rd_old_prf_o(disp_rd_old_prf),
+
+        .two_branch_stall(branch_stall),
 
         .disp_packet_o(disp_packet),
         .stall(stall)
@@ -697,18 +734,11 @@ module cpu #(
         .checkpoint_valid_o(checkpoint_valid)
     );
 
-    //### 11/10 sychenn ###// (for map table restore)
+ //### 11/10 sychenn ###// (for map table restore)
     always_ff @(posedge clock or posedge reset) begin : checkpoint
         if (reset) begin
-            // snapshot_reg       <= '{default:'{phys:'0, valid:'0}};
-            // snapshot_data_i    <= '{default:'{phys:'0, valid:'0}};
-            for(int i =0 ; i < `ARCH_REGS ; i++)begin
-                snapshot_reg[i].phys <= '0;
-                snapshot_reg[i].valid <= '0;
-                // $display("snapshot_reg[%0d] = %d (%d)",i,snapshot_reg[i].phys,snapshot_reg[i].valid);
-            end
-            // snapshot_reg       <= '0;
-            // snapshot_data_i    <= '0;
+            snapshot_reg       <= '{default:'{phys:'0, valid:'0}};
+            snapshot_data_i    <= '{default:'{phys:'0, valid:'0}};
             snapshot_restore_i <= 1'b0;
             has_snapshot       <= 1'b0;
         end else begin
@@ -764,6 +794,7 @@ module cpu #(
         .flush_i(flush_rob_debug),
         .flush_free_regs_valid(flush_free_regs_valid),
         .flush_free_regs(flush_free_regs)
+
 
     );
 
@@ -898,7 +929,7 @@ module cpu #(
     //                                              //
     //////////////////////////////////////////////////
 
-    assign id_s_enable = !stall;
+    assign id_s_enable = !stall && !branch_stall;
     // assign id_s_enable = 1'b1;
 
     always_ff @(posedge clock) begin
@@ -1291,6 +1322,7 @@ always_ff @(posedge clock) begin
     if (!reset) begin
         integer i;
         for (i = 0; i < `N; i++) begin
+            if(committed_insts[i].valid) begin
             $display("Commit[%0d]: valid=%b halt=%b illegal=%b reg=%0d data=%h NPC=%h",
                      i,
                      committed_insts[i].valid,
@@ -1299,6 +1331,7 @@ always_ff @(posedge clock) begin
                      committed_insts[i].reg_idx,
                      committed_insts[i].data,
                      committed_insts[i].NPC);
+        end
         end
         $display("-------------------\n");
     end

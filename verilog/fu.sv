@@ -8,7 +8,8 @@ module alu_fu #(
 )(
   input  issue_packet_t req_i,
   output fu_resp_t      resp_o,
-  output logic          ready_o
+  output logic          ready_o,
+  output logic   [XLEN-1:0]          resulta //debug
 
 );
   logic [XLEN-1:0] result;
@@ -27,6 +28,8 @@ module alu_fu #(
             // here to prevent latches:
             default:  result = 32'hfacebeec;
         endcase
+    $display("ALU op=%0d src1=%h src2=%h result=%h time=%0t",
+             req_i.opcode, req_i.src1_val, req_i.src2_val, result, $time);
     end
 
 /*
@@ -178,9 +181,10 @@ module branch_fu #(
   logic take;
   
   always_comb begin
-    // if(req_i.disp_packet.uncond_branch == 1'b1) begin
-    //       take = `TRUE;
-    // end else begin
+    take = `FALSE;
+    if(req_i.disp_packet.uncond_branch == 1'b1) begin
+          take = `TRUE;
+    end else begin
           case (req_i.disp_packet.inst.b.funct3)
               3'b000:  take = signed'(req_i.src1_mux) == signed'(req_i.src2_mux); // BEQ
               3'b001:  take = signed'(req_i.src1_mux) != signed'(req_i.src2_mux); // BNE
@@ -190,7 +194,7 @@ module branch_fu #(
               3'b111:  take = req_i.src1_mux >= req_i.src2_mux;                   // BGEU
               default: take = `FALSE;
           endcase
-    // end
+    end
   end
 
   // assign ready_o = 1'b1;
@@ -245,7 +249,7 @@ module fu #(
 
   localparam int TOTAL_FU = ALU_COUNT + MUL_COUNT + LOAD_COUNT + BR_COUNT;
   // always_ff @(negedge clock)
-
+  logic [XLEN-1:0] results [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT];
   genvar i;
   generate
     // ---------------- ALU ----------------
@@ -297,6 +301,9 @@ module fu #(
   integer k;
   always_comb begin
     for (k = 0; k < TOTAL_FU; k++) begin
+      if (fu_resp_bus[k].rob_idx == 35 && fu_resp_bus[k].dest_prf ==110 ) begin
+        $display("value= aaa:%h",results[k]);
+      end
       fu_valid_o    [k] = fu_resp_bus[k].valid;
       fu_value_o    [k] = fu_resp_bus[k].value;
       fu_dest_prf_o [k] = fu_resp_bus[k].dest_prf;
@@ -304,7 +311,9 @@ module fu #(
       fu_exception_o[k] = fu_resp_bus[k].exception;
       fu_mispred_o  [k] = fu_resp_bus[k].mispred;
     end
+
   end
+
 
         // =========================================================
     // For GUI Debugger (FU Trace)
