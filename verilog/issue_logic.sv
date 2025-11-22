@@ -93,10 +93,12 @@ module issue_logic #(
     //TODO issue pkts reg exist latch
     always_comb begin : issue_output
         issue_slot = 0;
-        alu_req_o[0]  = '0;
-        mul_req_o[0]  = '0;
-        load_req_o[0] = '0;
-        br_req_o[0]   = '0;
+        for(int i = 0; i < `SINGLE_FU_NUM; i++) begin
+            alu_req_o[i]  = '0;
+            mul_req_o[i]  = '0;
+            load_req_o[i] = '0;
+            br_req_o[i]   = '0;
+        end
         src1_mux ='0;
         src2_mux ='0;
         src2_valid = 0;
