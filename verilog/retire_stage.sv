@@ -49,8 +49,10 @@ module retire_stage #(
             end
 
             if (fire) begin
+                if (commit_old_prf_i != 0) begin
                 free_valid_o[i] = 1'b1;
                 free_reg_o[i]   = commit_old_prf_i[i];
+                end
             end
         end
     end
