@@ -22,95 +22,31 @@
 
 // superscalar width
 `define N 1
-`define CDB_SZ `N // This MUST match your superscalar width
-
-`ifndef XLEN
-  `define XLEN            32      // 32-bit processor width
-`endif
-
-`ifndef OPCODE_N
-    `define OPCODE_N 7
-`endif
-
-`ifndef READ_PORTS
-    `define READ_PORTS 8
-`endif
-
-`ifndef FETCH_WIDTH
-    `define FETCH_WIDTH 1
-`endif
-
-`ifndef CDB_WIDTH
-    `define CDB_WIDTH 4
-`endif
-
-`ifndef DISPATCH_WIDTH
-    `define DISPATCH_WIDTH 1
-`endif
-
-`ifndef COMMIT_WIDTH
-    `define COMMIT_WIDTH 1
-`endif
-
-`ifndef WB_WIDTH
-    `define WB_WIDTH 4
-`endif
-
-`ifndef ALU_COUNT
-    `define ALU_COUNT 1
-`endif
-
-`ifndef MUL_COUNT
-    `define MUL_COUNT 1
-`endif
-
-`ifndef LOAD_COUNT
-    `define LOAD_COUNT 1
-`endif
-
-`ifndef BR_COUNT
-    `define BR_COUNT 1
-`endif
-
-`ifndef FU_NUM
-  `define FU_NUM          4       // total number of functional unit types
-`endif
-
-`ifndef OPCODE_N
-  `define OPCODE_N        8       // total number of opcodes
-`endif
-
-`ifndef RS_DEPTH
-    `define RS_DEPTH 64
-`endif
-
-`ifndef ROB_DEPTH
-  `define ROB_DEPTH       64      // reorder buffer entries
-`endif
-
-`ifndef PHYS_REGS
-  `define PHYS_REGS       128     // physical register file size
-`endif
-
-`ifndef ARCH_REGS
-  `define ARCH_REGS       64      // architectural registers (x0–x31)
-`endif
-
-// sizes
-`define ROB_SZ xx
-`define RS_SZ xx
-`define PHYS_REG_SZ_P6 32
-`define PHYS_REG_SZ_R10K (32 + `ROB_SZ)
-
-// worry about these later
-`define BRANCH_PRED_SZ xx
-`define LSQ_SZ xx
-
-// functional units (you should decide if you want more or fewer types of FUs)
-`define NUM_FU_ALU xx
-`define NUM_FU_MULT xx
-`define NUM_FU_LOAD xx
-`define NUM_FU_STORE xx
+`define CDB_SZ `N
+`define XLEN 32
+`define OPCODE_N 7
+`define FU_ALU 1
+`define FU_MUL 1
+`define FU_LOAD 1
+`define FU_BRANCH 1
+`define ISSUE_WIDTH 1
+`define READ_PORTS 8
+`define INST_W 16
+`define ADDR_WIDTH 32
+`define FETCH_WIDTH 1
+`define CDB_WIDTH 4
+`define DISPATCH_WIDTH 1
+`define COMMIT_WIDTH 1
+`define WB_WIDTH 4
+`define ALU_COUNT 1
+`define MUL_COUNT 1
+`define LOAD_COUNT 1
+`define BR_COUNT 1
+`define FU_NUM 4
+`define RS_DEPTH 32
+`define ROB_DEPTH 64
+`define PHYS_REGS 64
+`define ARCH_REGS 32
 
 // number of mult stages (2, 4) (you likely don't need 8)
 `define MULT_STAGES 4
@@ -348,6 +284,17 @@ typedef enum logic [2:0] {
     M_MULHU
 } MULT_FUNC;
 
+// typedef enum logic [2:0] {
+//     M_MUL     = 3'b000,
+//     M_MULH    = 3'b001,
+//     M_MULHSU  = 3'b010,
+//     M_MULHU   = 3'b011,
+//     M_DIV     = 3'b100,
+//     M_DIVU    = 3'b101,
+//     M_REM     = 3'b110,
+//     M_REMU    = 3'b111
+// } MULT_FUNC3;
+
 ////////////////////////////////
 // ---- Datapath Packets ---- //
 ////////////////////////////////
@@ -455,6 +402,7 @@ typedef struct packed {
 } COMMIT_PACKET;
 
 
+
 typedef struct packed {
     INST inst; //INST.i.imm
     ADDR PC;
@@ -547,4 +495,19 @@ typedef struct packed {
     logic     commited; 
 } sq_entry_t; // marked by ROB commited
 
+typedef struct packed {
+    logic                          valid;    
+    fu_type_e                      fu_type;       // functional unit type
+    logic [3:0]                    opcode;        // operation code
+    logic [$clog2(`PHYS_REGS)-1:0] dest_tag;      // destination physical reg tag
+    logic [`XLEN-1:0]               src1_mux;
+    logic [`XLEN-1:0]               src2_mux;
+    logic [`XLEN-1:0]               src1_val;      // actual operand value 1
+    logic [`XLEN-1:0]               src2_val;      // actual operand value 2
+    logic                           src2_valid;      // if src2_valid = 1 用rs2 ;  if src2_valid = 0 用imm
+    logic [`XLEN-1:0]               imm;
+    logic [$clog2(`ROB_DEPTH)-1:0] rob_idx;       // reorder buffer index
+    DISP_PACKET                    disp_packet; //decoder_o 
+} issue_packet_t;
 `endif // __SYS_DEFS_SVH__
+
