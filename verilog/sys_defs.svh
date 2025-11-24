@@ -473,6 +473,28 @@ typedef struct packed {
     logic                         valid; // 1 = physical register holds valid data
 } map_entry_t;
 
+
+typedef struct packed {
+    logic     valid;
+    ADDR      addr;
+    MEM_SIZE  size;
+    ROB_IDX   rob_idx;
+    logic     data_valid;
+    MEM_BLOCK data;
+    logic     issued;  //whether request was sent to dcache
+} lq_entry_t;
+
+
+typedef struct packed {
+    logic     valid;
+    ADDR      addr;
+    MEM_SIZE  size;
+    ROB_IDX   rob_idx;
+    logic     data_valid;
+    MEM_BLOCK data;
+    logic     commited; 
+} sq_entry_t; // marked by ROB commited
+
 typedef struct packed {
     logic                          valid;    
     fu_type_e                      fu_type;       // functional unit type
