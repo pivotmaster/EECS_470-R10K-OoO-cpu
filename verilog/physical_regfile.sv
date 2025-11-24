@@ -51,7 +51,7 @@ end
             regfile <= '0;
         end else begin
             for (int w = 0; w < WRITE_PORTS; w++) begin
-                if (wr_en[w])
+                if (wr_en[w] && waddr[w]!=0)
                     regfile[waddr[w]] <= wdata[w];
             end
         end

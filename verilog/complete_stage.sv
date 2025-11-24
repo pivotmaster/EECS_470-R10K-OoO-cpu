@@ -27,22 +27,11 @@ module complete_stage #(
     output logic [WB_WIDTH-1:0][$clog2(ROB_DEPTH)-1:0] wb_rob_idx_o,
     output logic [WB_WIDTH-1:0]                    wb_exception_o,
     output logic [WB_WIDTH-1:0]                    wb_mispred_o,
-
-    //### 11/7 add sychenn ###//
-    output  logic [XLEN-1:0]          wb_value_o,
+    output logic [WB_WIDTH-1:0][XLEN-1:0]          wb_value_o,
 
     // cdb
     output cdb_entry_t [CDB_WIDTH-1:0]             cdb_o
 );
-
-    //### 11/7 add sychenn ###//
-    always_comb begin : blockName
-        for (int i=0; i < WB_WIDTH; i ++) begin
-            if (fu_valid_i[i]) begin
-                wb_value_o = fu_value_i[i];
-            end
-        end
-    end
 
     always_comb begin
         prf_wr_en_o   = '0;
@@ -52,6 +41,7 @@ module complete_stage #(
         wb_rob_idx_o  = '0;
         wb_exception_o = '0;
         wb_mispred_o   = '0;
+        wb_value_o    = '0;
         cdb_o          = '0;
 
         for (int i = 0; i < WB_WIDTH; i++) begin
@@ -64,13 +54,12 @@ module complete_stage #(
                 wb_rob_idx_o[i]   = fu_rob_idx_i[i];
                 wb_exception_o[i] = fu_exception_i[i];
                 wb_mispred_o[i]   = fu_mispred_i[i];
+                wb_value_o[i]   = fu_value_i[i]; // 11/21 sychenn
 
                 cdb_o[i].valid     = 1'b1;
                 cdb_o[i].dest_arch = '0;
                 cdb_o[i].phys_tag  = fu_dest_prf_i[i];
-                cdb_o[i].value     = fu_value_i[i];
-
-                
+                cdb_o[i].value     = fu_value_i[i];          
             end
             // $display("complete stage i, out, in = %0d, %0d, %0d", i, cdb_o[i].value, fu_value_i[i]);
         end

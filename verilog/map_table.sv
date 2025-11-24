@@ -174,7 +174,11 @@ module map_table#(
                 end
             end else begin
                 for(int i =0 ; i < DISPATCH_WIDTH ; i++)begin
-                        if(disp_valid_i[i])begin
+                    if(disp_valid_i[i])begin
+                        //### 11/21 r0 should always be zero ###//
+                        if (disp_arch_i[i] == `ZERO_REG) begin
+                            $display("disp_arch_i = %d is zero reg", disp_arch_i[i]);
+                        end else begin
                             $display("disp_arch_i = %d | old_phys = %d | disp_old_phys_o = %d ", disp_arch_i[i],table_reg[disp_arch_i[i]].phys,disp_old_phys_o[i] );
                             table_reg[disp_arch_i[i]].phys <= disp_new_phys_i[i];
                             table_reg[disp_arch_i[i]].valid <= 1'b0; 
@@ -182,49 +186,50 @@ module map_table#(
                     end
                 end
             end
+        end
 
-            // ===================================================
-            //  Writeback(aka complete stage): any WB that writes a physical tag should mark 
-            //  every architectural mapping that references that physical tag as valid.
-            // ===================================================
-            for (int i = 0 ; i < WB_WIDTH; i ++)begin
-                if(wb_valid_i[i])begin
-                    // table_reg[wb_phys_i[i]].valid <= 1'b1;
-                    for(int j = 0 ; j < ARCH_REGS ; j++)begin
-                        //###11/15 sychenn prevent wb and dispatch write to the same reg at the same cycle###//
-                        for(int k =0 ; k < DISPATCH_WIDTH ; k++)begin
-                            if ((table_reg[j].phys == wb_phys_i[i]) && (disp_arch_i[k] != j))begin 
-                                table_reg[j].valid <= 1'b1;
-                            end
+        // ===================================================
+        //  Writeback(aka complete stage): any WB that writes a physical tag should mark 
+        //  every architectural mapping that references that physical tag as valid.
+        // ===================================================
+        for (int i = 0 ; i < WB_WIDTH; i ++)begin
+            if(wb_valid_i[i])begin
+                // table_reg[wb_phys_i[i]].valid <= 1'b1;
+                for(int j = 0 ; j < ARCH_REGS ; j++)begin
+                    //###11/15 sychenn prevent wb and dispatch write to the same reg at the same cycle###//
+                    for(int k =0 ; k < DISPATCH_WIDTH ; k++)begin
+                        if ((table_reg[j].phys == wb_phys_i[i]) && (disp_arch_i[k] != j))begin 
+                            table_reg[j].valid <= 1'b1;
                         end
                     end
                 end
             end
-
-            // ===================================================
-            // Snapshot restore takes highest priority:
-            // If restore asserted, overwrite the table with the provided snapshot.
-            // We also mark valid = 1 for restored (AMT state is committed).
-            // ===================================================
-
-            // if(snapshot_restore_valid_i) begin
-            //     for(int i =0; i < ARCH_REGS ; i++)begin
-            //         table_reg[i].phys <= snapshot_data_i[i];
-            //         table_reg[i].valid <= 1'b1;
-            //     end
-            // end
-
-            // // ===================================================
-            // // 4) Optional flush: if flush asserted, reset to identity mapping.
-            // //    Depending on your microarchitecture you might instead restore from AMT.
-            // // ===================================================
-            // if(flush_i)begin
-            //     for(int i =0 ; i<ARCH_REGS ; i++)begin
-            //         table_reg[i].phys <= i;
-            //         table_reg[i].valid <= 1'b1;
-            //     end
-            // end
         end
+
+        // ===================================================
+        // Snapshot restore takes highest priority:
+        // If restore asserted, overwrite the table with the provided snapshot.
+        // We also mark valid = 1 for restored (AMT state is committed).
+        // ===================================================
+
+        // if(snapshot_restore_valid_i) begin
+        //     for(int i =0; i < ARCH_REGS ; i++)begin
+        //         table_reg[i].phys <= snapshot_data_i[i];
+        //         table_reg[i].valid <= 1'b1;
+        //     end
+        // end
+
+        // // ===================================================
+        // // 4) Optional flush: if flush asserted, reset to identity mapping.
+        // //    Depending on your microarchitecture you might instead restore from AMT.
+        // // ===================================================
+        // if(flush_i)begin
+        //     for(int i =0 ; i<ARCH_REGS ; i++)begin
+        //         table_reg[i].phys <= i;
+        //         table_reg[i].valid <= 1'b1;
+        //     end
+        // end
+    end
 
 
     // =======================================================
@@ -247,14 +252,14 @@ module map_table#(
         end
     endgenerate
 
-    always_ff @(posedge clock) begin
-        if (!reset) begin
-            $display("MAP_TABLE: snapshot_restore_i=%b | is_branch_i=%b valid =%b ",snapshot_restore_valid_i,is_branch_i,checkpoint_valid_o);
-            for (int i = 0 ; i < ARCH_REGS ; i++)begin
-                $display("table_reg[%0d] value = %d (%d)| checkpoint[%0d] value = %d (%d)| snapshot_data_i[%0d] value = %d (%d)", i, table_reg[i].phys,table_reg[i].valid, i, snapshot_data_o[i].phys,snapshot_data_o[i].valid, i, snapshot_data_i[i].phys,snapshot_data_i[i].valid);
-            end
-        end
-    end
+    // always_ff @(posedge clock) begin
+    //     if (!reset) begin
+    //         $display("MAP_TABLE: snapshot_restore_i=%b | is_branch_i=%b valid =%b ",snapshot_restore_valid_i,is_branch_i,checkpoint_valid_o);
+    //         for (int i = 0 ; i < ARCH_REGS ; i++)begin
+    //             $display("table_reg[%0d] value = %d (%d)| checkpoint[%0d] value = %d (%d)| snapshot_data_i[%0d] value = %d (%d)", i, table_reg[i].phys,table_reg[i].valid, i, snapshot_data_o[i].phys,snapshot_data_o[i].valid, i, snapshot_data_i[i].phys,snapshot_data_i[i].valid);
+    //         end
+    //     end
+    // end
     // =======================================================
     // Snapshot output: provide current mapping (for ROB/CPU to save)
     // Drive it continuously from table_reg; CPU will latch on checkpoint_valid_o
