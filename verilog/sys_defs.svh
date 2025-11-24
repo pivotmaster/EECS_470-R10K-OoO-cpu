@@ -524,4 +524,27 @@ typedef struct packed {
     logic [$clog2(`PHYS_REGS)-1:0] phys;  // physical register tag
     logic                         valid; // 1 = physical register holds valid data
 } map_entry_t;
+
+
+typedef struct packed {
+    logic     valid;
+    ADDR      addr;
+    MEM_SIZE  size;
+    ROB_IDX   rob_idx;
+    logic     data_valid;
+    MEM_BLOCK data;
+    logic     issued;  //whether request was sent to dcache
+} lq_entry_t;
+
+
+typedef struct packed {
+    logic     valid;
+    ADDR      addr;
+    MEM_SIZE  size;
+    ROB_IDX   rob_idx;
+    logic     data_valid;
+    MEM_BLOCK data;
+    logic     commited; 
+} sq_entry_t; // marked by ROB commited
+
 `endif // __SYS_DEFS_SVH__
