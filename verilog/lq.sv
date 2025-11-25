@@ -116,7 +116,7 @@ module lq #(
         dc_req_valid = 1'b0;
         dc_req_addr  = '0;
         dc_req_size  = '0;
-
+        $display("[DEBUG-ALWAYS LOAD QUEUE] Count=%0d, Tail=%0d, Head=%0d", count, tail, head);
         // Only issue request if:
         // 1. We found a candidate (found_unissued)
         // 2. SQ is NOT saying "Wait, I have data pending" (sq_fwd_pending)
@@ -186,12 +186,16 @@ module lq #(
                 // If we queried SQ and it says "Hit!", take the data directly
                 if(found_unissued && sq_forward_valid) begin
                     // 直接寫入剛剛發起查詢的那個 Index (query_idx)
+                    $display("sq_forwarding");
                     lq[query_idx].data <= sq_forward_data;
                     lq[query_idx].data_valid <= 1'b1;
                     // 不需要 set issued, 因為資料已經拿到了
                     // Trigger Writeback immediately (Optional, or wait for next cycle logic)
                     // 為了簡化，我們讓它在下個 cycle 透過一般 Writeback 邏輯處理，
                     // 或者在這裡直接觸發 wb_valid 也可以。
+                    wb_valid   <= 1'b1;
+                    wb_rob_idx <= lq[query_idx].rob_idx;
+                    wb_data    <= sq_forward_data;
                 end
 
                 // ------------------------------------
@@ -218,6 +222,11 @@ module lq #(
                     // end
                     lq[dc_load_tag].data       <= dc_load_data;
                     lq[dc_load_tag].data_valid <= 1'b1;
+
+                    // modify by zhengge in 11/25 TODO
+                    wb_valid   <= 1'b1;
+                    wb_rob_idx <= lq[dc_load_tag].rob_idx; // 注意：要確認 tag 對應的 rob_idx 正確
+                    wb_data    <= dc_load_data;
                 end
 
                 // ------------------------------------
@@ -238,6 +247,7 @@ module lq #(
                 // ------------------------------------
                 // 6. Commit Logic (Free Entry)
                 // ------------------------------------
+                $display("[DEBUG-ALWAYS LOAD QUEUE] empty = %0b", empty);
                 if(!empty) begin
                      if(lq[head].valid && rob_commit_valid && (rob_commit_valid_idx == lq[head].rob_idx)) begin
                         // 只有在 Commit 的時候才真正釋放 Entry
@@ -247,11 +257,12 @@ module lq #(
                         count <= count - 1'b1;
                         
                         // 在 Commit 時送出 Writeback (配合你的 Testbench 預期)
-                        if (lq[head].data_valid) begin
-                             wb_valid <= 1'b1;
-                             wb_rob_idx <= lq[head].rob_idx;
-                             wb_data <= lq[head].data;
-                        end
+                        $display("[DEBUG-ALWAYS LOAD QUEUE] lq[head].valid = %0b", lq[head].valid);
+                        // if (lq[head].data_valid) begin
+                        //     wb_valid <= 1'b1;
+                        //     //  wb_rob_idx <= lq[head].rob_idx;
+                        //     //  wb_data <= lq[head].data;
+                        // end
                     end
                 end
 
