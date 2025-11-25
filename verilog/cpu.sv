@@ -358,6 +358,7 @@ module cpu #(
     logic has_branch_in_pipline; // register (Store the branch info)
     logic branch_stall, branch_stall_reg, branch_stall_next;   // branch_stall_next is to let stall at the same cycle
     logic branch_resolve;
+    logic stall_dispatch;
 
     always_ff @(posedge clock) begin
         if (reset) begin
@@ -379,6 +380,7 @@ module cpu #(
     assign branch_stall = branch_stall_reg || branch_stall_next;
     // assign branch_stall = 0;
     assign branch_resolve = wb_valid[`FU_NUM - `FU_BRANCH]; // no matter it is mispredict or not
+    assign stall_dispatch = branch_stall || stall;
 
 
     always_ff @(posedge clock) begin
@@ -501,7 +503,7 @@ module cpu #(
         .if_flush (if_flush),  
         .take_branch(take_branch),   
 
-        .disp_n(disp_n),  
+        .disp_n(2),  
 
         .pred_valid_i(pred_valid_i),     
         .pred_lane_i(pred_lane_i),      
@@ -544,7 +546,7 @@ module cpu #(
     // assign if_id_enable = 1'b1;//###
 
     always_ff @(posedge clock) begin
-        if (reset) begin
+        if (reset || stall_dispatch) begin
             for(int i=0;i<`FETCH_WIDTH;i++) begin
                 if_id_reg[i].inst  <= `NOP;
                 if_id_reg[i].valid <= `FALSE; //close this valid
@@ -638,7 +640,7 @@ module cpu #(
         .disp_rd_new_prf_o(disp_rd_new_prf),
         .disp_rd_old_prf_o(disp_rd_old_prf),
 
-        .two_branch_stall(branch_stall),
+        .stall_dispatch(stall_dispatch),
 
         .disp_packet_o(disp_packet),
         .stall(stall),
