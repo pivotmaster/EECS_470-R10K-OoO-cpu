@@ -43,6 +43,7 @@ output logic [$clog2(PHYS_REGS+1)-1:0]                       free_count_o, // nu
     input  logic flush_i,
     input logic [`ROB_DEPTH-1:0] flush_free_regs_valid, /// unused
     input logic [(PHYS_REGS)-1:0]  flush_free_regs
+
 );
 
     // =========================================================
@@ -62,8 +63,6 @@ output logic [$clog2(PHYS_REGS+1)-1:0]                       free_count_o, // nu
 
     assign free_count_o = count;
     assign full_o = (count < DISPATCH_WIDTH);
-
-
 
     /////////////////////////////////////////////////////////////////////////
     // always_comb begin
@@ -154,23 +153,24 @@ output logic [$clog2(PHYS_REGS+1)-1:0]                       free_count_o, // nu
         end
 
         // Final next_count = 舊 count + N_free - N_alloc
-        next_count = count + N_free - N_alloc;
+        // next_count = count + N_free - N_alloc;
+        next_count = 2;
     end
 
-logic [$clog2(PHYS_REGS)-1:0] t, added;
-always_comb begin 
-    t = next_tail;
-    added = 0;
-    if (flush_i) begin
-        for (int k = 0; k <(PHYS_REGS); k++) begin
-            if (flush_free_regs[k]) begin
-                t = (t + 1) % (PHYS_REGS-ARCH_REGS);
-                added++;
+    //### sychenn 11/10 checkpoint ###
+    logic [$clog2(PHYS_REGS)-1:0] t, added;
+    always_comb begin 
+        t = next_tail;
+        added = 0;
+        if (flush_i) begin
+            for (int k = 0; k <(PHYS_REGS); k++) begin
+                if (flush_free_regs[k]) begin
+                    t = (t + 1) % (PHYS_REGS-ARCH_REGS);
+                    added++;
+                end
             end
-        end
-    end    
-end
-
+        end    
+    end
     ///////////////////////////////////////////////////////////////////////////////////////////
 
     // =========================================================
@@ -194,6 +194,7 @@ end
             head <= next_head;
             tail <= next_tail;
             count <= next_count;
+
 
             // =========================================================
             //  Release (Commit) — push freed physical regs back
@@ -229,13 +230,13 @@ end
     end 
     
 
-    always_ff @(negedge clock)begin 
-        $display("free_phys = %0d , free_valid = %d\n", free_phys_i , free_valid_i);
-        $display("head: %d , tail: %d\n" , head, tail);
-        for(int i =0 ; i< (PHYS_REGS-ARCH_REGS); i++)begin
-            $display("free_fifo[%d] = %0d | flush_free_regs_valid = %d", i, free_fifo[i], flush_free_regs_valid[i]);
-        end
-    end
+    // always_ff @(negedge clock)begin 
+    //     $display("free_phys = %0d , free_valid = %d\n", free_phys_i , free_valid_i);
+    //     $display("head: %d , tail: %d, count: %d" , head, tail, count);
+    //     for(int i =0 ; i< (PHYS_REGS-ARCH_REGS); i++)begin
+    //         $display("free_fifo[%d] = %0d ", i, free_fifo[i]);
+    //     end
+    // end
     
     // always_ff @(posedge clock) begin 
     //     $display("total_available = %0d", total_available);

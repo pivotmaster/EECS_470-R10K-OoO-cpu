@@ -1,4 +1,3 @@
-`timescale 1ns/1ps
 `include "def.svh"
 `include "ISA.svh"
 
@@ -10,7 +9,6 @@ module issue_logic #(
     parameter int unsigned PHYS_REGS       = 128,
     parameter int unsigned OPCODE_N        = 8,  //number of opcodes
     parameter int unsigned FU_NUM          = 6,  // how many different FU
-    parameter int unsigned MAX_FIFO_DEPTH  = 4,  // Remaining FIFO space for each FU
     parameter int unsigned XLEN            = 32,
     parameter int ALU_COUNT   = 1,
     parameter int MUL_COUNT   = 1,
@@ -134,16 +132,19 @@ module issue_logic #(
                 case (rs_entries_i[i].disp_packet.opb_select)
                     OPB_IS_RS2:   src2_valid =  1;
                     OPB_IS_I_IMM: src2_valid = 0;
-                    // OPB_IS_S_IMM: src2_mux = 0;
-                    // OPB_IS_B_IMM: src2_mux = 0;
+                    OPB_IS_S_IMM: src2_valid = 0;
+                    OPB_IS_B_IMM: src2_valid = 0;
                     OPB_IS_U_IMM: src2_valid = 0;
-                    //OPB_IS_J_IMM: src2_mux = 0;
+                    OPB_IS_J_IMM: src2_valid = 0;
                     default:      src2_valid = 1; // face feed
                 endcase
                  //$display("imm = %d", src2_mux);
                 issue_pkts[issue_slot].opcode =  rs_entries_i[i].disp_packet.alu_func; // 4 bit opcode for ALU(add/ sub...)
                 issue_pkts[issue_slot].src1_val  = src1_mux;
                 issue_pkts[issue_slot].src2_val  = src2_mux;
+                issue_pkts[issue_slot].src1_mux  = rs_entries_i[i].src1_tag;
+                issue_pkts[issue_slot].src2_mux  = rs_entries_i[i].src2_tag;
+
                 issue_pkts[issue_slot].imm       = src2_mux;
                 issue_pkts[issue_slot].src2_valid  = src2_valid;
 
@@ -267,13 +268,15 @@ end
     // ---- BRANCH requests ----
     $write("BR_REQ:\n");
     for (int i = 0; i < BR_COUNT; i++) begin
-        $write("  [%0d] valid=%0b | rob=%0d | dest=%0d | src1=%0d | src2=%0d\n",
+        $write("  [%0d] valid=%0b | rob=%0d | dest=%0d | src1=%0d | src2=%0d | src1_mux=%0d | src2_mux=%0d\n",
                i,
                br_req_o[i].valid,
                br_req_o[i].rob_idx,
                br_req_o[i].dest_tag,
                br_req_o[i].src1_val,
-               br_req_o[i].src2_val);
+               br_req_o[i].src2_val,
+               br_req_o[i].src1_mux,
+               br_req_o[i].src2_mux);
     end
 
     $write("=============================================================\n\n");

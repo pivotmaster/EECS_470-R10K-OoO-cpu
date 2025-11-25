@@ -74,8 +74,8 @@ module stage_if #(
         if(take_branch) begin
             PC_next = 32'h68;
         end else if (if_flush) begin
-            // PC_next = correct_pc_target_o;
-            PC_next = 32'h68;
+            PC_next = correct_pc_target_o;
+            // PC_next = 32'h68;
         end else if (if_valid && !stall_fetch) begin
             if (pred_valid_i && pred_taken_i) begin
                 PC_next = pred_target_i;
@@ -165,7 +165,7 @@ module stage_if #(
         end
     endgenerate
 
-    always_ff @(posedge clock or posedge reset) begin
+    always_ff @(posedge clock) begin
         if (!reset) begin
             $display("PC_next=%h | Icache_valid=%b | if_valid=%b", PC_next, Icache_valid[0], if_packet_o[0].valid );
         end

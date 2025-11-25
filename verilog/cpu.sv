@@ -121,6 +121,7 @@ module cpu #(
     logic free_full;      // true if no free regs left
     logic [$clog2(`PHYS_REGS+1)-1:0] free_count; // number of free regs
 
+
 // Arch map table
     logic [`ARCH_REGS-1:0][$clog2(`PHYS_REGS)-1:0] snapshot; // Full snapshot of current architectural-to-physical map
     logic restore_valid_i;  // Asserted when restoring the AMT from a saved snapshot
@@ -159,8 +160,8 @@ module cpu #(
 
      //### TODO: for debug only (sychenn 11/6) ###//
     logic flush_rob_debug;
-     logic [`ROB_DEPTH-1:0] flush_free_regs_valid;
-     logic [`PHYS_REGS] flush_free_regs;
+    logic [`ROB_DEPTH-1:0] flush_free_regs_valid;
+    logic [`PHYS_REGS-1:0] flush_free_regs;
 
 
 // RS
@@ -208,8 +209,8 @@ module cpu #(
         raddr[3] <= mul_req[0].src2_val; 
         raddr[4] <= load_req[0].src1_val; 
         raddr[5] <= load_req[0].src2_val; 
-        raddr[6] <= br_req[0].src1_val; 
-        raddr[7] <= br_req[0].src2_val;
+        raddr[6] <= br_req[0].src1_mux; 
+        raddr[7] <= br_req[0].src2_mux;
     end
 
 // S/EX
@@ -258,7 +259,7 @@ module cpu #(
     logic [`WB_WIDTH-1:0][$clog2(`ROB_DEPTH)-1:0] wb_rob_idx;
     logic [`WB_WIDTH-1:0] wb_exception;
     logic [`WB_WIDTH-1:0] wb_mispred;
-    logic [`XLEN-1:0]          fu_value_wb; //### sychenn 11/7 ###///
+    logic [`WB_WIDTH-1:0][`XLEN-1:0]          fu_value_wb; //### sychenn 11/7 ###///
     cdb_entry_t [`CDB_WIDTH-1:0] cdb_packets;
 
 // Retire-stage
@@ -345,6 +346,40 @@ module cpu #(
     logic [$clog2(`FETCH_WIDTH)-1:0] pred_lane_i;   // which instruction is branch    
     ADDR pred_target_i; // predicted target PC Addr
 
+// ---------- Branch Stall ---------- 
+    logic has_branch_in_pipline; // register (Store the branch info)
+    logic branch_stall, branch_stall_reg, branch_stall_next;   // branch_stall_next is to let stall at the same cycle
+    logic branch_resolve;
+
+    always_ff @(posedge clock or posedge reset) begin
+        if (reset) begin
+            has_branch_in_pipline <= '0;
+            branch_stall_reg <= '0; 
+        end else begin
+            if (branch_resolve) begin
+                has_branch_in_pipline <= '0;
+                branch_stall_reg <= '0;
+            end
+            if (|is_branch && !has_branch_in_pipline) begin
+                has_branch_in_pipline <= 1;
+            end else if (branch_stall_next) begin
+                branch_stall_reg <= 1;
+            end
+        end
+    end
+
+    assign branch_stall_next = (|is_branch && has_branch_in_pipline && !branch_resolve);
+    assign branch_stall = branch_stall_reg || branch_stall_next;
+    // assign branch_stall = 0;
+    assign branch_resolve = wb_valid[3]; // no matter it is mispredict or not
+
+
+    always_ff @(posedge clock or posedge reset) begin
+        if(!reset) begin
+            $display("|is_branch=%b | has_branch_in_pipline=%b | branch_stall=%b | branch_resolve=%b", |is_branch, has_branch_in_pipline, branch_stall, branch_resolve);
+            $display("branch_stall_reg=%b |branch_stall_next=%b",branch_stall_reg,branch_stall_next);
+        end
+    end
 
     // valid bit will cycle through the pipeline and come back from the wb stage
     // assign if_valid = ((!stall) && (if_packet[0].inst != 32'h10500073)) ? 1'b1 : 1'b0;//###
@@ -352,7 +387,7 @@ module cpu #(
         $display("inst : %h", if_packet[0].inst);
     end
     // assign if_valid = 1'b1;
-    assign if_valid = !stall;
+    assign if_valid = !stall && !branch_stall;
     //###
     logic [16:0] cycle;
     always @(posedge clock) begin
@@ -363,6 +398,7 @@ module cpu #(
     end
     // assign if_valid = (cycle < 45) ? 1'b1 : 1'b0; //###
     // assign if_valid = 1'b1;
+    assign correct_pc_target_o = fu_value_reg[3];
     assign correct_predict = (wb_valid[3] & !wb_mispred[3]); //###TODO: CORRECT PREDICT 
     assign if_flush = (wb_valid[3] & wb_mispred[3]); //### open flush
     // assign take_branch = wb_valid[3] & wb_mispred[3];
@@ -380,7 +416,7 @@ module cpu #(
             cycle_count <= 0;
         end else begin
             if (if_flush) begin
-                $display("if_flush=%b | wb_valid=%b | wb_mispred=%b | wb_rob_idx=%d", if_flush, wb_valid, wb_mispred, wb_rob_idx[3]);
+                $display("cycle[%d]| if_flush=%b | wb_valid=%b | wb_mispred=%b | wb_rob_idx=%d", cycle_count, if_flush, wb_valid, wb_mispred, wb_rob_idx[3]);
             end else begin
             cycle_count <= cycle_count + 1;
             end
@@ -390,13 +426,23 @@ module cpu #(
     // assign if_valid = 1'b1;
     // assign if_flush = (wb_valid[3] & wb_mispred[3]); //###
     // assign take_branch = wb_valid[3] & wb_mispred[3];
-    assign take_branch = 1'b0;
-    assign if_flush = 1'b0;
+
+    // assign take_branch = 1'b0;
+    // assign if_flush = 1'b0;
     // always @(posedge clock) begin
     //     $display("CPU. take_br, wb_valid, wb_mispred=%b %b %b", take_branch, wb_valid, wb_mispred);
     // end
-    assign pred_taken_i = 1'b0; //###
-    assign pred_valid_i = 1'b0; //###
+    // assign pred_taken_i = 1'b0; //###
+    // assign pred_valid_i = 1'b0; //###
+
+    //assign take_branch = 1'b0;
+    //assign if_flush = 1'b0;
+    // always @(posedge clock) begin
+    //     $display("CPU. take_br, wb_valid, wb_mispred=%b %b %b", take_branch, wb_valid, wb_mispred);
+    // end
+    //assign pred_taken_i = 1'b0; //###
+    //assign pred_valid_i = 1'b0; //###
+
 
     //////////////////////////////////////////////////
     //                                              //
@@ -433,7 +479,10 @@ module cpu #(
     //////////////////////////////////////////////////
 
 
-    stage_if stage_if_0(
+    stage_if #(
+        .FETCH_WIDTH (`FETCH_WIDTH),
+        .ADDR_WIDTH  (`ADDR_WIDTH)
+    )stage_if_0(
         .clock (clock),
         .reset (reset),
 
@@ -479,14 +528,14 @@ module cpu #(
     //                                              //
     //////////////////////////////////////////////////
 
-    assign if_id_enable = !stall;
+    assign if_id_enable = !stall && !branch_stall;
     // assign if_id_enable = 1'b1;//###
 
     always_ff @(posedge clock) begin
         if (reset) begin
             for(int i=0;i<`FETCH_WIDTH;i++) begin
                 if_id_reg[i].inst  <= `NOP;
-                if_id_reg[i].valid <= `FALSE;
+                if_id_reg[i].valid <= `FALSE; //close this valid
                 if_id_reg[i].NPC   <= 0;
                 if_id_reg[i].PC    <= 0;
             end
@@ -521,7 +570,14 @@ module cpu #(
     assign disp_rob_space = (free_rob_slots > `DISPATCH_WIDTH) ? `DISPATCH_WIDTH : free_rob_slots[`DISPATCH_WIDTH-1:0]; 
     assign disp_free_space = (free_count > `DISPATCH_WIDTH) ? `DISPATCH_WIDTH : free_count[`DISPATCH_WIDTH-1:0];
     // assign disp_free_space = 1'b1; //###
-    dispatch_stage dispatch_stage_0(
+    dispatch_stage  #(
+        .FETCH_WIDTH(`FETCH_WIDTH),
+        .DISPATCH_WIDTH(`DISPATCH_WIDTH),
+        .PHYS_REGS(`PHYS_REGS),
+        .ARCH_REGS(`ARCH_REGS),
+        .DEPTH(`ROB_DEPTH),
+        .ADDR_WIDTH(`ADDR_WIDTH)
+    )dispatch_stage_0(
         .clock (clock),
         .reset (reset),
 
@@ -570,6 +626,8 @@ module cpu #(
         .disp_rd_new_prf_o(disp_rd_new_prf),
         .disp_rd_old_prf_o(disp_rd_old_prf),
 
+        .two_branch_stall(branch_stall),
+
         .disp_packet_o(disp_packet),
         .stall(stall)
     );
@@ -580,7 +638,16 @@ module cpu #(
     //                                              //
     //////////////////////////////////////////////////
 
-    rob rob_0(
+    rob #(
+        .DEPTH(`ROB_DEPTH),
+        .INST_W(`INST_W),
+        .DISPATCH_WIDTH(`DISPATCH_WIDTH),
+        .COMMIT_WIDTH(`COMMIT_WIDTH),
+        .WB_WIDTH(`WB_WIDTH),
+        .ARCH_REGS(`ARCH_REGS),
+        .PHYS_REGS(`PHYS_REGS),
+        .XLEN(`XLEN)
+    )rob_0(
         .clock(clock),
         .reset(reset),
 
@@ -631,7 +698,13 @@ module cpu #(
     //                                              //
     //////////////////////////////////////////////////
 
-    map_table map_table_0(
+    map_table #(
+        .ARCH_REGS(`ARCH_REGS),           // Number of architectural registers
+        .PHYS_REGS(`PHYS_REGS),          // Number of physical registers
+        .DISPATCH_WIDTH(`DISPATCH_WIDTH),       // Number of instructions dispatched per cycle
+        .WB_WIDTH(`WB_WIDTH),         // Number of writeback ports
+        .COMMIT_WIDTH(`COMMIT_WIDTH)         // Number of commit ports
+    )map_table_0(
         .clock(clock),
         .reset(reset),
 
@@ -661,7 +734,7 @@ module cpu #(
         .checkpoint_valid_o(checkpoint_valid)
     );
 
-    //### 11/10 sychenn ###// (for map table restore)
+ //### 11/10 sychenn ###// (for map table restore)
     always_ff @(posedge clock or posedge reset) begin : checkpoint
         if (reset) begin
             snapshot_reg       <= '{default:'{phys:'0, valid:'0}};
@@ -697,7 +770,12 @@ module cpu #(
     //                                              //
     //////////////////////////////////////////////////
 
-    free_list free_list_0(
+    free_list #(
+        .DISPATCH_WIDTH(`DISPATCH_WIDTH),
+        .COMMIT_WIDTH(`COMMIT_WIDTH),
+        .ARCH_REGS(`ARCH_REGS),
+        .PHYS_REGS(`PHYS_REGS)
+    ) free_list_0(
         .clock(clock),
         .reset(reset),
         //Inputs
@@ -717,6 +795,7 @@ module cpu #(
         .flush_free_regs_valid(flush_free_regs_valid),
         .flush_free_regs(flush_free_regs)
 
+
     );
 
     //////////////////////////////////////////////////
@@ -725,7 +804,13 @@ module cpu #(
     //                                              //
     //////////////////////////////////////////////////
 
-    pr pr_0(
+    pr #(
+        .PHYS_REGS(`PHYS_REGS),
+        .XLEN(`XLEN),
+        .READ_PORTS(`READ_PORTS),
+        .WRITE_PORTS(`FU_ALU + `FU_MUL + `FU_LOAD + `FU_BRANCH),
+        .BYPASS_EN(1'b1)
+    ) pr_0(
         .clock (clock),
         .reset (reset),
         //Inputs    
@@ -744,7 +829,11 @@ module cpu #(
     //                                              //
     //////////////////////////////////////////////////
 
-    arch_map_table arch_map_table_0(
+    arch_map_table #(
+        .ARCH_REGS(`ARCH_REGS),
+        .PHYS_REGS(`PHYS_REGS),
+        .COMMIT_WIDTH(`COMMIT_WIDTH)
+    ) arch_map_table_0(
         .clock (clock),
         .reset (reset),
 
@@ -766,7 +855,13 @@ module cpu #(
     //                                              //
     //////////////////////////////////////////////////
 
-    cdb cdb_0(
+    cdb #(
+        .CDB_WIDTH(`CDB_WIDTH),
+        .PHYS_REGS(`PHYS_REGS),
+        .ARCH_REGS(`ARCH_REGS),
+        .ROB_DEPTH(`ROB_DEPTH),
+        .XLEN(`XLEN)
+    )cdb_0(
         .clock (clock),
         .reset (reset),
 
@@ -791,7 +886,15 @@ module cpu #(
     //                                              //
     //////////////////////////////////////////////////
 
-    RS rs_0(
+    RS #(
+        .RS_DEPTH(`RS_DEPTH), //RS entry numbers
+        .DISPATCH_WIDTH(`DISPATCH_WIDTH),
+        .CDB_WIDTH(`CDB_WIDTH),
+        .PHYS_REGS(`PHYS_REGS),
+        .OPCODE_N(8),  //number of opcodes
+        .FU_NUM(`FU_ALU + `FU_MUL + `FU_LOAD + `FU_BRANCH),  // how many different FU
+        .XLEN(`XLEN)
+    )rs_0(
         .clock (clock),
         .reset (reset),
         // .flush('0),
@@ -826,7 +929,7 @@ module cpu #(
     //                                              //
     //////////////////////////////////////////////////
 
-    assign id_s_enable = !stall;
+    assign id_s_enable = !stall && !branch_stall;
     // assign id_s_enable = 1'b1;
 
     always_ff @(posedge clock) begin
@@ -856,7 +959,20 @@ module cpu #(
     //                Issue-Stage                   //
     //                                              //
     //////////////////////////////////////////////////
-    issue_logic issue_0(
+    issue_logic #(
+        .RS_DEPTH(`RS_DEPTH), //RS entry numbers
+        .DISPATCH_WIDTH(`DISPATCH_WIDTH),
+        .ISSUE_WIDTH(`ISSUE_WIDTH),
+        .CDB_WIDTH(`CDB_WIDTH),
+        .PHYS_REGS(`PHYS_REGS),
+        .OPCODE_N(8),  //number of opcodes
+        .FU_NUM(`FU_ALU + `FU_MUL + `FU_LOAD + `FU_BRANCH),  // how many different FU
+        .XLEN(`XLEN),
+        .ALU_COUNT(`FU_ALU),
+        .MUL_COUNT(`FU_MUL),
+        .LOAD_COUNT(`FU_LOAD),
+        .BR_COUNT(`FU_BRANCH)
+    )issue_0(
         .clock(clock),
         .reset(reset),
         // Inputs
@@ -982,6 +1098,8 @@ module cpu #(
             br_req_reg[0].dest_tag <= br_req[0].dest_tag;
             br_req_reg[0].src2_valid <= br_req[0].src2_valid;
             br_req_reg[0].disp_packet <= br_req[0].disp_packet;
+            br_req_reg[0].src1_val <= br_req[0].src1_val;
+            br_req_reg[0].src2_val <= br_req[0].src2_val;
         end
     end
 
@@ -1010,11 +1128,23 @@ module cpu #(
     assign mul_req_reg[0].src2_val = mul_req_reg_org[0].src2_valid ? rdata[3] : mul_req_reg_org[0].src2_val;
     assign load_req_reg[0].src1_val = rdata[4];
     assign load_req_reg[0].src2_val = load_req_reg_org[0].src2_valid ? rdata[5] : load_req_reg_org[0].src2_val;
-    assign br_req_reg[0].src1_val = rdata[6];
-    assign br_req_reg[0].src2_val = br_req_reg_org[0].src2_valid ? rdata[7] : br_req_reg_org[0].src2_val;
+    assign br_req_reg[0].src1_mux = rdata[6];
+    assign br_req_reg[0].src2_mux = br_req_reg_org[0].src2_valid ? rdata[7] : br_req_reg_org[0].src2_mux;
+
     
-    fu fu_0(
+    fu #(
+        .XLEN(`XLEN),
+        .PHYS_REGS(`PHYS_REGS),
+        .ROB_DEPTH(`ROB_DEPTH),
+        .ALU_COUNT(`FU_ALU),
+        .MUL_COUNT(`FU_MUL),
+        .LOAD_COUNT(`FU_LOAD),
+        .BR_COUNT(`FU_BRANCH)
+    ) fu_0(
         //Inputs
+        .clock(clock),
+        .reset(reset),
+        
         .alu_req(alu_req_reg),
         .mul_req(mul_req_reg),
         .load_req(load_req_reg),
@@ -1087,7 +1217,13 @@ module cpu #(
     //                                              //
     //////////////////////////////////////////////////
 
-    complete_stage complete_stage0(
+    complete_stage #(
+        .XLEN(`XLEN),
+        .PHYS_REGS(`PHYS_REGS),
+        .ROB_DEPTH(`ROB_DEPTH),
+        .WB_WIDTH(`WB_WIDTH),
+        .CDB_WIDTH(`CDB_WIDTH)
+    ) complete_stage0(
         .clock(clock),
         .reset(reset),
 
@@ -1124,7 +1260,11 @@ module cpu #(
     //                                              //
     //////////////////////////////////////////////////
 
-    retire_stage retire_stage_0(
+    retire_stage #(
+        .ARCH_REGS(`ARCH_REGS),
+        .PHYS_REGS(`PHYS_REGS),
+        .COMMIT_WIDTH(`COMMIT_WIDTH)
+    ) retire_stage_0(
         .clock(clock),
         .reset(reset),
 
@@ -1182,6 +1322,7 @@ always_ff @(posedge clock) begin
     if (!reset) begin
         integer i;
         for (i = 0; i < `N; i++) begin
+            if(committed_insts[i].valid) begin
             $display("Commit[%0d]: valid=%b halt=%b illegal=%b reg=%0d data=%h NPC=%h",
                      i,
                      committed_insts[i].valid,
@@ -1190,6 +1331,7 @@ always_ff @(posedge clock) begin
                      committed_insts[i].reg_idx,
                      committed_insts[i].data,
                      committed_insts[i].NPC);
+        end
         end
         $display("-------------------\n");
     end
