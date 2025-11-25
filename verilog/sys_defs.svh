@@ -461,6 +461,9 @@ typedef struct packed {
     logic                         valid;
     logic [`XLEN-1:0]                  value;
     logic [$clog2(`PHYS_REGS)-1:0] dest_prf;
+    logic [$clog2(`PHYS_REGS)-1:0] sw_addr;
+    logic                          is_lw;
+    logic                          is_sw;
     logic [$clog2(`ROB_DEPTH)-1:0] rob_idx;
     logic                         exception;
     logic                         mispred;

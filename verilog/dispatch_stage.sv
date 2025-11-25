@@ -197,7 +197,7 @@ module dispatch_stage #(
                   //rs_entry
                   rs_packets_o[i].valid = 1;
                   //###11/10
-                  rs_packets_o[i].fu_type = (disp_packet_o[i].mult) ? 2'b01 : (disp_packet_o[i].rd_mem) ? 2'b10 : (disp_packet_o[i].cond_branch|disp_packet_o[i].uncond_branch) ? 2'b11 : 2'b00;
+                  rs_packets_o[i].fu_type = (disp_packet_o[i].mult) ? 2'b01 : (disp_packet_o[i].rd_mem | disp_packet_o[i].wr_mem) ? 2'b10 : (disp_packet_o[i].cond_branch|disp_packet_o[i].uncond_branch) ? 2'b11 : 2'b00;
                   rs_packets_o[i].rob_idx = disp_rob_idx_i[i];
 
                   rs_packets_o[i].dest_arch_reg = disp_packet_o[i].dest_reg_idx;

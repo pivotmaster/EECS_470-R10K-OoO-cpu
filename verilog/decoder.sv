@@ -26,7 +26,7 @@ module decoder (
 
     always_comb begin
         fu_type = (mult)             ? FU_MUL   :
-                (rd_mem)           ? FU_LOAD  :
+                (rd_mem | wr_mem)           ? FU_LOAD  :
                 (cond_branch | uncond_branch) ? FU_BRANCH :
                                                 FU_ALU;
     end
