@@ -65,7 +65,7 @@
 typedef logic [31:0] ADDR;
 typedef logic [31:0] DATA;
 typedef logic [4:0] REG_IDX;
-
+typedef logic [$clog2(`ROB_DEPTH)-1:0] ROB_IDX;
 // the zero register
 // In RISC-V, any read of this register returns zero and any writes are thrown away
 `define ZERO_REG 5'd0
@@ -472,6 +472,9 @@ typedef struct packed {
     logic [$clog2(`PHYS_REGS)-1:0] phys;  // physical register tag
     logic                         valid; // 1 = physical register holds valid data
 } map_entry_t;
+
+
+
 
 
 typedef struct packed {
