@@ -95,7 +95,7 @@ module dispatch_stage #(
     //output  logic                          btb_update_valid_o,
     //output  logic      [ADDR_WIDTH-1:0]    btb_update_pc_o,
     //output  logic      [ADDR_WIDTH-1:0]    btb_update_target_o,
-
+    input two_branch_stall, // from cpu 
     //packet
     output DISP_PACKET [DISPATCH_WIDTH-1:0] disp_packet_o,
     output logic stall
@@ -104,7 +104,8 @@ module dispatch_stage #(
     //### 11/10 sychenn ###// (for map table restore)
     always_comb begin
         for (int i = 0; i < DISPATCH_WIDTH; i++) begin
-            is_branch_o[i] = disp_rs_valid_o[i] && (rs_packets_o[i].fu_type == FU_BRANCH);
+          //### TODO: Fetch width need to be smaller then dispatch width ###//
+            is_branch_o[i] = if_packet_i[i] && (rs_packets_o[i].fu_type == FU_BRANCH);
         end
     end
 
@@ -175,6 +176,9 @@ module dispatch_stage #(
         disp_rd_arch_o = '0;
         disp_rd_new_prf_o = '0;
         disp_rd_old_prf_o = '0;
+        src1_arch_o = '0;
+        src2_arch_o = '0;
+        dest_arch_o = '0;
 
         for (int i = 0; i < DISPATCH_WIDTH; i++) begin
             if (if_packet_i[i].valid) begin //### Account for icache miss (valid = 0)
@@ -187,7 +191,7 @@ module dispatch_stage #(
 
               // To RS
               if(i < disp_n)begin
-                  disp_rs_valid_o[i] = 1;
+                  disp_rs_valid_o[i] = !two_branch_stall; //### 11/21
 
                   //rs_entry
                   rs_packets_o[i].valid = 1;
@@ -206,7 +210,7 @@ module dispatch_stage #(
                   rs_packets_o[i].disp_packet = disp_packet_o[i];
 
                   // To ROB
-                  disp_rob_valid_o[i] = 1;
+                  disp_rob_valid_o[i] = !two_branch_stall;
                   disp_rd_arch_o[i] = disp_packet_o[i].dest_reg_idx;
                   disp_rd_old_prf_o[i] = dest_reg_old_i[i]; // Told
                   disp_rd_new_prf_o[i] = new_reg_i[i];  //from free list
@@ -247,6 +251,7 @@ module dispatch_stage #(
   // =========================================================
   // DEBUG
   // =========================================================
+  `ifndef SYNTHESIS
   integer cycle_count;
   always_ff @(posedge clock) begin
     if (reset)
@@ -266,7 +271,7 @@ module dispatch_stage #(
       end
     end
   end
-
+`endif
 
 endmodule
 
