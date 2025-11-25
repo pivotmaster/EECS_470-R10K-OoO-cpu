@@ -57,6 +57,9 @@ module alu_fu #(
     resp_o.rob_idx   = req_i.rob_idx;
     resp_o.exception = 1'b0;
     resp_o.mispred   = 1'b0;
+    resp_o.is_lw     = 1'b0;
+    resp_o.is_sw     = 1'b0;
+    resp_o.sw_addr   = '0;
   end
 endmodule
 
@@ -143,13 +146,16 @@ module mul_fu #(
         resp_o.rob_idx   = req_i_list[`MULT_STAGES-1].rob_idx;
         resp_o.exception = 1'b0;
         resp_o.mispred   = 1'b0;
+        resp_o.is_lw     = 1'b0;
+        resp_o.is_sw     = 1'b0;
+        resp_o.sw_addr   = '0;
       end
     end
 
 endmodule  
 
 // ---------------- LOAD FU ----------------
-module load_fu #(
+module ls_fu #(
   parameter int XLEN = 32,
   parameter int PHYS_REGS = 128,
   parameter int ROB_DEPTH = 64
@@ -160,15 +166,35 @@ module load_fu #(
 );
   logic [XLEN-1:0] addr;
   assign addr = req_i.src1_val + {{(XLEN-12){req_i.imm[11]}}, req_i.imm[11:0]};
-
   assign ready_o = 1'b1;
+
   always_comb begin
+    resp_o = '0;
+
     resp_o.valid     = req_i.valid;
     resp_o.value     = addr;
-    resp_o.dest_prf  = req_i.dest_tag;
     resp_o.rob_idx   = req_i.rob_idx;
     resp_o.exception = 1'b0;
     resp_o.mispred   = 1'b0;
+
+    if (req_i.disp_packet.rd_mem) begin
+      resp_o.is_lw     = 1'b1;
+      resp_o.is_sw     = 1'b0;
+      resp_o.dest_prf  = req_i.dest_tag;
+      resp_o.sw_addr   = '0;
+
+    end else if (req_i.disp_packet.wr_mem) begin
+      resp_o.is_lw     = 1'b0;
+      resp_o.is_sw     = 1'b1;
+      resp_o.dest_prf  = '0;
+      resp_o.sw_addr   = req_i.src1_val;
+
+    end else begin
+      resp_o.is_lw     = 1'b0;
+      resp_o.is_sw     = 1'b0;
+      resp_o.dest_prf  = '0;
+      resp_o.sw_addr   = '0;
+    end
   end
 endmodule
 
@@ -220,6 +246,9 @@ module branch_fu #(
     resp_o.rob_idx   = req_i.rob_idx;
     resp_o.exception = 1'b1; // TODO: is branch
     resp_o.mispred   = take;
+    resp_o.is_lw     = 1'b0;
+    resp_o.is_sw     = 1'b0;
+    resp_o.sw_addr   = '0;
   end
 endmodule
 
@@ -292,7 +321,7 @@ module fu #(
     // ---------------- LOAD ----------------
     for (i = 0; i < LOAD_COUNT; i++) begin : GEN_LOAD
       localparam int IDX = ALU_COUNT + MUL_COUNT + i;
-      load_fu #(.XLEN(XLEN), .PHYS_REGS(PHYS_REGS), .ROB_DEPTH(ROB_DEPTH)) u_load (
+      ls_fu #(.XLEN(XLEN), .PHYS_REGS(PHYS_REGS), .ROB_DEPTH(ROB_DEPTH)) u_load (
         .req_i  (load_req[i]),
         .resp_o (fu_resp_bus[IDX]),
         .ready_o(load_ready_o[i])
