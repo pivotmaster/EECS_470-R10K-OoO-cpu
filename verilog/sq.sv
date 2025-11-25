@@ -53,7 +53,7 @@ module sq #(
     output logic   [$clog2(SQ_SIZE+1)-1:0] snapshot_count_o,
     input sq_entry_t                 snapshot_data_i[SQ_SIZE-1:0],
     input logic    [IDX_WIDTH-1 : 0] snapshot_head_i , snapshot_tail_i,
-    input logic   [$clog2(SQ_SIZE+1)-1:0] snapshot_count_i;
+    input logic   [$clog2(SQ_SIZE+1)-1:0] snapshot_count_i
 
 );
   // typedef struct packed {
@@ -152,16 +152,18 @@ module sq #(
           sq[i].rob_idx <= snapshot_data_i[i].rob_idx;
           sq[i].data_valid <= snapshot_data_i[i].data_valid;
           sq[i].data <= snapshot_data_i[i].data;
-          sq[i].issued <= snapshot_data_i[i].issued;
+          sq[i].commited <= snapshot_data_i[i].commited;
         end
       end
       else begin
         if (enq_valid && !full)begin
+          // $display("[RTL-SQ] Enqueue at tail=%0d, ROB=%0d, Addr=%h", tail, enq_rob_idx, enq_addr);
           sq[tail].valid <= 1'b1;
           sq[tail].addr <= enq_addr;
           sq[tail].size <= enq_size;
           sq[tail].data_valid <= 1'b0;
           sq[tail].commited <= 1'b0;
+          sq[tail].rob_idx <= enq_rob_idx;
           // tail <= tail + 1'b1;
           tail <= next_ptr(tail);
           count <= count + 1'b1; 
@@ -169,8 +171,11 @@ module sq #(
 
         // store data arrived(match by rob_idx)
         if (data_valid)begin
+          // $display("[RTL-SQ] Update Data Request for ROB=%0d, Data=%h", data_rob_idx, data);
           for(int i = 0 ; i < SQ_SIZE ; i++)begin // simple linear search
+            $display("   Checking idx=%0d: Valid=%b, ROB=%0d", i, sq[i].valid, sq[i].rob_idx);
             if(sq[i].valid && (sq[i].rob_idx == data_rob_idx))begin
+              // $display("[RTL-SQ]   -> MATCH FOUND at idx=%0d! Updating Data.", i);
               sq[i].data <= data;
               sq[i].data_valid <= 1'b1;
               break;
@@ -219,23 +224,29 @@ module sq #(
   ADDR found_addr;
 
   always_comb begin
+    int k;
+    int i;
+    int start;
     found = 1'b0;
     pending_found = 1'b0;
     found_data = '0;
     found_addr = '0;
-
+    $display("[DEBUG-ALWAYS] Count=%0d, Tail=%0d, Head=%0d", count, tail, head);
     if(count != 0)begin
       int checked = 0;
-
       // start at tail - 1 (most recent store) and go backwards up to count entries
-      int start  = (tail==0) ? (SQ_SIZE - 1) : (tail - 1);
+      start  = (tail==0) ? (SQ_SIZE - 1) : (tail - 1);
       // idx = tail - 1;
-      for(int k = 0 ; k < SQ_SIZE ; k++)begin
+      for(k = 0 ; k < SQ_SIZE ; k++)begin
         // int i = (idx - k) % SQ_SIZE;
-        int i = start - k;
+        i = start - k;
         if(i<0)i = i + SQ_SIZE;
+        // $display("[DEBUG-FWD] Checking indx = %0d, sq[%0d] = %0d , k=%0d , start = %0d" , i , i , sq[i].valid , k , start);
         if(sq[i].valid)begin
+          // $display("[DEBUG-FWD] Checking idx=%0d. SQ_Addr=%h, SQ_Size=%0d | Load_Addr=%h, Load_Size=%0d", 
+                  //  i, sq[i].addr, sq[i].size, load_addr, load_size);
           if(addr_overlap(sq[i].addr , sq[i].size , load_addr , load_size))begin
+            // $display("[RTL-SQ-FWD] Overlap at idx=%0d. DataValid=%b. Data=%h", i, sq[i].data_valid, sq[i].data);
             if(sq[i].data_valid)begin
               found = 1'b1;
               pending_found = 1'b0;
@@ -243,6 +254,7 @@ module sq #(
               found_addr = sq[i].addr;
               break;
             end else begin
+              // $display("[DEBUG-ALWAYS] Loop idx=%0d has Valid=0! (This is wrong)", i);
               pending_found = 1'b1;break;
             end
           end
