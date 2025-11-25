@@ -95,7 +95,7 @@ module dispatch_stage #(
     //output  logic                          btb_update_valid_o,
     //output  logic      [ADDR_WIDTH-1:0]    btb_update_pc_o,
     //output  logic      [ADDR_WIDTH-1:0]    btb_update_target_o,
-    input two_branch_stall, // from cpu 
+    input stall_dispatch, // from cpu 
     //packet
     output DISP_PACKET [DISPATCH_WIDTH-1:0] disp_packet_o,
     output logic stall,
@@ -111,7 +111,7 @@ module dispatch_stage #(
         end
     end
 
-    assign stall = (disp_n == '0);
+    assign stall = (disp_n < 2);
 
 
     always_comb begin
@@ -181,49 +181,77 @@ module dispatch_stage #(
         src2_arch_o = '0;
         dest_arch_o = '0;
 
-        for (int i = 0; i < DISPATCH_WIDTH; i++) begin
-            if (if_packet_i[i].valid) begin //### Account for icache miss (valid = 0)
-              // Dispatch -> Map Table
-              src1_arch_o[i] = if_packet_i[i].inst.r.rs1;
-              src2_arch_o[i]= if_packet_i[i].inst.r.rs2;
-              dest_arch_o[i] = disp_packet_o[i].dest_reg_idx;  // from decoder
-              rename_valid_o[i] = if_packet_i[i].valid & disp_rs_rd_wen_o[i] & (i < disp_n); // only if instruction is valid
-              alloc_req_o[i] = if_packet_i[i].valid & disp_rs_rd_wen_o[i] & (i < disp_n);
+        if (!stall_dispatch) begin
+          for (int i = 0; i < DISPATCH_WIDTH; i++) begin
+              if (if_packet_i[i].valid) begin //### Account for icache miss (valid = 0)
+                // Dispatch -> Map Table
+                src1_arch_o[i] = if_packet_i[i].inst.r.rs1;
+                src2_arch_o[i]= if_packet_i[i].inst.r.rs2;
+                dest_arch_o[i] = disp_packet_o[i].dest_reg_idx;  // from decoder
+                rename_valid_o[i] = if_packet_i[i].valid & disp_rs_rd_wen_o[i] & (i < disp_n); // only if instruction is valid
+                alloc_req_o[i] = if_packet_i[i].valid & disp_rs_rd_wen_o[i] & (i < disp_n);
 
-              // To RS
-              if(i < disp_n)begin
-                  disp_rs_valid_o[i] = !two_branch_stall; //### 11/21
+                // To RS
+                if(i < disp_n) begin
+                    disp_rs_valid_o[i] = 1; //### 11/21
 
-                  //rs_entry
-                  rs_packets_o[i].valid = 1;
-                  //###11/10
-                  rs_packets_o[i].fu_type = (disp_packet_o[i].mult) ? 2'b01 : (disp_packet_o[i].rd_mem | disp_packet_o[i].wr_mem) ? 2'b10 : (disp_packet_o[i].cond_branch|disp_packet_o[i].uncond_branch) ? 2'b11 : 2'b00;
-                  rs_packets_o[i].rob_idx = disp_rob_idx_i[i];
+                    //rs_entry
+                    rs_packets_o[i].valid = 1;
+                    //###11/10
+                    rs_packets_o[i].fu_type = (disp_packet_o[i].mult) ? 2'b01 : (disp_packet_o[i].rd_mem | disp_packet_o[i].wr_mem) ? 2'b10 : (disp_packet_o[i].cond_branch|disp_packet_o[i].uncond_branch) ? 2'b11 : 2'b00;
+                    rs_packets_o[i].rob_idx = disp_rob_idx_i[i];
 
-                  rs_packets_o[i].dest_arch_reg = disp_packet_o[i].dest_reg_idx;
+                    rs_packets_o[i].dest_arch_reg = disp_packet_o[i].dest_reg_idx;
 
-                  rs_packets_o[i].dest_tag = new_reg_i[i];//from free list
+                    rs_packets_o[i].dest_tag = new_reg_i[i];//from free list
 
-                  rs_packets_o[i].src1_tag = src1_phys_i[i];  // physical tag for rs1
-                  rs_packets_o[i].src2_tag = src2_phys_i[i];  // physical tag for rs2
-                  rs_packets_o[i].src1_ready = src1_ready_i[i]; // whether rs1 is ready (+)
-                  rs_packets_o[i].src2_ready = src2_ready_i[i];
-                  rs_packets_o[i].disp_packet = disp_packet_o[i];
+                    rs_packets_o[i].src1_tag = src1_phys_i[i];  // physical tag for rs1
+                    rs_packets_o[i].src2_tag = src2_phys_i[i];  // physical tag for rs2
+                    rs_packets_o[i].src1_ready = src1_ready_i[i]; // whether rs1 is ready (+)
+                    rs_packets_o[i].src2_ready = src2_ready_i[i];
+                    rs_packets_o[i].disp_packet = disp_packet_o[i];
 
-                  // To ROB
-                  disp_rob_valid_o[i] = !two_branch_stall;
-                  disp_rd_arch_o[i] = disp_packet_o[i].dest_reg_idx;
-                  disp_rd_old_prf_o[i] = dest_reg_old_i[i]; // Told
-                  disp_rd_new_prf_o[i] = new_reg_i[i];  //from free list
+                    // To ROB
+                    disp_rob_valid_o[i] = 1;
+                    disp_rd_arch_o[i] = disp_packet_o[i].dest_reg_idx;
+                    disp_rd_old_prf_o[i] = dest_reg_old_i[i]; // Told
+                    disp_rd_new_prf_o[i] = new_reg_i[i];  //from free list
 
-                  // To map table
-                  dest_new_prf[i] = new_reg_i[i];
-              end 
-            end
+                    // To map table
+                    dest_new_prf[i] = new_reg_i[i];
+                end 
+              end
+          end
+        end else begin
+          for (int i = 0; i < DISPATCH_WIDTH; i++) begin
+            src1_arch_o[i]     = src1_arch_o[i];
+            src2_arch_o[i]     = src2_arch_o[i];
+            dest_arch_o[i]     = dest_arch_o[i];
+            rename_valid_o[i]  = 0;   
+            alloc_req_o[i]     = 0;  
+
+            disp_rs_valid_o[i] = 0;
+            disp_rob_valid_o[i] = 0;
+
+            rs_packets_o[i].valid       = 0;
+            rs_packets_o[i].fu_type     = 2'b00;
+            rs_packets_o[i].rob_idx     = '0;
+            rs_packets_o[i].dest_arch_reg = '0;
+            rs_packets_o[i].dest_tag    = '0;
+            rs_packets_o[i].src1_tag    = '0;
+            rs_packets_o[i].src2_tag    = '0;
+            rs_packets_o[i].src1_ready  = 0;
+            rs_packets_o[i].src2_ready  = 0;
+            rs_packets_o[i].disp_packet = '0;
+
+            disp_rd_arch_o[i]     = disp_rd_arch_o[i];
+            disp_rd_old_prf_o[i]  = disp_rd_old_prf_o[i];
+            disp_rd_new_prf_o[i]  = disp_rd_new_prf_o[i];
+            dest_new_prf[i]       = dest_new_prf[i];
+          end
         end
 
-
-    end
+      end
 
 /*
   // =========================================================
