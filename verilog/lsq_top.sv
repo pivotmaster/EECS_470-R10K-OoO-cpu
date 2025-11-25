@@ -49,10 +49,12 @@ module lsq_top #(
     output MEM_COMMAND Dcache_command_0,   // MEM_LOAD / MEM_NONE
     output MEM_SIZE    Dcache_size_0,
     output MEM_BLOCK   Dcache_store_data_0, // 對 Load 來說無用，補 0
+    output [LQ_IDX_WIDTH-1:0] Dcache_req_tag,
     input  logic       Dcache_req_0_accept, // Bank Conflict 處理
     
     input  MEM_BLOCK   Dcache_data_out_0,   // Load Data Return
     input  logic       Dcache_valid_out_0,  // Load Data Valid
+    input [LQ_IDX_WIDTH-1:0] Dcache_load_tag,
 
     // --- Port 1: 用於 Store ---
     output ADDR        Dcache_addr_1,
@@ -185,6 +187,7 @@ module lsq_top #(
         .dc_req_cmd(sq_req_cmd),
         .dc_store_data(sq_req_data), // 修正名稱對應
         .dc_req_accept(sq_req_accept),
+        // .dc_req_tag()
 
         // Snapshot
         .is_branch_i(is_branch_i),
@@ -228,10 +231,12 @@ module lsq_top #(
         .dc_req_addr(lq_req_addr),
         .dc_req_size(lq_req_size),
         .dc_req_accept(lq_req_accept),
+        .dc_req_tag(lq_req_tag), // TODO
 
         // Input from D-Cache
         .dc_load_data(Dcache_data_out_0),   // 連接 Port 0 回傳
         .dc_load_valid(Dcache_valid_out_0), // 連接 Port 0 Valid
+        .dc_load_tag(Dcache_load_tag), //TODO
 
         // Writeback / Commit
         .rob_commit_valid(commit_valid),
@@ -268,7 +273,7 @@ module lsq_top #(
     assign Dcache_addr_0       = lq_req_addr;
     assign Dcache_size_0       = lq_req_size;
     assign Dcache_store_data_0 = '0; // Load 不寫入資料
-    
+    assign Dcache_req_tag      = lq_req_tag; //TODO
     // 將 Cache 的 Accept 回傳給 LQ
     assign lq_req_accept       = Dcache_req_0_accept;
 
