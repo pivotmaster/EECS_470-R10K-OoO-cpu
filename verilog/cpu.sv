@@ -91,16 +91,22 @@ module cpu #(
 // Fetch
     logic take_branch;
 // Dispactch
+    logic [$clog2(`DISPATCH_WIDTH+1)-1:0] disp_n;
     //Free list
     logic [`DISPATCH_WIDTH-1:0] disp_free_space;
     logic [`DISPATCH_WIDTH-1:0] alloc_req;
     // Map Table
+    logic [`DISPATCH_WIDTH-1:0] rs1_ready_disp;
+    logic [`DISPATCH_WIDTH-1:0] rs2_ready_disp;
+    logic [`DISPATCH_WIDTH-1:0][$clog2(`PHYS_REGS)-1:0] rs1_phys_dest;
+    logic [`DISPATCH_WIDTH-1:0][$clog2(`PHYS_REGS)-1:0] rs2_phys_dest;
     logic [`DISPATCH_WIDTH-1:0] rename_valid;
     logic [`DISPATCH_WIDTH-1:0][$clog2(`ARCH_REGS)-1:0] dest_arch;
     logic [`DISPATCH_WIDTH-1:0][$clog2(`ARCH_REGS)-1:0] src1_arch;
     logic [`DISPATCH_WIDTH-1:0][$clog2(`ARCH_REGS)-1:0] src2_arch;
     logic [`DISPATCH_WIDTH-1:0][$clog2(`PHYS_REGS)-1:0] dest_new_prf; //T_new
     logic [`DISPATCH_WIDTH-1:0] is_branch; //### 11/10 sychenn ###//
+    logic [`DISPATCH_WIDTH-1:0][$clog2(`PHYS_REGS)-1:0] disp_old_phys_disp;
     
     // RS
     logic [`DISPATCH_WIDTH-1:0] disp_rs_valid;
@@ -385,7 +391,9 @@ module cpu #(
     // valid bit will cycle through the pipeline and come back from the wb stage
     // assign if_valid = ((!stall) && (if_packet[0].inst != 32'h10500073)) ? 1'b1 : 1'b0;//###
     always_ff @(negedge clock) begin
-        $display("inst : %h", if_packet[0].inst);
+        for(int i = 0; i < `N; i++) begin
+            $display("inst[%d] valid(%b) : %h", i, if_packet[i].valid, if_packet[i].inst);
+        end
     end
     // assign if_valid = 1'b1;
     assign if_valid = !stall && !branch_stall;
@@ -491,7 +499,9 @@ module cpu #(
         // Inputs
         .if_valid (if_valid),
         .if_flush (if_flush),  
-        .take_branch(take_branch),     
+        .take_branch(take_branch),   
+
+        .disp_n(disp_n),  
 
         .pred_valid_i(pred_valid_i),     
         .pred_lane_i(pred_lane_i),      
@@ -593,11 +603,11 @@ module cpu #(
         .alloc_req_o(alloc_req),
 
         //map table inputs
-        .src1_ready_i(rs1_ready),
-        .src2_ready_i(rs2_ready),
-        .src1_phys_i(rs1_phys),
-        .src2_phys_i(rs2_phys),
-        .dest_reg_old_i(disp_old_phys),
+        .src1_ready_i(rs1_ready_disp),
+        .src2_ready_i(rs2_ready_disp),
+        .src1_phys_i(rs1_phys_dest),
+        .src2_phys_i(rs2_phys_dest),
+        .dest_reg_old_i(disp_old_phys_disp),
         .is_branch_o(is_branch),
 
         //map table outputs
@@ -631,7 +641,9 @@ module cpu #(
         .two_branch_stall(branch_stall),
 
         .disp_packet_o(disp_packet),
-        .stall(stall)
+        .stall(stall),
+
+        .disp_n(disp_n)
     );
 
     //////////////////////////////////////////////////
@@ -641,7 +653,7 @@ module cpu #(
     //////////////////////////////////////////////////
 
     rob #(
-        .DEPTH(`ROB_DEPTH),
+        .ROB_DEPTH(`ROB_DEPTH),
         .INST_W(`INST_W),
         .DISPATCH_WIDTH(`DISPATCH_WIDTH),
         .COMMIT_WIDTH(`COMMIT_WIDTH),
@@ -700,6 +712,40 @@ module cpu #(
     //                                              //
     //////////////////////////////////////////////////
 
+    always_ff @(negedge clock) begin
+        for (int i = 0; i < `DISPATCH_WIDTH; i++) begin
+            $display("DISP[%0d] rs1_arch=%0d rs2_arch=%0d rd_arch=%0d rs1_phys=%0d rs2_phys=%0d rd_phys=%0d",
+                    i,
+                    src1_arch[i],
+                    src2_arch[i],
+                    dest_arch[i],
+                    rs1_phys_dest[i],
+                    rs2_phys_dest[i],
+                    alloc_phys[i]);
+        end
+        $display();
+    end
+
+
+    always_comb begin
+        rs1_phys_dest = rs1_phys;
+        rs2_phys_dest = rs2_phys;
+        rs1_ready_disp = rs1_ready;
+        rs2_ready_disp = rs2_ready;
+        disp_old_phys_disp = disp_old_phys;
+        if((`DISPATCH_WIDTH == 2) && (src1_arch[`DISPATCH_WIDTH-1] == dest_arch[0])) begin
+            rs1_phys_dest[`DISPATCH_WIDTH-1] = alloc_phys[0];
+            rs1_ready_disp[`DISPATCH_WIDTH-1] = 0;
+        end
+        if((`DISPATCH_WIDTH == 2) && (src2_arch[`DISPATCH_WIDTH-1] == dest_arch[0])) begin
+            rs2_phys_dest[`DISPATCH_WIDTH-1] = alloc_phys[0];
+            rs2_ready_disp[`DISPATCH_WIDTH-1] = 0;
+        end
+        if((`DISPATCH_WIDTH == 2) && (dest_arch[`DISPATCH_WIDTH-1] == dest_arch[0])) begin
+            disp_old_phys_disp[`DISPATCH_WIDTH-1] = alloc_phys[0];
+        end
+    end
+
     map_table #(
         .ARCH_REGS(`ARCH_REGS),           // Number of architectural registers
         .PHYS_REGS(`PHYS_REGS),          // Number of physical registers
@@ -735,6 +781,7 @@ module cpu #(
         .snapshot_data_o(snapshot_data_o),
         .checkpoint_valid_o(checkpoint_valid)
     );
+
 
  //### 11/10 sychenn ###// (for map table restore)
     always_ff @(posedge clock) begin : checkpoint

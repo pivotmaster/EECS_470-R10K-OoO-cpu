@@ -1,6 +1,6 @@
 /*
 module rob #(
-    parameter int unsigned DEPTH           = 64,
+    parameter int unsigned ROB_DEPTH           = 64,
     parameter int unsigned INST_W          = 16,
     parameter int unsigned DISPATCH_WIDTH  = 1,
     parameter int unsigned COMMIT_WIDTH    = 1,
@@ -21,12 +21,12 @@ module rob #(
 
     output logic [DISPATCH_WIDTH-1:0] disp_ready_o,
     output logic [DISPATCH_WIDTH-1:0] disp_alloc_o,
-    output logic [DISPATCH_WIDTH-1:0][$clog2(DEPTH)-1:0]  disp_rob_idx_o,
-    output logic [$clog2(DEPTH+1)-1:0] disp_enable_space_o, 
+    output logic [DISPATCH_WIDTH-1:0][$clog2(ROB_DEPTH)-1:0]  disp_rob_idx_o,
+    output logic [$clog2(ROB_DEPTH+1)-1:0] disp_enable_space_o, 
 
     // Writeback
     input  logic [WB_WIDTH-1:0] wb_valid_i,
-    input  logic [WB_WIDTH-1:0][$clog2(DEPTH)-1:0] wb_rob_idx_i,
+    input  logic [WB_WIDTH-1:0][$clog2(ROB_DEPTH)-1:0] wb_rob_idx_i,
     input  logic [WB_WIDTH-1:0] wb_exception_i,
     input  logic [WB_WIDTH-1:0] wb_mispred_i,
 
@@ -39,7 +39,7 @@ module rob #(
 
     // Branch flush
     output logic flush_o,
-    output logic [$clog2(DEPTH)-1:0] flush_upto_rob_idx_o
+    output logic [$clog2(ROB_DEPTH)-1:0] flush_upto_rob_idx_o
 );
 
         // ===== ROB Entry Struct =====
@@ -54,22 +54,22 @@ module rob #(
         logic mispred;
     } rob_entry_t;
 
-    rob_entry_t rob_table [DEPTH];
+    rob_entry_t rob_table [ROB_DEPTH];
 
-    logic [$clog2(DEPTH)-1:0] head, tail;
-    logic [$clog2(DEPTH):0] count;
+    logic [$clog2(ROB_DEPTH)-1:0] head, tail;
+    logic [$clog2(ROB_DEPTH):0] count;
 
     // ===== Internal Signals =====
     logic full, empty;
-    logic [$clog2(DEPTH)-1:0] next_tail, next_head;
+    logic [$clog2(ROB_DEPTH)-1:0] next_tail, next_head;
     logic [COMMIT_WIDTH-1:0] retire_en;
 
-    assign full  = (count == DEPTH);
+    assign full  = (count == ROB_DEPTH);
     assign empty = (count == 0);
     assign disp_ready_o = {!full, !full};   //fixed to 2 bits
 
     // ===== Dispatch Logic =====
-    assign disp_enable_space_o = DEPTH - count;
+    assign disp_enable_space_o = ROB_DEPTH - count;
     always_comb begin
         next_tail = tail;
         for (int i = 0; i < DISPATCH_WIDTH; i++) begin
@@ -79,10 +79,10 @@ module rob #(
 
         if (!full) begin
             for (int i = 0; i < DISPATCH_WIDTH; i++) begin
-                if (disp_valid_i[i] && (count + i < DEPTH)) begin
+                if (disp_valid_i[i] && (count + i < ROB_DEPTH)) begin
                     disp_alloc_o[i]   = 1'b1;
                     disp_rob_idx_o[i] = next_tail;
-                    next_tail         = (next_tail == DEPTH-1) ? '0 : next_tail + 1;
+                    next_tail         = (next_tail == ROB_DEPTH-1) ? '0 : next_tail + 1;
                 end
             end
         end
@@ -92,8 +92,8 @@ module rob #(
     always_comb begin
         retire_en = '0;
         for (int i = 0; i < COMMIT_WIDTH; i++) begin
-            // if (!empty && rob_table[(head + i) % DEPTH].valid && rob_table[(head + i) % DEPTH].ready && ((i == 0) || retire_en[i-1])) begin ### ?not sure the valid part
-            if (!empty && rob_table[(head + i) % DEPTH].ready && ((i == 0) || retire_en[i-1])) begin
+            // if (!empty && rob_table[(head + i) % ROB_DEPTH].valid && rob_table[(head + i) % ROB_DEPTH].ready && ((i == 0) || retire_en[i-1])) begin ### ?not sure the valid part
+            if (!empty && rob_table[(head + i) % ROB_DEPTH].ready && ((i == 0) || retire_en[i-1])) begin
                 retire_en[i] = 1'b1;
             end
         end
@@ -112,7 +112,7 @@ module rob #(
                 commit_old_prf_o[i] <= '0;
             end
 
-            for (int i = 0; i < DEPTH; i++) begin
+            for (int i = 0; i < ROB_DEPTH; i++) begin
             //     rob_table[i].valid     <= 1'b0;
             //     rob_table[i].ready     <= 1'b0;
             //     rob_table[i].exception <= 1'b0;
@@ -162,7 +162,7 @@ module rob #(
                         head   <= '0;//###
                         tail   <= '0;//###
                         count  <= '0;
-                        for (int j = 0; j < DEPTH; j++) begin
+                        for (int j = 0; j < ROB_DEPTH; j++) begin
                             rob_table[j].valid <= 1'b0;
                         end
                     end else begin
@@ -192,7 +192,7 @@ task automatic show_rob_output();
     $display("============================================");
     $display("Head = %0d | Tail = %0d | Count = %0d | Full = %b | Empty = %b", 
              head, tail, count, full, empty);
-    for (int i = 0; i < DEPTH; i++) begin
+    for (int i = 0; i < ROB_DEPTH; i++) begin
         if (rob_table[i].valid) begin
             $display("Entry %0d: valid=%b, ready=%b, rd_wen=%b, rd_arch=%0d, new_prf=%0d, old_prf=%0d, exception=%b, mispred=%b",
                      i, 
@@ -227,7 +227,7 @@ endmodule
 
 //### TODO: Modified Version 11/6 sychenn ###//
 module rob #(
-    parameter int unsigned DEPTH           = 64,
+    parameter int unsigned ROB_DEPTH       = 64,
     parameter int unsigned INST_W          = 16,
     parameter int unsigned DISPATCH_WIDTH  = 1,
     parameter int unsigned COMMIT_WIDTH    = 1,
@@ -249,12 +249,12 @@ module rob #(
 
     output logic [DISPATCH_WIDTH-1:0] disp_ready_o,
     output logic [DISPATCH_WIDTH-1:0] disp_alloc_o,
-    output logic [DISPATCH_WIDTH-1:0][$clog2(DEPTH)-1:0]  disp_rob_idx_o,
-    output logic [$clog2(DEPTH+1)-1:0] disp_enable_space_o, 
+    output logic [DISPATCH_WIDTH-1:0][$clog2(ROB_DEPTH)-1:0]  disp_rob_idx_o,
+    output logic [$clog2(ROB_DEPTH+1)-1:0] disp_enable_space_o, 
 
     // Writeback
     input  logic [WB_WIDTH-1:0] wb_valid_i,
-    input  logic [WB_WIDTH-1:0][$clog2(DEPTH)-1:0] wb_rob_idx_i,
+    input  logic [WB_WIDTH-1:0][$clog2(ROB_DEPTH)-1:0] wb_rob_idx_i,
     input  logic [WB_WIDTH-1:0] wb_exception_i,
     input  logic [WB_WIDTH-1:0] wb_mispred_i,
     //### 11/7 add sychenn ###//
@@ -269,16 +269,16 @@ module rob #(
 
     // Branch flush ##TODO: What is this for?
     output logic flush_o,
-    output logic [$clog2(DEPTH)-1:0] flush_upto_rob_idx_o,
+    output logic [$clog2(ROB_DEPTH)-1:0] flush_upto_rob_idx_o,
 
     // Branch flush ### (sychenn 11/6) ###
     input logic mispredict_i,
-    input logic [$clog2(DEPTH)-1:0] mispredict_rob_idx_i,
+    input logic [$clog2(ROB_DEPTH)-1:0] mispredict_rob_idx_i,
 
     //### TODO: for debug only (sychenn 11/6) ###
     //  to free list
     output logic flush_i,
-    output logic [DEPTH-1:0] flush_free_regs_valid,
+    output logic [ROB_DEPTH-1:0] flush_free_regs_valid,
     output logic [(PHYS_REGS)-1:0] flush_free_regs,
 
     output COMMIT_PACKET [`N-1:0] wb_packet_o
@@ -302,17 +302,20 @@ module rob #(
         logic [XLEN-1:0] value;
     } rob_entry_t;
 
-    rob_entry_t rob_table [DEPTH];
+    rob_entry_t rob_table [ROB_DEPTH];
 
-    logic [$clog2(DEPTH)-1:0] head, tail;
-    logic [$clog2(DEPTH):0] count;
+    logic [$clog2(ROB_DEPTH)-1:0] head, tail;
+    logic [$clog2(ROB_DEPTH):0] count;
 
     // ===== Internal Signals =====
-    logic full, empty;
-    logic [$clog2(DEPTH)-1:0] next_tail, next_head;
+    logic full, empty, empty_org;
+    logic [$clog2(ROB_DEPTH)-1:0] next_tail, next_head;
     logic [COMMIT_WIDTH-1:0] retire_en;
+    always_ff @(posedge clock) begin
+        empty_org <= empty;
+    end
 
-    assign full  = (count == DEPTH);
+    assign full  = (count == ROB_DEPTH);
     assign empty = (count == 0);
     assign disp_ready_o = {!full, !full};   //fixed to 2 bits
 
@@ -338,40 +341,31 @@ module rob #(
     //=============================================================//
     //### for debug only (sychenn 11/6) ###//
     //=============================================================//
-    logic wb_valid;
+    logic [COMMIT_WIDTH-1:0] wb_valid;
     COMMIT_PACKET [`N-1:0] wb_packet;
 
-    always_ff @(posedge clock) begin
-        wb_valid <= 1'b0;
-        for (int i = 0; i < COMMIT_WIDTH; i++) begin
-            if (retire_en[i]) begin    
-                wb_valid <= 1;
-                break;
-            end
-        end
-        
+    always_comb begin
+        wb_valid = retire_en;
     end
 
     always_comb begin 
         wb_packet_o = '0;
-        if  (wb_valid) begin
-            for (int i = 0; i < COMMIT_WIDTH; i++) begin
-            wb_packet_o[i].data = wb_packet[i].data;
-            wb_packet_o[i].reg_idx =wb_packet[i].reg_idx;
-            wb_packet_o[i].halt = wb_packet[i].halt;
-            wb_packet_o[i].illegal=wb_packet[i].illegal;
-            wb_packet_o[i].valid =wb_packet[i].valid;
-            wb_packet_o[i].NPC = wb_packet[i].NPC;
-            end     
-        end  else begin
-            for (int i = 0; i < COMMIT_WIDTH; i++) begin
-                wb_packet_o[i].valid = 0;
+        for(int i = 0; i < COMMIT_WIDTH; i++) begin
+            if  (wb_valid[i]) begin
+                wb_packet_o[i].data = wb_packet[i].data;
+                wb_packet_o[i].reg_idx =wb_packet[i].reg_idx;
+                wb_packet_o[i].halt = wb_packet[i].halt;
+                wb_packet_o[i].illegal=wb_packet[i].illegal;
+                wb_packet_o[i].valid =wb_packet[i].valid;
+                wb_packet_o[i].NPC = wb_packet[i].NPC;
+            end else begin
+                wb_packet_o[i] = '0;
             end
         end
     end
 
     // ===== Dispatch Logic =====
-    assign disp_enable_space_o = DEPTH - count;
+    assign disp_enable_space_o = ROB_DEPTH - count;
     always_comb begin
         next_tail = tail;
         for (int i = 0; i < DISPATCH_WIDTH; i++) begin
@@ -381,10 +375,10 @@ module rob #(
 
         if (!full) begin
             for (int i = 0; i < DISPATCH_WIDTH; i++) begin
-                if (disp_valid_i[i] && (count + i < DEPTH)) begin
+                if (disp_valid_i[i] && (count + i < ROB_DEPTH)) begin
                     disp_alloc_o[i]   = 1'b1;
                     disp_rob_idx_o[i] = next_tail;
-                    next_tail         = (next_tail == DEPTH-1) ? '0 : next_tail + 1;
+                    next_tail         = (next_tail == ROB_DEPTH-1) ? '0 : next_tail + 1;
                 end
             end
         end
@@ -394,21 +388,23 @@ module rob #(
     always_comb begin
         retire_en = '0;
         for (int i = 0; i < COMMIT_WIDTH; i++) begin
-            // if (!empty && rob_table[(head + i) % DEPTH].valid && rob_table[(head + i) % DEPTH].ready && ((i == 0) || retire_en[i-1])) begin ### ?not sure the valid part
-            if (!empty && rob_table[(head + i) % DEPTH].ready && ((i == 0) || retire_en[i-1])) begin
+            // if (!empty && rob_table[(head + i) % ROB_DEPTH].valid && rob_table[(head + i) % ROB_DEPTH].ready && ((i == 0) || retire_en[i-1])) begin ### ?not sure the valid part
+            if (rob_table[(head + i) % ROB_DEPTH].valid && rob_table[(head + i) % ROB_DEPTH].ready) begin
                 retire_en[i] = 1'b1;
+            end else begin
+                break;
             end
         end
     end
 
     // ===== Flush Miispredict logic ====//
     // for free regs
-    // logic [DEPTH-1:0] flush_free_regs_valid;
-    // logic [DEPTH-1:0][$clog2(PHYS_REGS)-1:0] flush_free_regs;
+    // logic [ROB_DEPTH-1:0] flush_free_regs_valid;
+    // logic [ROB_DEPTH-1:0][$clog2(PHYS_REGS)-1:0] flush_free_regs;
 
     // for flush mispredict instructions
-    logic [$clog2(DEPTH):0]   flush_count;
-    logic [DEPTH-1:0]   flushed_mask;  // flushed if flushed_mask[i] = 1
+    logic [$clog2(ROB_DEPTH):0]   flush_count;
+    logic [ROB_DEPTH-1:0]   flushed_mask;  // flushed if flushed_mask[i] = 1
     always_comb begin
         // free regs
         flush_free_regs_valid = '0;
@@ -417,21 +413,21 @@ module rob #(
         flush_count = '0;
         flushed_mask = '0;
         if (mispredict_i) begin
-            for (int j = 1; j < DEPTH; j++) begin
-                $display("m=%d,j=%d | valid=%b | rob_table[j].old_prf=%0d",mispredict_rob_idx_i, (mispredict_rob_idx_i + j) % DEPTH,rob_table[(mispredict_rob_idx_i + j) % DEPTH].valid,rob_table[(mispredict_rob_idx_i + j) % DEPTH].old_prf);
-                // (mispredict_rob_idx_i + 1 + j) % DEPTH = idx (but cannot 2 int in one block?)
-                if ((mispredict_rob_idx_i + j) % DEPTH == tail) begin
+            for (int j = 1; j < ROB_DEPTH; j++) begin
+                $display("m=%d,j=%d | valid=%b | rob_table[j].old_prf=%0d",mispredict_rob_idx_i, (mispredict_rob_idx_i + j) % ROB_DEPTH,rob_table[(mispredict_rob_idx_i + j) % ROB_DEPTH].valid,rob_table[(mispredict_rob_idx_i + j) % ROB_DEPTH].old_prf);
+                // (mispredict_rob_idx_i + 1 + j) % ROB_DEPTH = idx (but cannot 2 int in one block?)
+                if ((mispredict_rob_idx_i + j) % ROB_DEPTH == tail) begin
                     break;
-                end else if ((rob_table[(mispredict_rob_idx_i + j) % DEPTH].valid)) begin
+                end else if ((rob_table[(mispredict_rob_idx_i + j) % ROB_DEPTH].valid)) begin
                     // this is to update ROB
                     flush_count++; 
-                    flushed_mask |= (1 << (mispredict_rob_idx_i + j) % DEPTH);
+                    flushed_mask |= (1 << (mispredict_rob_idx_i + j) % ROB_DEPTH);
                     // this is to update free list
-                    if ((rob_table[(mispredict_rob_idx_i + j) % DEPTH].old_prf != 0)) begin
+                    if ((rob_table[(mispredict_rob_idx_i + j) % ROB_DEPTH].old_prf != 0)) begin
                         // flush mispredict instructions                        
                         //free regs
                         flush_free_regs_valid[j] = 1'b1;
-                        flush_free_regs       |= (1 << rob_table[(mispredict_rob_idx_i + j) % DEPTH].old_prf);
+                        flush_free_regs       |= (1 << rob_table[(mispredict_rob_idx_i + j) % ROB_DEPTH].old_prf);
                     end
                 end
             end
@@ -460,7 +456,7 @@ module rob #(
                 commit_old_prf_o[i] <= '0;
             end
 
-            for (int i = 0; i < DEPTH; i++) begin
+            for (int i = 0; i < ROB_DEPTH; i++) begin
                 rob_table[i] <= '0;
             end
         
@@ -469,13 +465,13 @@ module rob #(
             if (mispredict_i) begin
                 // Flush to tail
                 if (mispredict_i) begin
-                    for (int j = 0; j < DEPTH; j++) begin
+                    for (int j = 0; j < ROB_DEPTH; j++) begin
                         if (flushed_mask[j])
                             rob_table[j].valid <= 1'b0;
                     end
                 end
                 // update tail and count
-                tail  <= (mispredict_rob_idx_i+1) % DEPTH;
+                tail  <= (mispredict_rob_idx_i+1) % ROB_DEPTH;
                 count <= count - flush_count;
                 
 
@@ -526,31 +522,31 @@ module rob #(
                     //     tail   <= '0;//###
                     //     count  <= '0;
                     //     commit_valid_o[i] <= 1'b0; //TODO: I guess this also needed??
-                    //     for (int j = 0; j < DEPTH; j++) begin
+                    //     for (int j = 0; j < ROB_DEPTH; j++) begin
                     //         rob_table[j].valid <= 1'b0;
                     //     end
 
                     // end else begin
-                        // cleaar the rob entry
-                        rob_table[head].valid <= 1'b0;
-                        // Output commit data
-                        commit_valid_o[i]   <= 1'b1;
-                        commit_rd_wen_o[i]  <= rob_table[head + i].rd_wen;
-                        commit_rd_arch_o[i] <= rob_table[head + i].rd_arch;
-                        commit_new_prf_o[i] <= rob_table[head + i].new_prf;
-                        commit_old_prf_o[i] <= rob_table[head + i].old_prf;
-                        // wb file
-                        if(rob_table[head].valid) begin
-                            wb_packet[i].data <= rob_table[head + i].value;
-                            wb_packet[i].reg_idx <= rob_table[head + i].rd_arch;
-                            wb_packet[i].halt <= rob_table[head + i].halt;
-                            wb_packet[i].illegal <=0;
-                            wb_packet[i].valid <=1;
-                            wb_packet[i].NPC <= rob_table[head + i].NPC;
-                        end else begin
-                            wb_packet[i].valid <=0;
-                        end
-                        // $display("npc1=%h | npc2=%h",rob_table[head + i].NPC, disp_packet_i[0].NPC);
+                    // cleaar the rob entry
+                    rob_table[head + i].valid <= 1'b0;
+                    // Output commit data
+                    commit_valid_o[i]   <= 1'b1;
+                    commit_rd_wen_o[i]  <= rob_table[head + i].rd_wen;
+                    commit_rd_arch_o[i] <= rob_table[head + i].rd_arch;
+                    commit_new_prf_o[i] <= rob_table[head + i].new_prf;
+                    commit_old_prf_o[i] <= rob_table[head + i].old_prf;
+                    // wb file
+                    if(rob_table[head].valid) begin
+                        wb_packet[i].data <= rob_table[head + i].value;
+                        wb_packet[i].reg_idx <= rob_table[head + i].rd_arch;
+                        wb_packet[i].halt <= rob_table[head + i].halt;
+                        wb_packet[i].illegal <=0;
+                        wb_packet[i].valid <=1;
+                        wb_packet[i].NPC <= rob_table[head + i].NPC;
+                    end else begin
+                        wb_packet[i].valid <=0;
+                    end
+                    // $display("npc1=%h | npc2=%h",rob_table[head + i].NPC, disp_packet_i[0].NPC);
 
                 end else begin
                     commit_valid_o[i] <= 1'b0;
@@ -590,7 +586,7 @@ task automatic show_rob_output();
     $display("============================================");
     $display("Head = %0d | Tail = %0d | Count = %0d | Full = %b | Empty = %b", 
              head, tail, count, full, empty);
-    for (int i = 0; i < DEPTH; i++) begin
+    for (int i = 0; i < ROB_DEPTH; i++) begin
         if (rob_table[i].valid) begin
             $display("Entry %0d: Value=%h, PC=%h , valid=%b, ready=%b, rd_wen=%b, rd_arch=%0d, new_prf=%0d, old_prf=%0d, exception=%b, mispred=%b",
                      i, 
@@ -624,7 +620,7 @@ endtask
 
     task automatic dump_rob_state(int cycle);
         $fwrite(rob_trace_fd, "{ \"cycle\": %0d, \"ROB\": [", cycle);
-        for (int i = 0; i < DEPTH; i++) begin
+        for (int i = 0; i < ROB_DEPTH; i++) begin
             if (rob_table[i].valid) begin
                 automatic rob_entry_t e = rob_table[i];
                 $fwrite(rob_trace_fd,
@@ -635,7 +631,7 @@ endtask
                 $fwrite(rob_trace_fd, "{\"idx\":%0d, \"valid\":0}", i);
             end
 
-            if (i != DEPTH - 1)
+            if (i != ROB_DEPTH - 1)
                 $fwrite(rob_trace_fd, ",");
         end
         $fwrite(rob_trace_fd, "]}\n");
