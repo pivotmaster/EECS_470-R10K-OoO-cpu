@@ -3,6 +3,7 @@
 module lq #(
     parameter int DISPATCH_WIDTH = 1,
     parameter int LQ_SIZE = 16,
+    parameter int SQ_SIZE = 16,
     parameter int IDX_WIDTH = $clog2(LQ_SIZE)
 )
 (   
@@ -36,6 +37,7 @@ module lq #(
     input  logic [IDX_WIDTH-1:0] dc_load_tag,
 
     // 5. Writeback (To CDB/ROB - Data Ready)
+    input  ROB_IDX     rob_head,
     output logic       wb_valid,
     output ROB_IDX     wb_rob_idx,
     output MEM_BLOCK   wb_data,
@@ -55,7 +57,9 @@ module lq #(
     output logic   [$clog2(LQ_SIZE+1)-1:0] snapshot_count_o,
     input lq_entry_t                 snapshot_data_i[LQ_SIZE-1:0],
     input logic    [IDX_WIDTH-1 : 0] snapshot_head_i , snapshot_tail_i,
-    input logic   [$clog2(LQ_SIZE+1)-1:0] snapshot_count_i
+    input logic   [$clog2(LQ_SIZE+1)-1:0] snapshot_count_i,
+
+    input sq_entry_t sq_view_i [SQ_SIZE-1:0]
 );
 
     // Function for pointer increment
@@ -87,6 +91,7 @@ module lq #(
     // =========================================================================
     logic found_unissued;
     logic [IDX_WIDTH-1:0] query_idx; // 記住是誰在查詢
+    logic stall_older_store_unknown;
 
     always_comb begin
         int i;
@@ -95,6 +100,7 @@ module lq #(
         query_idx = '0;
         sq_query_addr = '0;
         sq_query_size = '0;
+        stall_older_store_unknown = 1'b0;
         // Find the oldest valid entry that needs data (not valid, not issued)
         // This acts as the candidate for BOTH Forwarding and D-Cache Issue
         for(i = 0; i < LQ_SIZE; i++) begin
@@ -117,11 +123,27 @@ module lq #(
         dc_req_addr  = '0;
         dc_req_size  = '0;
         $display("[DEBUG-ALWAYS LOAD QUEUE] Count=%0d, Tail=%0d, Head=%0d", count, tail, head);
+
+        // 只有當準備 Issue 時才檢查
+        if (found_unissued) begin
+            // 掃描整個 SQ
+            for (int k=0; k<SQ_SIZE; k++) begin
+                // 條件：SQ有效 + 地址未知 + 比目前的 Load 老
+                if (sq_view_i[k].valid && 
+                    !sq_view_i[k].addr_valid && 
+                    is_older(sq_view_i[k].rob_idx, lq[query_idx].rob_idx, rob_head)) begin
+                    
+                    stall_older_store_unknown = 1'b1;
+                    break; // 只要有一個擋路，就必須停
+                end
+            end
+        end
+
         // Only issue request if:
         // 1. We found a candidate (found_unissued)
         // 2. SQ is NOT saying "Wait, I have data pending" (sq_fwd_pending)
         // 3. SQ is NOT immediately providing data (sq_forward_valid) -> optimization
-        if (found_unissued && !sq_fwd_pending && !sq_forward_valid) begin
+        if (found_unissued && !stall_older_store_unknown && !sq_fwd_pending && !sq_forward_valid) begin
             dc_req_valid = 1'b1;
             dc_req_addr  = sq_query_addr; // Same as lq[query_idx].addr
             dc_req_size  = sq_query_size;
@@ -134,6 +156,8 @@ module lq #(
     // Sequential Logic: State Updates
     // =========================================================================
     always_ff @(posedge clock) begin
+        logic do_enq, do_commit;
+        logic wb_from_fwd, wb_from_cache;
         if(reset) begin
             head <= '0;
             tail <= '0;
@@ -155,6 +179,21 @@ module lq #(
         end else begin
             checkpoint_valid_o <= checkpoint_valid_next;
             wb_valid <= 1'b0; // Default: Pulse wb_valid high for 1 cycle only
+            wb_data <= '0;
+
+            // 定義動作
+            do_enq = enq_valid && !full;
+            // 只有在 Valid 且符合 ROB Index 時才 Commit
+            do_commit = !empty && lq[head].valid && rob_commit_valid && (rob_commit_valid_idx == lq[head].rob_idx);
+
+            // 定義 WB 來源
+            wb_from_cache = dc_load_valid;
+            // 只有當 Cache 沒有佔用 WB 通道時，才允許 Forwarding WB
+            // 否則我們這回合先不收 Forwarding data (下回合再收)
+            wb_from_fwd   = found_unissued && sq_forward_valid && !wb_from_cache;
+
+            if (do_enq && !do_commit)      count <= count + 1'b1;
+            else if (!do_enq && do_commit) count <= count - 1'b1;
 
             if(snapshot_restore_valid_i) begin
                 // ... Snapshot Restore (Keep original logic) ...
@@ -177,14 +216,33 @@ module lq #(
                     lq[tail].data_valid <= 1'b0;
                     lq[tail].issued <= 1'b0;
                     tail <= next_ptr(tail);
-                    count <= count + 1'b1;
+                    // count <= count + 1'b1;
                 end
 
+                if(wb_from_cache) begin
+                    // 簡單版本：搜尋第一個 issued 但沒資料的
+                    // 進階版本：D-Cache 應該回傳 Tag/Index
+                    // for(int i = 0; i < LQ_SIZE; i++) begin
+                    //     int idx = (head + i) % LQ_SIZE;
+                    //     if(lq[idx].valid && lq[idx].issued && !lq[idx].data_valid) begin
+                    //         lq[idx].data <= dc_load_data;
+                    //         lq[idx].data_valid <= 1'b1;
+                    //         break; // Assume strictly in-order return for this simple logic
+                    //     end
+                    // end
+                    lq[dc_load_tag].data       <= dc_load_data;
+                    lq[dc_load_tag].data_valid <= 1'b1;
+
+                    // modify by zhengge in 11/25 TODO
+                    wb_valid   <= 1'b1;
+                    wb_rob_idx <= lq[dc_load_tag].rob_idx; // 注意：要確認 tag 對應的 rob_idx 正確
+                    wb_data    <= dc_load_data;
+                end
                 // ------------------------------------
                 // 2. Handling SQ Forwarding Response
                 // ------------------------------------
                 // If we queried SQ and it says "Hit!", take the data directly
-                if(found_unissued && sq_forward_valid) begin
+                else if(wb_from_fwd) begin
                     // 直接寫入剛剛發起查詢的那個 Index (query_idx)
                     $display("sq_forwarding");
                     lq[query_idx].data <= sq_forward_data;
@@ -209,25 +267,6 @@ module lq #(
                 // ------------------------------------
                 // 4. Handling D-Cache Data Return
                 // ------------------------------------
-                if(dc_load_valid) begin
-                    // 簡單版本：搜尋第一個 issued 但沒資料的
-                    // 進階版本：D-Cache 應該回傳 Tag/Index
-                    // for(int i = 0; i < LQ_SIZE; i++) begin
-                    //     int idx = (head + i) % LQ_SIZE;
-                    //     if(lq[idx].valid && lq[idx].issued && !lq[idx].data_valid) begin
-                    //         lq[idx].data <= dc_load_data;
-                    //         lq[idx].data_valid <= 1'b1;
-                    //         break; // Assume strictly in-order return for this simple logic
-                    //     end
-                    // end
-                    lq[dc_load_tag].data       <= dc_load_data;
-                    lq[dc_load_tag].data_valid <= 1'b1;
-
-                    // modify by zhengge in 11/25 TODO
-                    wb_valid   <= 1'b1;
-                    wb_rob_idx <= lq[dc_load_tag].rob_idx; // 注意：要確認 tag 對應的 rob_idx 正確
-                    wb_data    <= dc_load_data;
-                end
 
                 // ------------------------------------
                 // 5. Writeback Logic (Data is Ready -> Tell ROB)
@@ -254,7 +293,7 @@ module lq #(
                         lq[head].valid <= 1'b0;
                         lq[head].data_valid <= 1'b0;
                         head <= next_ptr(head);
-                        count <= count - 1'b1;
+                        // count <= count - 1'b1;
                         
                         // 在 Commit 時送出 Writeback (配合你的 Testbench 預期)
                         $display("[DEBUG-ALWAYS LOAD QUEUE] lq[head].valid = %0b", lq[head].valid);

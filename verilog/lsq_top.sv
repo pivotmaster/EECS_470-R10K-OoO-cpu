@@ -30,6 +30,7 @@ module lsq_top #(
     // =====================================================
     // 3. Commit Stage (來自 ROB)
     // =====================================================
+    input  ROB_IDX     rob_head,
     input  logic       commit_valid,
     input  ROB_IDX     commit_rob_idx, 
 
@@ -117,6 +118,10 @@ module lsq_top #(
     MEM_SIZE    lq_req_size;
     logic       lq_req_accept;
 
+
+    /////////////////
+    sq_entry_t sq_internal_state [SQ_SIZE-1:0]; //TODO
+    ////////////////
     // SQ Request Signals
     logic       sq_req_valid;
     ADDR        sq_req_addr;
@@ -193,7 +198,7 @@ module lsq_top #(
         .is_branch_i(is_branch_i),
         .snapshot_restore_valid_i(snapshot_restore_valid_i),
         .checkpoint_valid_o(sq_checkpoint_valid_o),
-        .snapshot_data_o(sq_snapshot_data_o),
+        .snapshot_data_o(sq_internal_state),
         .snapshot_head_o(sq_snapshot_head_o),
         .snapshot_tail_o(sq_snapshot_tail_o),
         .snapshot_count_o(sq_snapshot_count_o),
@@ -239,6 +244,8 @@ module lsq_top #(
         .dc_load_tag(Dcache_load_tag), //TODO
 
         // Writeback / Commit
+        .rob_head(rob_head),
+        .sq_view_i(sq_internal_state),
         .rob_commit_valid(commit_valid),
         .rob_commit_valid_idx(commit_rob_idx),
         .wb_valid(wb_valid),
@@ -289,5 +296,7 @@ module lsq_top #(
     
     // 將 Cache 的 Accept 回傳給 SQ
     assign sq_req_accept       = Dcache_req_1_accept;
+
+    assign sq_snapshot_data_o = sq_internal_state;
 
 endmodule
