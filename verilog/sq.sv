@@ -125,6 +125,7 @@ module sq #(
 
 
   always_ff @(posedge clock)begin
+    logic do_enq, do_deq;
     if(reset)begin
       head <= '0;
       tail <= '0;
@@ -133,6 +134,7 @@ module sq #(
       for(int i = 0 ; i < SQ_SIZE ; i++)begin
         sq[i].valid <= '0;
         sq[i].addr <= '0;
+        sq[i].addr_valid <= '0;
         sq[i].size <= '0;
         sq[i].rob_idx <= '0;
         sq[i].data_valid <= '0;
@@ -140,6 +142,16 @@ module sq #(
         sq[i].commited <= '0;
       end
     end else begin 
+      do_enq = enq_valid && !full;
+      do_deq = dc_req_valid && dc_req_accept;
+
+      // 1. 處理 Count (優先級邏輯)
+      if (do_enq && !do_deq)      
+          count <= count + 1'b1;
+      else if (!do_enq && do_deq) 
+          count <= count - 1'b1;
+      // else if (do_enq && do_deq) count <= count; // 不變
+
       checkpoint_valid_o <= checkpoint_valid_next;
       if (snapshot_restore_valid_i) begin
         head <= snapshot_head_i;
@@ -148,6 +160,7 @@ module sq #(
         for(int i =0 ; i < SQ_SIZE ; i++)begin
           sq[i].valid <= snapshot_data_i[i].valid;
           sq[i].addr <= snapshot_data_i[i].addr;
+          sq[i].addr_valid <= snapshot_data_i[i].addr_valid;
           sq[i].size <= snapshot_data_i[i].size;
           sq[i].rob_idx <= snapshot_data_i[i].rob_idx;
           sq[i].data_valid <= snapshot_data_i[i].data_valid;
@@ -160,13 +173,14 @@ module sq #(
           // $display("[RTL-SQ] Enqueue at tail=%0d, ROB=%0d, Addr=%h", tail, enq_rob_idx, enq_addr);
           sq[tail].valid <= 1'b1;
           sq[tail].addr <= enq_addr;
+          sq[tail].addr_valid <= 1'b1;
           sq[tail].size <= enq_size;
           sq[tail].data_valid <= 1'b0;
           sq[tail].commited <= 1'b0;
           sq[tail].rob_idx <= enq_rob_idx;
           // tail <= tail + 1'b1;
           tail <= next_ptr(tail);
-          count <= count + 1'b1; 
+          // count <= count + 1'b1; 
         end 
 
         // store data arrived(match by rob_idx)
@@ -211,7 +225,8 @@ module sq #(
           sq[head].valid <= 1'b0;
           sq[head].data_valid <= 1'b0;
           sq[head].commited <= 1'b0;
-          count <= count - 1'b1;
+          sq[head].addr_valid <= 1'b0;
+          // count <= count - 1'b1;
           head <= next_ptr(head);
         end
       end
@@ -303,6 +318,7 @@ module sq #(
       for (genvar i = 0 ; i < SQ_SIZE ; i++)begin
           assign snapshot_data_o[i].valid = sq[i].valid;
           assign snapshot_data_o[i].addr = sq[i].addr;
+          assign snapshot_data_o[i].addr_valid = sq[i].addr_valid;
           assign snapshot_data_o[i].size = sq[i].size;
           assign snapshot_data_o[i].rob_idx = sq[i].rob_idx;
           assign snapshot_data_o[i].data_valid = sq[i].data_valid;

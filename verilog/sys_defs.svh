@@ -284,6 +284,18 @@ typedef enum logic [2:0] {
     M_MULHU
 } MULT_FUNC;
 
+function automatic logic is_older(ROB_IDX a, ROB_IDX b, ROB_IDX head);
+    int dist_a, dist_b;
+    
+    if (a >= head) dist_a = a - head;
+    else           dist_a = (a + ROB_SIZE) - head;
+
+    if (b >= head) dist_b = b - head;
+    else           dist_b = (b + ROB_SIZE) - head;
+
+    return (dist_a < dist_b);
+endfunction
+
 // typedef enum logic [2:0] {
 //     M_MUL     = 3'b000,
 //     M_MULH    = 3'b001,
@@ -491,6 +503,7 @@ typedef struct packed {
 typedef struct packed {
     logic     valid;
     ADDR      addr;
+    logic     addr_valid;
     MEM_SIZE  size;
     ROB_IDX   rob_idx;
     logic     data_valid;
