@@ -92,44 +92,58 @@ module mul_fu #(
   parameter int PHYS_REGS = 128,
   parameter int ROB_DEPTH = 64
 )(
+    input logic clock,
+    input logic reset,
     input  issue_packet_t req_i,
 
     output fu_resp_t      resp_o,
     output logic  ready_o
 );
- assign ready_o = 1;
 
-    logic [63:0] mcand, mplier, product;
-    logic [31:0] rs1, rs2;
-    logic [XLEN-1:0] result;
-
-    assign rs1 = req_i.src1_val;
-    assign rs2 = req_i.src2_val;
-
-    assign product = mcand * mplier;
-
-    // Sign-extend the multiplier inputs based on the operation
-    always_comb begin
-        case (req_i.disp_packet.inst.r.funct3)
-            M_MUL, M_MULH, M_MULHSU: mcand = {{(32){rs1[31]}}, rs1};
-            default:                 mcand = {32'b0, rs1};
-        endcase
-        case (req_i.disp_packet.inst.r.funct3)
-            M_MUL, M_MULH: mplier = {{(32){rs2[31]}}, rs2};
-            default:       mplier = {32'b0, rs2};
-        endcase
+    issue_packet_t [`MULT_STAGES-1:0] req_i_list;
+    always_ff @(posedge clock) begin
+      if(reset) begin
+        for (int i = 0; i < `MULT_STAGES; i++) begin
+          req_i_list[i] <= '0;
+        end
+      end else begin
+        req_i_list[0] <= req_i;
+        for(int i = 1; i < `MULT_STAGES; i++) begin
+          req_i_list[i] <= req_i_list[i - 1];
+        end
+      end
     end
 
-    // Use the high or low bits of the product based on the output func
-    assign result = (req_i.disp_packet.inst.r.funct3 == M_MUL) ? product[31:0] : product[63:32];
+    assign ready_o = 1'b1;
+    MULT_FUNC fu_func;
+    always_comb  begin
+      fu_func = MULT_FUNC'(req_i.disp_packet.inst.r.funct3);
+    end
+    logic [XLEN-1:0] product;
+    logic done;
+
+    mult mult_0(
+        .clock(clock), .reset(reset), .start(req_i.valid),
+        .rs1(req_i.src1_val), .rs2(req_i.src2_val),
+        .func(fu_func),
+        // input logic [TODO] dest_tag_in,
+
+        // output logic [TODO] dest_tag_out,
+        .result(product),
+        .done(done)
+    );
+    // assign product = mcand * mplier;
 
     always_comb begin
-      resp_o.valid     = req_i.valid;
-      resp_o.value     = result;
-      resp_o.dest_prf  = req_i.dest_tag;
-      resp_o.rob_idx   = req_i.rob_idx;
-      resp_o.exception = 1'b0;
-      resp_o.mispred   = 1'b0;
+      resp_o = '0;
+      if(done) begin
+        resp_o.valid     = done;
+        resp_o.value     = product;
+        resp_o.dest_prf  = req_i_list[`MULT_STAGES-1].dest_tag;
+        resp_o.rob_idx   = req_i_list[`MULT_STAGES-1].rob_idx;
+        resp_o.exception = 1'b0;
+        resp_o.mispred   = 1'b0;
+      end
     end
 
 endmodule  
@@ -265,6 +279,8 @@ module fu #(
     for (i = 0; i < MUL_COUNT; i++) begin : GEN_MUL
       localparam int IDX = ALU_COUNT + i;
       mul_fu #(.XLEN(XLEN), .PHYS_REGS(PHYS_REGS), .ROB_DEPTH(ROB_DEPTH)) u_mul (
+        .clock(clock),
+        .reset(reset),
         .req_i  (mul_req[i]),
         .resp_o (fu_resp_bus[IDX]),
         .ready_o(mul_ready_o[i])

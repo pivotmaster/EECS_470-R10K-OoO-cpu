@@ -25,6 +25,7 @@
 `define SINGLE_FU_NUM 1
 `define RS_DEPTH 16
 `define ROB_DEPTH 32
+`define MULT_STAGES 4
 
 
 // fixed data
@@ -53,7 +54,7 @@
 `define OPCODE_N 7
 
 // number of mult stages (2, 4) (you likely don't need 8)
-`define MULT_STAGES 4
+
 
 ///////////////////////////////
 // ---- Basic Constants ---- //
