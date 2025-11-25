@@ -98,7 +98,9 @@ module dispatch_stage #(
     input two_branch_stall, // from cpu 
     //packet
     output DISP_PACKET [DISPATCH_WIDTH-1:0] disp_packet_o,
-    output logic stall
+    output logic stall,
+
+    output logic [$clog2(DISPATCH_WIDTH+1)-1:0] disp_n
 
 );
     //### 11/10 sychenn ###// (for map table restore)
@@ -109,7 +111,6 @@ module dispatch_stage #(
         end
     end
 
-    logic [$clog2(DISPATCH_WIDTH+1)-1:0] disp_n;
     assign stall = (disp_n == '0);
 
 
