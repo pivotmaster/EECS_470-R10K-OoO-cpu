@@ -21,6 +21,8 @@ module stage_if #(
     input logic                            if_flush,   
     input logic take_branch, //###    
 
+
+    input logic [$clog2(`DISPATCH_WIDTH+1)-1:0] disp_n,
     // =========================================================
     // Branch Predictor ->  Fetch (only first branch was computed!!)
     // =========================================================
@@ -34,8 +36,8 @@ module stage_if #(
     // Problem : fetch one line (from ICache) per cycle (might not enough for N-way)
     // Possible Solution: dual-line fetch (two fetch requests per cycle)?
     // =========================================================
-    input [FETCH_WIDTH-1:0]                Icache_valid,
-    input  MEM_BLOCK [FETCH_WIDTH-1:0]     Icache_data,      // data coming back from Instruction memory
+    input                 Icache_valid,
+    input  MEM_BLOCK      Icache_data,      // data coming back from Instruction memory
 
     output ADDR                            Imem_addr, // address sent to Instruction memory
 
@@ -85,7 +87,7 @@ module stage_if #(
             // end else if(PC_reg == 32'hA8) begin //###
             //     PC_next = 32'hA8; //###
             end else begin
-                PC_next = PC_reg + (FETCH_WIDTH << 2); // + 4 * FETCH_WIDTH
+                PC_next = PC_reg + (disp_n << 2); // + 4 * FETCH_WIDTH
             end
         end
         
@@ -112,11 +114,12 @@ module stage_if #(
     // Compute each lane’s instruction address as base PC + 4 × i.
     function automatic logic [31:0] pick_inst_from_block
     (
+        input                             k,
         input MEM_BLOCK                   blk,
         input logic [ADDR_WIDTH-1:0]      inst_addr
     );
         case (inst_addr[2])
-            1'b0: pick_inst_from_block = blk.word_level[0];
+            1'b0: pick_inst_from_block = (k == 1) ? `NOP : blk.word_level[0];
             1'b1: pick_inst_from_block = blk.word_level[1];
             default: pick_inst_from_block = `NOP; 
         endcase
@@ -142,13 +145,13 @@ module stage_if #(
                 this_inst = `NOP;
                 this_valid = 1'b0;
 
-                if (Icache_valid[k]) begin
+                if (Icache_valid) begin
                     this_pc   = PC_reg + (k << 2);
-                    this_inst = pick_inst_from_block(Icache_data[k], this_pc);
+                    this_inst = pick_inst_from_block(k, Icache_data, this_pc);
                 end
 
                 // TODO: for N-way, when one of the instructions miss, all instructions after it should be invalid?
-                if (reset || if_flush || !if_valid || !Icache_valid[k]) begin
+                if (reset || if_flush || !if_valid || !Icache_valid) begin
                     this_valid = 1'b0;
                 end else if (pred_valid_i && pred_taken_i) begin
                     this_valid = (k <= pred_lane_i);
@@ -167,7 +170,7 @@ module stage_if #(
 
     always_ff @(posedge clock) begin
         if (!reset) begin
-            $display("PC_next=%h | Icache_valid=%b | if_valid=%b", PC_next, Icache_valid[0], if_packet_o[0].valid );
+            $display("PC_next=%h | Icache_valid=%b | if_valid=%b", PC_next, Icache_valid, if_packet_o[0].valid );
         end
     end
 

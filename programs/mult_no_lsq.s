@@ -64,3 +64,7 @@ loop:	addi	x5,	x5,	1 #88	58
     addi	x1,	x1,	16 #144	90
     bne	x6,	x0,	loop #148	94
     wfi
+    wfi
+    wfi
+    wfi
+
