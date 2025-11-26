@@ -288,7 +288,39 @@ module fu #(
     output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0][$clog2(ROB_DEPTH)-1:0] fu_rob_idx_o,
     output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0]                    fu_exception_o,
     output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0]                    fu_mispred_o
+
+    //FU -> LSQ
+    output logic [LOAD_COUNT-1:0]                                               fu_ls_valid_o,
+    output logic [LOAD_COUNT-1:0]                                               fu_ls_rob_idx_o,
+    output logic [LOAD_COUNT-1:0]                                               fu_ls_addr_o,
+    output logic [LOAD_COUNT-1:0]                                                fu_sw_data_o  //only for store instr.
+
 );
+
+  // For Store instruction (store data generation)
+  int idx;
+  always_comb begin 
+    idx = 0;
+    // clear zero
+    for (int j; j < LOAD_COUNT; j++) begin
+        fu_ls_valid_o[j] = '0;
+        fu_ls_rob_idx_o[j] = '0;
+        fu_ls_addr_o[j] = '0;
+        fu_sw_data_o[j] = '0;
+    end
+
+    // route fu_resp_bus to output to lsq 
+    for (int i; i < (ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT); i++) begin
+      if (fu_resp_bus[i].is_sw || fu_resp_bus[i].is_lw) begin
+        fu_ls_valid_o[idx] = fu_resp_bus[i].valid;
+        fu_ls_rob_idx_o[idx] = fu_resp_bus[i].rob_idx;
+        fu_ls_addr_o[idx] = fu_resp_bus[i].value;
+        fu_sw_data_o[idx] = fu_resp_bus[i].sw_data;
+
+        idx ++;
+      end
+    end
+  end
 
   localparam int TOTAL_FU = ALU_COUNT + MUL_COUNT + LOAD_COUNT + BR_COUNT;
   // always_ff @(negedge clock)
@@ -349,7 +381,9 @@ module fu #(
       if (fu_resp_bus[k].rob_idx == 35 && fu_resp_bus[k].dest_prf ==110 ) begin
         $display("value= aaa:%h",results[k]);
       end
-      fu_valid_o    [k] = fu_resp_bus[k].valid;
+      if (fu_resp_bus[i].is_sw || fu_resp_bus[i].is_lw) fu_valid_o[k] = 0;
+      else fu_valid_o[k] = 1;
+  
       fu_value_o    [k] = fu_resp_bus[k].value;
       fu_dest_prf_o [k] = fu_resp_bus[k].dest_prf;
       fu_rob_idx_o  [k] = fu_resp_bus[k].rob_idx;

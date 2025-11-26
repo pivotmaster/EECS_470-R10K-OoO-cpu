@@ -8,10 +8,12 @@ module dcache (
     input  MEM_COMMAND Dcache_command_0, // MEM_LOAD or MEM_STORE or MEM_NONE
     input  MEM_SIZE    Dcache_size_0, // WORD/BYTE/HALF
     input  MEM_BLOCK   Dcache_store_data_0, // load = 0
+    input [`LQ_IDX_WIDTH-1:0] Dcache_req_tag,
 
     output logic       Dcache_req_0_accept, // if bank conflict (two request go to the same bank), it might be 0 and need to be resent at the next cycle
     output MEM_BLOCK   Dcache_data_out_0,
     output logic       Dcache_valid_out_0,
+    output [`LQ_IDX_WIDTH-1:0] Dcache_load_tag,
     
     input  ADDR        Dcache_addr_1,      // Request 1
     input  MEM_COMMAND Dcache_command_1,
@@ -257,6 +259,7 @@ module dcache (
 
     // ----------  Get Read Result ---------- 
     always_comb begin
+        Dcache_load_tag = (Dcache_valid_out_0) ? Dcache_req_tag : '0; // if cache miss, tag = 0 //### 11/25 ###//
         Dcache_valid_out_0 = cacheload_cache_hit_0 && Dcache_req_0_accept; //Actually Dcache_req_0_accept contains (Dcache_command_0 != MEM_NONE)
         Dcache_valid_out_1 = load_cache_hit_1 && Dcache_req_1_accept;
         Dcache_data_out_0 = '0; //8 byte per line = 64 bits
@@ -290,8 +293,41 @@ module dcache (
                 DOUBLE:  Dcache_data_out_1.dbbl_level = line_data_1.dbbl_level;
                 default: Dcache_data_out_1.dbbl_level = line_data_1.dbbl_level;
             endcase
+
+        // Data from memory refill_mshr_id
+        end else if (mem2proc_data_tag != 0) begin
+            unique case (Dcache_size_0)
+                BYTE:    Dcache_data_out_0.byte_level[0] = mem2proc_data.byte_level[offset_0];
+                HALF:    Dcache_data_out_0.half_level[0] = mem2proc_data.half_level[offset_0[OFFSET_BITS-1:1]];
+                WORD:    Dcache_data_out_0.word_level[0] = mem2proc_data.word_level[offset_0[OFFSET_BITS-1:2]];
+                DOUBLE:  Dcache_data_out_0.dbbl_level = mem2proc_data.dbbl_level;
+                default: Dcache_data_out_0.dbbl_level = mem2proc_data.dbbl_level;
+            endcase
+            unique case (Dcache_size_1)
+                BYTE:    Dcache_data_out_1.byte_level[0] = mem2proc_data.byte_level[offset_1];
+                HALF:    Dcache_data_out_1.half_level[0] = mem2proc_data.half_level[offset_1[OFFSET_BITS-1:1]];
+                WORD:    Dcache_data_out_1.word_level[0] = mem2proc_data.word_level[offset_1[OFFSET_BITS-1:2]];
+                DOUBLE:  Dcache_data_out_1.dbbl_level = mem2proc_data.dbbl_level;
+                default: Dcache_data_out_1.dbbl_level = mem2proc_data.dbbl_level;
+            endcase
         end
     end
+    // ---------- MSHR for Non-Blocking ----------   
+    typedef struct packed {
+        logic valid;
+        logic [TAG_BITS-1:0] tag;
+        logic [INDEX_BITS-1:0] index;
+        logic [BANK_BITS-1:0] bank;
+        logic [$clog2(CACHE_WAYS)-1:0] way;
+        logic [OFFSET_BITS-1:0] offset;
+        MEM_COMMAND command;
+        MEM_SIZE size;
+        MEM_BLOCK store_data;
+        // logic [3:0] request_id;
+        MEM_TAG     mem_tag; 
+        [`LQ_IDX_WIDTH-1:0] Dcache_req_tag;
+        // logic victim_hit;  // Request went to victim cache
+    } mshr_entry_t;
 
     // =========================================================
     // Store (Write) Logic
@@ -394,6 +430,7 @@ module dcache (
         MEM_BLOCK store_data;
         // logic [3:0] request_id;
         MEM_TAG     mem_tag; 
+        [`LQ_IDX_WIDTH-1:0] Dcache_req_tag;
         // logic victim_hit;  // Request went to victim cache
     } mshr_entry_t;
 
@@ -587,8 +624,9 @@ module dcache (
                 mshr[free_mshr_idx].offset  <= (send_miss_0 ? offset_0         : offset_1);
                 mshr[free_mshr_idx].size   <= (send_miss_0 ? Dcache_size_0    : Dcache_size_1);
                 mshr[free_mshr_idx].store_data <= (send_miss_0 ? Dcache_store_data_0    : Dcache_store_data_1);
-                mshr[free_mshr_idx].mem_tag <= '0;  
-            end 
+                mshr[free_mshr_idx].mem_tag <= '0;   
+                mshr[free_mshr_idx].Dcache_req_tag <= Dcache_req_tag; 
+            end  
 
             // ---------- Get tag/result from mem ---------- 
             // Get Tag from memory (save to MSHR & clear pending bit)

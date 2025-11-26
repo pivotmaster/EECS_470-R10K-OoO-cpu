@@ -27,6 +27,9 @@
 `define ROB_DEPTH 32
 `define MULT_STAGES 4
 
+`define SQ_SIZE 128
+`define LQ_SIZE 128  
+`define LQ_IDX_WIDTH 7 //### clog2(128) 
 
 // fixed data
 `define FU_ALU `SINGLE_FU_NUM

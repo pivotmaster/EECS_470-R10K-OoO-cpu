@@ -15,7 +15,6 @@ module lsq_top #(
     // =====================================================
     input  logic       dispatch_valid,
     input  logic       dispatch_is_store, // 1=Store, 0=Load
-    input  ADDR        dispatch_addr,
     input  MEM_SIZE    dispatch_size,
     input  ROB_IDX     dispatch_rob_idx,
     output logic       lsq_full,          // Stall signal to frontend
@@ -23,9 +22,10 @@ module lsq_top #(
     // =====================================================
     // 2. Execution Stage (Store Data 來自 ALU/RegFile)
     // =====================================================
-    input  logic       sq_data_valid,
-    input  MEM_BLOCK   sq_data,
-    input  ROB_IDX     sq_data_rob_idx,
+    input  logic       sq_data_valid,  // resp_o.valid
+    input  MEM_BLOCK   sq_data, //resp_o.sw_data
+    input  ROB_IDX     sq_data_rob_idx, // resp_o.rob_idx
+    input  ADDR        dispatch_addr,  //resp_o.value 
 
     // =====================================================
     // 3. Commit Stage (來自 ROB)
