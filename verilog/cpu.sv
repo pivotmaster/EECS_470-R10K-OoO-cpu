@@ -91,16 +91,22 @@ module cpu #(
 // Fetch
     logic take_branch;
 // Dispactch
+    logic [$clog2(`DISPATCH_WIDTH+1)-1:0] disp_n;
     //Free list
     logic [`DISPATCH_WIDTH-1:0] disp_free_space;
     logic [`DISPATCH_WIDTH-1:0] alloc_req;
     // Map Table
+    logic [`DISPATCH_WIDTH-1:0] rs1_ready_disp;
+    logic [`DISPATCH_WIDTH-1:0] rs2_ready_disp;
+    logic [`DISPATCH_WIDTH-1:0][$clog2(`PHYS_REGS)-1:0] rs1_phys_dest;
+    logic [`DISPATCH_WIDTH-1:0][$clog2(`PHYS_REGS)-1:0] rs2_phys_dest;
     logic [`DISPATCH_WIDTH-1:0] rename_valid;
     logic [`DISPATCH_WIDTH-1:0][$clog2(`ARCH_REGS)-1:0] dest_arch;
     logic [`DISPATCH_WIDTH-1:0][$clog2(`ARCH_REGS)-1:0] src1_arch;
     logic [`DISPATCH_WIDTH-1:0][$clog2(`ARCH_REGS)-1:0] src2_arch;
     logic [`DISPATCH_WIDTH-1:0][$clog2(`PHYS_REGS)-1:0] dest_new_prf; //T_new
     logic [`DISPATCH_WIDTH-1:0] is_branch; //### 11/10 sychenn ###//
+    logic [`DISPATCH_WIDTH-1:0][$clog2(`PHYS_REGS)-1:0] disp_old_phys_disp;
     
     // RS
     logic [`DISPATCH_WIDTH-1:0] disp_rs_valid;
@@ -203,14 +209,16 @@ module cpu #(
 
     assign rd_en = '1;
     always_ff @(posedge clock) begin //###
-        raddr[0] <= alu_req[0].src1_val; 
-        raddr[1] <= alu_req[0].src2_val; 
-        raddr[2] <= mul_req[0].src1_val; 
-        raddr[3] <= mul_req[0].src2_val; 
-        raddr[4] <= load_req[0].src1_val; 
-        raddr[5] <= load_req[0].src2_val; 
-        raddr[6] <= br_req[0].src1_mux; 
-        raddr[7] <= br_req[0].src2_mux;
+        for(int i = 0; i < `SINGLE_FU_NUM; i++) begin
+            raddr[0 + i*8] <= alu_req[i].src1_val; 
+            raddr[1 + i*8] <= alu_req[i].src2_val; 
+            raddr[2 + i*8] <= mul_req[i].src1_val; 
+            raddr[3 + i*8] <= mul_req[i].src2_val; 
+            raddr[4 + i*8] <= load_req[i].src1_mux; 
+            raddr[5 + i*8] <= load_req[i].src2_mux; 
+            raddr[6 + i*8] <= br_req[i].src1_mux; 
+            raddr[7 + i*8] <= br_req[i].src2_mux;
+        end
     end
 
 // S/EX
@@ -350,17 +358,17 @@ module cpu #(
     logic has_branch_in_pipline; // register (Store the branch info)
     logic branch_stall, branch_stall_reg, branch_stall_next;   // branch_stall_next is to let stall at the same cycle
     logic branch_resolve;
+    logic stall_dispatch;
 
-    always_ff @(posedge clock or posedge reset) begin
+    always_ff @(posedge clock) begin
         if (reset) begin
             has_branch_in_pipline <= '0;
             branch_stall_reg <= '0; 
         end else begin
-            if (branch_resolve) begin
+            if (branch_resolve && has_branch_in_pipline) begin
                 has_branch_in_pipline <= '0;
                 branch_stall_reg <= '0;
-            end
-            if (|is_branch && !has_branch_in_pipline) begin
+            end else if (|is_branch && !has_branch_in_pipline) begin
                 has_branch_in_pipline <= 1;
             end else if (branch_stall_next) begin
                 branch_stall_reg <= 1;
@@ -371,10 +379,11 @@ module cpu #(
     assign branch_stall_next = (|is_branch && has_branch_in_pipline && !branch_resolve);
     assign branch_stall = branch_stall_reg || branch_stall_next;
     // assign branch_stall = 0;
-    assign branch_resolve = wb_valid[3]; // no matter it is mispredict or not
+    assign branch_resolve = wb_valid[`FU_NUM - `FU_BRANCH]; // no matter it is mispredict or not
+    assign stall_dispatch = branch_stall || stall;
 
 
-    always_ff @(posedge clock or posedge reset) begin
+    always_ff @(posedge clock) begin
         if(!reset) begin
             $display("|is_branch=%b | has_branch_in_pipline=%b | branch_stall=%b | branch_resolve=%b", |is_branch, has_branch_in_pipline, branch_stall, branch_resolve);
             $display("branch_stall_reg=%b |branch_stall_next=%b",branch_stall_reg,branch_stall_next);
@@ -384,7 +393,9 @@ module cpu #(
     // valid bit will cycle through the pipeline and come back from the wb stage
     // assign if_valid = ((!stall) && (if_packet[0].inst != 32'h10500073)) ? 1'b1 : 1'b0;//###
     always_ff @(negedge clock) begin
-        $display("inst : %h", if_packet[0].inst);
+        for(int i = 0; i < `N; i++) begin
+            $display("inst[%d] valid(%b) : %h", i, if_packet[i].valid, if_packet[i].inst);
+        end
     end
     // assign if_valid = 1'b1;
     assign if_valid = !stall && !branch_stall;
@@ -398,9 +409,10 @@ module cpu #(
     end
     // assign if_valid = (cycle < 45) ? 1'b1 : 1'b0; //###
     // assign if_valid = 1'b1;
-    assign correct_pc_target_o = fu_value_reg[3];
-    assign correct_predict = (wb_valid[3] & !wb_mispred[3]); //###TODO: CORRECT PREDICT 
-    assign if_flush = (wb_valid[3] & wb_mispred[3]); //### open flush
+    //###TODO just predict first branch now
+    assign correct_pc_target_o = fu_value_reg[`FU_NUM - `FU_BRANCH];
+    assign correct_predict = (wb_valid[`FU_NUM - `FU_BRANCH] & !wb_mispred[`FU_NUM - `FU_BRANCH]); //###TODO: CORRECT PREDICT 
+    assign if_flush = (wb_valid[`FU_NUM - `FU_BRANCH] & wb_mispred[`FU_NUM - `FU_BRANCH]); //### open flush
     // assign take_branch = wb_valid[3] & wb_mispred[3];
     assign take_branch = 1'b0;
     // assign if_flush = 1'b0; //### close flush
@@ -416,7 +428,7 @@ module cpu #(
             cycle_count <= 0;
         end else begin
             if (if_flush) begin
-                $display("cycle[%d]| if_flush=%b | wb_valid=%b | wb_mispred=%b | wb_rob_idx=%d", cycle_count, if_flush, wb_valid, wb_mispred, wb_rob_idx[3]);
+                $display("cycle[%d]| if_flush=%b | wb_valid=%b | wb_mispred=%b | wb_rob_idx=%d | correct_pc_target_o=%h", cycle_count, if_flush, wb_valid, wb_mispred, wb_rob_idx[`FU_NUM - `FU_BRANCH], fu_value_reg[`FU_NUM - `FU_BRANCH]);
             end else begin
             cycle_count <= cycle_count + 1;
             end
@@ -489,7 +501,9 @@ module cpu #(
         // Inputs
         .if_valid (if_valid),
         .if_flush (if_flush),  
-        .take_branch(take_branch),     
+        .take_branch(take_branch),   
+
+        .disp_n(`N),  //todo
 
         .pred_valid_i(pred_valid_i),     
         .pred_lane_i(pred_lane_i),      
@@ -532,7 +546,7 @@ module cpu #(
     // assign if_id_enable = 1'b1;//###
 
     always_ff @(posedge clock) begin
-        if (reset) begin
+        if (reset || if_flush) begin
             for(int i=0;i<`FETCH_WIDTH;i++) begin
                 if_id_reg[i].inst  <= `NOP;
                 if_id_reg[i].valid <= `FALSE; //close this valid
@@ -591,11 +605,11 @@ module cpu #(
         .alloc_req_o(alloc_req),
 
         //map table inputs
-        .src1_ready_i(rs1_ready),
-        .src2_ready_i(rs2_ready),
-        .src1_phys_i(rs1_phys),
-        .src2_phys_i(rs2_phys),
-        .dest_reg_old_i(disp_old_phys),
+        .src1_ready_i(rs1_ready_disp),
+        .src2_ready_i(rs2_ready_disp),
+        .src1_phys_i(rs1_phys_dest),
+        .src2_phys_i(rs2_phys_dest),
+        .dest_reg_old_i(disp_old_phys_disp),
         .is_branch_o(is_branch),
 
         //map table outputs
@@ -626,10 +640,12 @@ module cpu #(
         .disp_rd_new_prf_o(disp_rd_new_prf),
         .disp_rd_old_prf_o(disp_rd_old_prf),
 
-        .two_branch_stall(branch_stall),
+        .stall_dispatch(stall_dispatch),
 
         .disp_packet_o(disp_packet),
-        .stall(stall)
+        .stall(stall),
+
+        .disp_n(disp_n)
     );
 
     //////////////////////////////////////////////////
@@ -639,7 +655,7 @@ module cpu #(
     //////////////////////////////////////////////////
 
     rob #(
-        .DEPTH(`ROB_DEPTH),
+        .ROB_DEPTH(`ROB_DEPTH),
         .INST_W(`INST_W),
         .DISPATCH_WIDTH(`DISPATCH_WIDTH),
         .COMMIT_WIDTH(`COMMIT_WIDTH),
@@ -684,7 +700,7 @@ module cpu #(
 
         // Mispredict flush (sychenn 11/6)
         .mispredict_i(if_flush),
-        .mispredict_rob_idx_i(wb_rob_idx[3]),
+        .mispredict_rob_idx_i(wb_rob_idx[`FU_NUM - `FU_BRANCH]),
          //### TODO: for debug only (sychenn 11/6) ###//
         .flush_i(flush_rob_debug),
         .flush_free_regs_valid(flush_free_regs_valid),
@@ -697,6 +713,40 @@ module cpu #(
     //                  map table                   //
     //                                              //
     //////////////////////////////////////////////////
+
+    always_ff @(negedge clock) begin
+        for (int i = 0; i < `DISPATCH_WIDTH; i++) begin
+            $display("DISP[%0d] rs1_arch=%0d rs2_arch=%0d rd_arch=%0d rs1_phys=%0d rs2_phys=%0d rd_phys=%0d",
+                    i,
+                    src1_arch[i],
+                    src2_arch[i],
+                    dest_arch[i],
+                    rs1_phys_dest[i],
+                    rs2_phys_dest[i],
+                    alloc_phys[i]);
+        end
+        $display();
+    end
+
+
+    always_comb begin
+        rs1_phys_dest = rs1_phys;
+        rs2_phys_dest = rs2_phys;
+        rs1_ready_disp = rs1_ready;
+        rs2_ready_disp = rs2_ready;
+        disp_old_phys_disp = disp_old_phys;
+        if((`DISPATCH_WIDTH == 2) && (src1_arch[`DISPATCH_WIDTH-1] == dest_arch[0])) begin
+            rs1_phys_dest[`DISPATCH_WIDTH-1] = alloc_phys[0];
+            rs1_ready_disp[`DISPATCH_WIDTH-1] = 0;
+        end
+        if((`DISPATCH_WIDTH == 2) && (src2_arch[`DISPATCH_WIDTH-1] == dest_arch[0])) begin
+            rs2_phys_dest[`DISPATCH_WIDTH-1] = alloc_phys[0];
+            rs2_ready_disp[`DISPATCH_WIDTH-1] = 0;
+        end
+        if((`DISPATCH_WIDTH == 2) && (dest_arch[`DISPATCH_WIDTH-1] == dest_arch[0])) begin
+            disp_old_phys_disp[`DISPATCH_WIDTH-1] = alloc_phys[0];
+        end
+    end
 
     map_table #(
         .ARCH_REGS(`ARCH_REGS),           // Number of architectural registers
@@ -734,11 +784,14 @@ module cpu #(
         .checkpoint_valid_o(checkpoint_valid)
     );
 
+
  //### 11/10 sychenn ###// (for map table restore)
-    always_ff @(posedge clock or posedge reset) begin : checkpoint
+    always_ff @(posedge clock) begin : checkpoint
         if (reset) begin
-            snapshot_reg       <= '{default:'{phys:'0, valid:'0}};
-            snapshot_data_i    <= '{default:'{phys:'0, valid:'0}};
+            for(int i =0 ; i <`ARCH_REGS ; i++)begin
+                snapshot_data_i[i].phys <= '0;
+                snapshot_data_i[i].valid <= '0;
+            end
             snapshot_restore_i <= 1'b0;
             has_snapshot       <= 1'b0;
         end else begin
@@ -1008,46 +1061,48 @@ module cpu #(
     always_ff @(posedge clock) begin
         if (reset) begin
             // Clear all FU request registers
-            alu_req_reg_org[0]   <= '0;
-            mul_req_reg_org[0]   <= '0;
-            load_req_reg_org[0]  <= '0;
-            br_req_reg_org[0]    <= '0;
+            for(int i = 0; i < `SINGLE_FU_NUM; i++) begin
+                alu_req_reg_org[i]   <= '0;
+                mul_req_reg_org[i]   <= '0;
+                load_req_reg_org[i]  <= '0;
+                br_req_reg_org[i]    <= '0;
 
-            alu_req_reg[0].valid       <= '0;
-            alu_req_reg[0].rob_idx     <= '0;
-            alu_req_reg[0].imm         <= '0;
-            alu_req_reg[0].fu_type     <= '0;
-            alu_req_reg[0].opcode      <= '0;
-            alu_req_reg[0].dest_tag    <= '0;
-            alu_req_reg[0].src2_valid  <= '0;
-            alu_req_reg[0].disp_packet <= '0;
+                alu_req_reg[i].valid       <= '0;
+                alu_req_reg[i].rob_idx     <= '0;
+                alu_req_reg[i].imm         <= '0;
+                alu_req_reg[i].fu_type     <= '0;
+                alu_req_reg[i].opcode      <= '0;
+                alu_req_reg[i].dest_tag    <= '0;
+                alu_req_reg[i].src2_valid  <= '0;
+                alu_req_reg[i].disp_packet <= '0;
 
-            mul_req_reg[0].valid       <= '0;
-            mul_req_reg[0].rob_idx     <= '0;
-            mul_req_reg[0].imm         <= '0;
-            mul_req_reg[0].fu_type     <= '0;
-            mul_req_reg[0].opcode      <= '0;
-            mul_req_reg[0].dest_tag    <= '0;
-            mul_req_reg[0].src2_valid  <= '0;
-            mul_req_reg[0].disp_packet <= '0;
+                mul_req_reg[i].valid       <= '0;
+                mul_req_reg[i].rob_idx     <= '0;
+                mul_req_reg[i].imm         <= '0;
+                mul_req_reg[i].fu_type     <= '0;
+                mul_req_reg[i].opcode      <= '0;
+                mul_req_reg[i].dest_tag    <= '0;
+                mul_req_reg[i].src2_valid  <= '0;
+                mul_req_reg[i].disp_packet <= '0;
 
-            load_req_reg[0].valid       <= '0;
-            load_req_reg[0].rob_idx     <= '0;
-            load_req_reg[0].imm         <= '0;
-            load_req_reg[0].fu_type     <= '0;
-            load_req_reg[0].opcode      <= '0;
-            load_req_reg[0].dest_tag    <= '0;
-            load_req_reg[0].src2_valid  <= '0;
-            load_req_reg[0].disp_packet <= '0;
+                load_req_reg[i].valid       <= '0;
+                load_req_reg[i].rob_idx     <= '0;
+                load_req_reg[i].imm         <= '0;
+                load_req_reg[i].fu_type     <= '0;
+                load_req_reg[i].opcode      <= '0;
+                load_req_reg[i].dest_tag    <= '0;
+                load_req_reg[i].src2_valid  <= '0;
+                load_req_reg[i].disp_packet <= '0;
 
-            br_req_reg[0].valid       <= '0; 
-            br_req_reg[0].rob_idx     <= '0;
-            br_req_reg[0].imm         <= '0;
-            br_req_reg[0].fu_type     <= '0;
-            br_req_reg[0].opcode      <= '0;
-            br_req_reg[0].dest_tag    <= '0;
-            br_req_reg[0].src2_valid  <= '0;
-            br_req_reg[0].disp_packet <= '0;
+                br_req_reg[i].valid       <= '0; 
+                br_req_reg[i].rob_idx     <= '0;
+                br_req_reg[i].imm         <= '0;
+                br_req_reg[i].fu_type     <= '0;
+                br_req_reg[i].opcode      <= '0;
+                br_req_reg[i].dest_tag    <= '0;
+                br_req_reg[i].src2_valid  <= '0;
+                br_req_reg[i].disp_packet <= '0;
+            end
 
 
             for(int i=0;i<`DISPATCH_WIDTH;i++) begin
@@ -1057,49 +1112,50 @@ module cpu #(
             for(int i=0;i<`DISPATCH_WIDTH;i++) begin
 			    s_ex_reg[i] <= issue_packet[i];
 		    end
+            for(int i = 0; i < `SINGLE_FU_NUM; i++) begin
+                alu_req_reg_org[i] <= alu_req[i];
+                mul_req_reg_org[i] <= mul_req[i];
+                load_req_reg_org[i] <= load_req[i];
+                br_req_reg_org[i]  <= br_req[i];
 
-            alu_req_reg_org[0] <= alu_req[0];
-            mul_req_reg_org[0] <= mul_req[0];
-            load_req_reg_org[0] <= load_req[0];
-            br_req_reg_org[0]  <= br_req[0];
+                alu_req_reg[i].valid <= alu_req[i].valid;
+                alu_req_reg[i].rob_idx <= alu_req[i].rob_idx;
+                alu_req_reg[i].imm <= alu_req[i].imm;
+                alu_req_reg[i].fu_type <= alu_req[i].fu_type;
+                alu_req_reg[i].opcode <= alu_req[i].opcode;
+                alu_req_reg[i].dest_tag <= alu_req[i].dest_tag;
+                alu_req_reg[i].src2_valid <= alu_req[i].src2_valid;
+                alu_req_reg[i].disp_packet <= alu_req[i].disp_packet;
+                
+                mul_req_reg[i].valid <= mul_req[i].valid;
+                mul_req_reg[i].rob_idx <= mul_req[i].rob_idx;
+                mul_req_reg[i].imm <= mul_req[i].imm;
+                mul_req_reg[i].fu_type <= mul_req[i].fu_type;
+                mul_req_reg[i].opcode <= mul_req[i].opcode;
+                mul_req_reg[i].dest_tag <= mul_req[i].dest_tag;
+                mul_req_reg[i].src2_valid <= mul_req[i].src2_valid;
+                mul_req_reg[i].disp_packet <= mul_req[i].disp_packet;
 
-            alu_req_reg[0].valid <= alu_req[0].valid;
-            alu_req_reg[0].rob_idx <= alu_req[0].rob_idx;
-            alu_req_reg[0].imm <= alu_req[0].imm;
-            alu_req_reg[0].fu_type <= alu_req[0].fu_type;
-            alu_req_reg[0].opcode <= alu_req[0].opcode;
-            alu_req_reg[0].dest_tag <= alu_req[0].dest_tag;
-            alu_req_reg[0].src2_valid <= alu_req[0].src2_valid;
-            alu_req_reg[0].disp_packet <= alu_req[0].disp_packet;
-            
-            mul_req_reg[0].valid <= mul_req[0].valid;
-            mul_req_reg[0].rob_idx <= mul_req[0].rob_idx;
-            mul_req_reg[0].imm <= mul_req[0].imm;
-            mul_req_reg[0].fu_type <= mul_req[0].fu_type;
-            mul_req_reg[0].opcode <= mul_req[0].opcode;
-            mul_req_reg[0].dest_tag <= mul_req[0].dest_tag;
-            mul_req_reg[0].src2_valid <= mul_req[0].src2_valid;
-            mul_req_reg[0].disp_packet <= mul_req[0].disp_packet;
+                load_req_reg[i].valid <= load_req[i].valid;
+                load_req_reg[i].rob_idx <= load_req[i].rob_idx;
+                load_req_reg[i].imm <= load_req[i].imm;
+                load_req_reg[i].fu_type <= load_req[i].fu_type;
+                load_req_reg[i].opcode <= load_req[i].opcode;
+                load_req_reg[i].dest_tag <= load_req[i].dest_tag;
+                load_req_reg[i].src2_valid <= load_req[i].src2_valid;
+                load_req_reg[i].disp_packet <= load_req[i].disp_packet;
 
-            load_req_reg[0].valid <= load_req[0].valid;
-            load_req_reg[0].rob_idx <= load_req[0].rob_idx;
-            load_req_reg[0].imm <= load_req[0].imm;
-            load_req_reg[0].fu_type <= load_req[0].fu_type;
-            load_req_reg[0].opcode <= load_req[0].opcode;
-            load_req_reg[0].dest_tag <= load_req[0].dest_tag;
-            load_req_reg[0].src2_valid <= load_req[0].src2_valid;
-            load_req_reg[0].disp_packet <= load_req[0].disp_packet;
-
-            br_req_reg[0].valid <= br_req[0].valid; 
-            br_req_reg[0].rob_idx <= br_req[0].rob_idx;
-            br_req_reg[0].imm <= br_req[0].imm;
-            br_req_reg[0].fu_type <= br_req[0].fu_type;
-            br_req_reg[0].opcode <= br_req[0].opcode;
-            br_req_reg[0].dest_tag <= br_req[0].dest_tag;
-            br_req_reg[0].src2_valid <= br_req[0].src2_valid;
-            br_req_reg[0].disp_packet <= br_req[0].disp_packet;
-            br_req_reg[0].src1_val <= br_req[0].src1_val;
-            br_req_reg[0].src2_val <= br_req[0].src2_val;
+                br_req_reg[i].valid <= br_req[i].valid; 
+                br_req_reg[i].rob_idx <= br_req[i].rob_idx;
+                br_req_reg[i].imm <= br_req[i].imm;
+                br_req_reg[i].fu_type <= br_req[i].fu_type;
+                br_req_reg[i].opcode <= br_req[i].opcode;
+                br_req_reg[i].dest_tag <= br_req[i].dest_tag;
+                br_req_reg[i].src2_valid <= br_req[i].src2_valid;
+                br_req_reg[i].disp_packet <= br_req[i].disp_packet;
+                br_req_reg[i].src1_val <= br_req[i].src1_val;
+                br_req_reg[i].src2_val <= br_req[i].src2_val;
+            end
         end
     end
 
@@ -1122,15 +1178,18 @@ module cpu #(
     //     $display("MUL: rob=%d | dast_tag=%d | src1_val =%h | src2_val %h | res %h", mul_req_reg[0].rob_idx, mul_req_reg[0].dest_tag, mul_req_reg[0].src1_val, mul_req_reg[0].src2_val, fu_resp_bus[1].value);
     // end
     
-    assign alu_req_reg[0].src1_val = rdata[0];
-    assign alu_req_reg[0].src2_val = alu_req_reg_org[0].src2_valid ? rdata[1] : alu_req_reg_org[0].src2_val; 
-    assign mul_req_reg[0].src1_val = rdata[2];
-    assign mul_req_reg[0].src2_val = mul_req_reg_org[0].src2_valid ? rdata[3] : mul_req_reg_org[0].src2_val;
-    assign load_req_reg[0].src1_val = rdata[4];
-    assign load_req_reg[0].src2_val = load_req_reg_org[0].src2_valid ? rdata[5] : load_req_reg_org[0].src2_val;
-    assign br_req_reg[0].src1_mux = rdata[6];
-    assign br_req_reg[0].src2_mux = br_req_reg_org[0].src2_valid ? rdata[7] : br_req_reg_org[0].src2_mux;
-
+    always_comb begin
+        for(int i = 0; i < `SINGLE_FU_NUM; i++) begin
+            alu_req_reg[i].src1_val = rdata[0 + i*8];
+            alu_req_reg[i].src2_val = alu_req_reg_org[i].src2_valid ? rdata[1 + i*8] : alu_req_reg_org[i].src2_val; 
+            mul_req_reg[i].src1_val = rdata[2 + i*8];
+            mul_req_reg[i].src2_val = mul_req_reg_org[i].src2_valid ? rdata[3 + i*8] : mul_req_reg_org[i].src2_val;
+            load_req_reg[i].src1_val = rdata[4 + i*8];
+            load_req_reg[i].src2_val = load_req_reg_org[i].src2_valid ? rdata[5 + i*8] : load_req_reg_org[i].src2_mux;
+            br_req_reg[i].src1_mux = rdata[6 + i*8];
+            br_req_reg[i].src2_mux = br_req_reg_org[i].src2_valid ? rdata[7 + i*8] : br_req_reg_org[i].src2_mux;
+        end
+    end
     
     fu #(
         .XLEN(`XLEN),

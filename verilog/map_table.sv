@@ -153,7 +153,7 @@ module map_table#(
     // arch reg i -> phys i, and mark valid = 1
     // (this assumes PHYS_REGS >= ARCH_REGS)
     // =======================================================
-    always_ff @(posedge clock or posedge reset)begin
+    always_ff @(posedge clock)begin
         if(reset)begin
             for(int i =0; i< ARCH_REGS; i++)begin
                 table_reg[i].phys <= i;
@@ -241,14 +241,17 @@ module map_table#(
     // Provide mapped phys tag and ready bit for each rs1/rs2 of every dispatch slot
     generate 
         for(genvar i =0 ; i < DISPATCH_WIDTH ; i++)begin
-            //rs1 outputs
-            assign rs1_phys_o[i] = table_reg[rs1_arch_i[i]].phys;                    
-            assign rs1_valid_o[i] = table_reg[rs1_arch_i[i]].valid | wb_forward_valid[rs1_arch_i[i]]; //###11/15    sychenn ###//                     
-            //rs2 outputs
-            assign rs2_phys_o[i] = table_reg[rs2_arch_i[i]].phys;                    
-            assign rs2_valid_o[i] = table_reg[rs2_arch_i[i]].valid | wb_forward_valid[rs2_arch_i[i]]; //###11/15    sychenn ###//      
-            // old prf
-            assign disp_old_phys_o[i] = table_reg[disp_arch_i[i]].phys; //### 11/15 ###//                          
+            always_comb begin
+                //rs1 outputs
+                rs1_phys_o[i] = table_reg[rs1_arch_i[i]].phys;                    
+                rs1_valid_o[i] = table_reg[rs1_arch_i[i]].valid | wb_forward_valid[rs1_arch_i[i]]; //###11/15    sychenn ###//                     
+                //rs2 outputs
+                rs2_phys_o[i] = table_reg[rs2_arch_i[i]].phys;                    
+                rs2_valid_o[i] = table_reg[rs2_arch_i[i]].valid | wb_forward_valid[rs2_arch_i[i]]; //###11/15    sychenn ###//      
+                // old prf
+                disp_old_phys_o[i] = table_reg[disp_arch_i[i]].phys; //### 11/15 ###//    
+                // ###TODO only for two ways  
+            end                    
         end
     endgenerate
 

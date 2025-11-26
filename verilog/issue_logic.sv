@@ -93,10 +93,12 @@ module issue_logic #(
     //TODO issue pkts reg exist latch
     always_comb begin : issue_output
         issue_slot = 0;
-        alu_req_o[0]  = '0;
-        mul_req_o[0]  = '0;
-        load_req_o[0] = '0;
-        br_req_o[0]   = '0;
+        for(int i = 0; i < `SINGLE_FU_NUM; i++) begin
+            alu_req_o[i]  = '0;
+            mul_req_o[i]  = '0;
+            load_req_o[i] = '0;
+            br_req_o[i]   = '0;
+        end
         src1_mux ='0;
         src2_mux ='0;
         src2_valid = 0;
@@ -138,6 +140,9 @@ module issue_logic #(
                     OPB_IS_J_IMM: src2_valid = 0;
                     default:      src2_valid = 1; // face feed
                 endcase
+                if(rs_entries_i[i].disp_packet.wr_mem) begin
+                    src2_valid = 1;
+                end
                  //$display("imm = %d", src2_mux);
                 issue_pkts[issue_slot].opcode =  rs_entries_i[i].disp_packet.alu_func; // 4 bit opcode for ALU(add/ sub...)
                 issue_pkts[issue_slot].src1_val  = src1_mux;
