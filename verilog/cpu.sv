@@ -247,7 +247,13 @@ module cpu #(
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0][$clog2(`PHYS_REGS)-1:0] fu_dest_prf;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0][$clog2(`ROB_DEPTH)-1:0] fu_rob_idx;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_exception;
-    logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_mispred;
+    logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_mispred; 
+
+    //FU -> LSQ
+    logic [`LOAD_COUNT-1:0] fu_ls_valid_o; 
+    logic [`LOAD_COUNT-1:0] fu_ls_rob_idx_o; 
+    logic [`LOAD_COUNT-1:0] fu_ls_addr_o; 
+    logic [`LOAD_COUNT-1:0] fu_sw_data_o; 
 
 //EX_C_REG
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_valid_reg;
@@ -256,6 +262,11 @@ module cpu #(
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0][$clog2(`ROB_DEPTH)-1:0] fu_rob_idx_reg;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_exception_reg;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_mispred_reg;
+    logic [`LOAD_COUNT-1:0] fu_sw_data_o_reg; 
+    logic [`LOAD_COUNT-1:0] fu_ls_valid_o_reg; 
+    logic [`LOAD_COUNT-1:0] fu_ls_rob_idx_o_reg; 
+    logic [`LOAD_COUNT-1:0] fu_ls_addr_o_reg; 
+    logic [`LOAD_COUNT-1:0] fu_sw_data_o_reg; 
 
 // Complete-stage
     // PR
@@ -1222,7 +1233,12 @@ module cpu #(
         .fu_dest_prf_o(fu_dest_prf),
         .fu_rob_idx_o(fu_rob_idx),
         .fu_exception_o(fu_exception),
-        .fu_mispred_o(fu_mispred)
+        .fu_mispred_o(fu_mispred),
+
+        .fu_ls_valid_o(fu_ls_valid_o),
+        .fu_ls_rob_idx_o(fu_ls_rob_idx_o),
+        .fu_ls_addr_o(fu_ls_addr_o),
+        .fu_sw_data_o(fu_sw_data_o)
     );
 
     // always_ff @(negedge clock) begin
@@ -1241,6 +1257,11 @@ module cpu #(
                 ex_c_inst_dbg <= `NOP; // debug output
                 ex_c_reg      <= 0;    // the defaults can all be zero!
             end
+            fu_ls_valid_o_reg <= '0;
+            fu_ls_rob_idx_o_reg <= '0;
+            fu_ls_addr_o_reg <= '0;            
+            fu_sw_data_o_reg <= '0; // for store instr
+
             fu_valid_reg <= '0;
             fu_value_reg <= '0;
             fu_dest_prf_reg <= '0;
@@ -1248,6 +1269,11 @@ module cpu #(
             fu_exception_reg <= '0;
             fu_mispred_reg <= '0;
         end else begin
+            fu_ls_valid_o_reg <= fu_ls_valid_o;
+            fu_ls_rob_idx_o_reg <= fu_ls_rob_idx_o;
+            fu_ls_addr_o_reg <= fu_ls_addr_o;
+            fu_sw_data_o_reg <= fu_sw_data_o; // for store instr
+
             fu_valid_reg <= fu_valid;
             fu_value_reg <= fu_value;
             fu_dest_prf_reg <= fu_dest_prf;
@@ -1263,12 +1289,104 @@ module cpu #(
         end
     end
 
-    // always_ff @(negedge clock) begin
-    //     $display("fu_valid : %b", fu_valid_reg);
-    // end
+    //////////////////////////////////////////////////
+    //                                              //
+    //                LSQ                           //
+    //                                              //
+    //////////////////////////////////////////////////
+// =====================================================
+// LSQ top instance
+// =====================================================
+lsq_top #(
+    .DISPATCH_WIDTH (`DISPATCH_WIDTH),
+    .SQ_SIZE        (`SQ_SIZE),
+    .LQ_SIZE        (`LQ_SIZE)
+) lsq_top_0 (
+    .clock                   (clock),
+    .reset                   (reset),
 
-    // debug outputs
-    //assign ex_c_NPC_dbg   = ex_c_reg.NPC;
+    // Dispatch Stage
+    .dispatch_valid          (dispatch_valid),
+    .dispatch_is_store       (dispatch_is_store),
+    .dispatch_size           (dispatch_size),
+    .dispatch_rob_idx        (dispatch_rob_idx),
+    .lsq_full                (lsq_full),
+
+    // Execution Stage  (###ok)
+    .sq_data_valid           (fu_ls_valid_o_reg),
+    .sq_data                 (fu_sw_data_o_reg),
+    .sq_data_rob_idx         (fu_ls_rob_idx_o_reg),
+    .dispatch_addr           (fu_ls_addr_o_reg),
+
+    // =====================================================
+    // 3. Commit Stage (from ROB)
+    // =====================================================
+    .rob_head                (rob_head),
+    .commit_valid            (commit_valid),
+    .commit_rob_idx          (commit_rob_idx),
+
+    // =====================================================
+    // 4. Writeback Stage (Load -> CDB/ROB)
+    // =====================================================
+    .wb_valid                (wb_valid),
+    .wb_rob_idx              (wb_rob_idx),
+    .wb_data                 (wb_data),
+
+    // =====================================================
+    // 5. Dual Port D-Cache Interface
+    // =====================================================
+
+    // --- Port 0: Load ---
+    .Dcache_addr_0           (Dcache_addr_0),
+    .Dcache_command_0        (Dcache_command_0),
+    .Dcache_size_0           (Dcache_size_0),
+    .Dcache_store_data_0     (Dcache_store_data_0),
+    .Dcache_req_tag          (Dcache_req_tag),
+    .Dcache_req_0_accept     (Dcache_req_0_accept),
+
+    .Dcache_data_out_0       (Dcache_data_out_0),
+    .Dcache_valid_out_0      (Dcache_valid_out_0),
+    .Dcache_load_tag         (Dcache_load_tag),
+
+    // --- Port 1: Store ---
+    .Dcache_addr_1           (Dcache_addr_1),
+    .Dcache_command_1        (Dcache_command_1),
+    .Dcache_size_1           (Dcache_size_1),
+    .Dcache_store_data_1     (Dcache_store_data_1),
+    .Dcache_req_1_accept     (Dcache_req_1_accept),
+
+    .Dcache_data_out_1       (Dcache_data_out_1),
+    .Dcache_valid_out_1      (Dcache_valid_out_1),
+
+    // =====================================================
+    // 6. Snapshot / Recovery Interface
+    // =====================================================
+    .is_branch_i             (is_branch_i),
+    .snapshot_restore_valid_i(snapshot_restore_valid_i),
+
+    // SQ Snapshot
+    .sq_checkpoint_valid_o   (sq_checkpoint_valid_o),
+    .sq_snapshot_data_o      (sq_snapshot_data_o),
+    .sq_snapshot_head_o      (sq_snapshot_head_o),
+    .sq_snapshot_tail_o      (sq_snapshot_tail_o),
+    .sq_snapshot_count_o     (sq_snapshot_count_o),
+    .sq_snapshot_data_i      (sq_snapshot_data_i),
+    .sq_snapshot_head_i      (sq_snapshot_head_i),
+    .sq_snapshot_tail_i      (sq_snapshot_tail_i),
+    .sq_snapshot_count_i     (sq_snapshot_count_i),
+
+    // LQ Snapshot
+    .lq_checkpoint_valid_o   (lq_checkpoint_valid_o),
+    .lq_snapshot_data_o      (lq_snapshot_data_o),
+    .lq_snapshot_head_o      (lq_snapshot_head_o),
+    .lq_snapshot_tail_o      (lq_snapshot_tail_o),
+    .lq_snapshot_count_o     (lq_snapshot_count_o),
+    .lq_snapshot_data_i      (lq_snapshot_data_i),
+    .lq_snapshot_head_i      (lq_snapshot_head_i),
+    .lq_snapshot_tail_i      (lq_snapshot_tail_i),
+    .lq_snapshot_count_i     (lq_snapshot_count_i)
+);
+
 
     //////////////////////////////////////////////////
     //                                              //
