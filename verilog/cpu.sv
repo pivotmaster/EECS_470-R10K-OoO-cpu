@@ -35,26 +35,26 @@ module cpu #(
 
     // IF-stage Outputs
     output ADDR [`FETCH_WIDTH-1:0] if_NPC_dbg,
-    output DATA [`FETCH_WIDTH-1:0] if_inst_dbg,
+    output INST [`FETCH_WIDTH-1:0] if_inst_dbg,
     output logic [`FETCH_WIDTH-1:0] if_valid_dbg,
 
     output ADDR [`FETCH_WIDTH-1:0] if_id_NPC_dbg,
-    output DATA [`FETCH_WIDTH-1:0] if_id_inst_dbg,
+    output INST [`FETCH_WIDTH-1:0] if_id_inst_dbg,
     output logic [`FETCH_WIDTH-1:0] if_id_valid_dbg,
 
     //Dispatch-stage Outputs
     output ADDR [`DISPATCH_WIDTH-1:0] id_s_NPC_dbg,
-    output DATA [`DISPATCH_WIDTH-1:0] id_s_inst_dbg,
+    output INST [`DISPATCH_WIDTH-1:0] id_s_inst_dbg,
     output logic [`DISPATCH_WIDTH-1:0] id_s_valid_dbg,
 
 
     output ADDR [`DISPATCH_WIDTH-1:0] s_ex_NPC_dbg,
-    output DATA [`DISPATCH_WIDTH-1:0] s_ex_inst_dbg,
+    output INST [`DISPATCH_WIDTH-1:0] s_ex_inst_dbg,
     output logic [`DISPATCH_WIDTH-1:0] s_ex_valid_dbg,
 
 
     //output ADDR  ex_c_NPC_dbg,
-    output DATA [`DISPATCH_WIDTH-1:0] ex_c_inst_dbg
+    output INST [`DISPATCH_WIDTH-1:0] ex_c_inst_dbg
     //output logic ex_c_valid_dbg
 );
 
@@ -84,12 +84,12 @@ module cpu #(
 
     // --- Wires for I-Cache <-> Main Memory ---
     MEM_COMMAND icache_to_mem_command; // Renamed from Imem_command
-    ADDR correct_pc_target_o;
+    ADDR correct_pc_target;
 
     // Outputs from IF-Stage and IF/ID Pipeline Register
     IF_ID_PACKET [`FETCH_WIDTH-1:0] if_packet, if_id_reg;
 // Fetch
-    logic take_branch;
+    //logic take_branch;
 // Dispactch
     logic [$clog2(`DISPATCH_WIDTH+1)-1:0] disp_n;
     //Free list
@@ -248,6 +248,9 @@ module cpu #(
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0][$clog2(`ROB_DEPTH)-1:0] fu_rob_idx;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_exception;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_mispred;
+    logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_taken;
+    ADDR [`BR_COUNT-1:0] br_pc;
+    logic [`BR_COUNT-1:0] [`HISTORY_BITS-1:0] br_history;
 
 //EX_C_REG
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_valid_reg;
@@ -256,6 +259,10 @@ module cpu #(
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0][$clog2(`ROB_DEPTH)-1:0] fu_rob_idx_reg;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_exception_reg;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_mispred_reg;
+    logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_taken_reg;
+    ADDR [`BR_COUNT-1:0] br_pc_reg;
+    logic [`BR_COUNT-1:0] [`HISTORY_BITS-1:0] br_history_reg;
+
 
 // Complete-stage
     // PR
@@ -349,10 +356,12 @@ module cpu #(
     // to stall until the previous instruction has completed.
     // For project 3, start by assigning if_valid to always be 1
 
-    logic if_valid, if_flush,correct_predict;
-    logic pred_valid_i, pred_taken_i;
+    logic if_valid, if_flush, correct_predict;
+    //logic pred_valid_i, pred_taken_i;
+    logic pred_taken;
     logic [$clog2(`FETCH_WIDTH)-1:0] pred_lane_i;   // which instruction is branch    
     ADDR pred_target_i; // predicted target PC Addr
+    ADDR [`FETCH_WIDTH-1:0] pred_pc;
 
 // ---------- Branch Stall ---------- 
     logic has_branch_in_pipline; // register (Store the branch info)
@@ -410,17 +419,23 @@ module cpu #(
     // assign if_valid = (cycle < 45) ? 1'b1 : 1'b0; //###
     // assign if_valid = 1'b1;
     //###TODO just predict first branch now
-    assign correct_pc_target_o = fu_value_reg[`FU_NUM - `FU_BRANCH];
+    logic [`FETCH_WIDTH-1:0] [`HISTORY_BITS-1:0] if_history;
+    logic ex_is_branch, ex_branch_taken;
+
+    assign ex_is_branch = wb_valid[`FU_NUM - `FU_BRANCH];
+    assign ex_branch_taken = (wb_valid[`FU_NUM - `FU_BRANCH] & fu_taken_reg[`FU_NUM - `FU_BRANCH]);
+
+    assign correct_pc_target = (wb_valid[`FU_NUM - `FU_BRANCH] & fu_taken_reg[`FU_NUM - `FU_BRANCH]) ? fu_value_reg[`FU_NUM - `FU_BRANCH] : br_pc_reg+4 ;
     assign correct_predict = (wb_valid[`FU_NUM - `FU_BRANCH] & !wb_mispred[`FU_NUM - `FU_BRANCH]); //###TODO: CORRECT PREDICT 
     assign if_flush = (wb_valid[`FU_NUM - `FU_BRANCH] & wb_mispred[`FU_NUM - `FU_BRANCH]); //### open flush
     // assign take_branch = wb_valid[3] & wb_mispred[3];
-    assign take_branch = 1'b0;
+    //assign take_branch = 1'b0;
     // assign if_flush = 1'b0; //### close flush
     // always @(posedge clock) begin
     //     $display("CPU. take_br, wb_valid, wb_mispred=%b %b %b", take_branch, wb_valid, wb_mispred);
     // end
-    assign pred_taken_i = 1'b0; //###
-    assign pred_valid_i = 1'b0; //###
+    // assign pred_taken_i = 1'b0; //###
+    // assign pred_valid_i = 1'b0; //###
 
     int cycle_count;
     always_ff @(posedge clock) begin
@@ -428,7 +443,7 @@ module cpu #(
             cycle_count <= 0;
         end else begin
             if (if_flush) begin
-                $display("cycle[%d]| if_flush=%b | wb_valid=%b | wb_mispred=%b | wb_rob_idx=%d | correct_pc_target_o=%h", cycle_count, if_flush, wb_valid, wb_mispred, wb_rob_idx[`FU_NUM - `FU_BRANCH], fu_value_reg[`FU_NUM - `FU_BRANCH]);
+                $display("cycle[%d]| if_flush=%b | wb_valid=%b | wb_mispred=%b | wb_rob_idx=%d | correct_pc_target=%h", cycle_count, if_flush, wb_valid, wb_mispred, wb_rob_idx[`FU_NUM - `FU_BRANCH], fu_value_reg[`FU_NUM - `FU_BRANCH]);
             end else begin
             cycle_count <= cycle_count + 1;
             end
@@ -501,14 +516,16 @@ module cpu #(
         // Inputs
         .if_valid (if_valid),
         .if_flush (if_flush),  
-        .take_branch(take_branch),   
+        //.take_branch(take_branch),   
 
-        .disp_n(`N),  //todo
+        // .disp_n(`N),  //todo
 
-        .pred_valid_i(pred_valid_i),     
-        .pred_lane_i(pred_lane_i),      
-        .pred_taken_i(pred_taken_i),     
-        .pred_target_i(pred_target_i),    
+        // .pred_valid_i(pred_valid_i),     
+        // .pred_lane_i(pred_lane_i),     
+
+        .pred_taken_i(pred_taken),     
+        .pred_target_i(pred_pc),    
+        .history_i(if_history),
 
         // =========================================================
         // Fetch <-> ICache / Mem
@@ -522,7 +539,7 @@ module cpu #(
         // .Imem_command (Imem_command),  //### initially fetch -> mem so has this line (now control by icache)
         .Imem_addr (proc2Icache_addr), 
 
-        .correct_pc_target_o(correct_pc_target_o), 
+        .correct_pc_target_i(correct_pc_target), 
         .if_packet_o (if_packet)
     );
 
@@ -535,6 +552,43 @@ module cpu #(
 			if_valid_dbg[i] = if_packet[i].valid;
 		end
 	end
+
+    ADDR [`FETCH_WIDTH-1:0] if_pc;
+    INST [`FETCH_WIDTH-1:0] if_inst;
+    logic [`FETCH_WIDTH-1:0] if_valids;
+
+    always_comb begin
+        for(int i=0;i<`FETCH_WIDTH;i++)begin
+            if_pc[i] = if_packet[i].PC;
+            if_inst[i] = if_packet[i].inst;
+            if_valids[i] = if_packet[i].valid;
+        end
+    end
+
+    //////////////////////////////////////////////////
+    //                                              //
+    //              Branch Prediction               //
+    //                                              //
+    //////////////////////////////////////////////////
+
+    branch_predictor branch_predictor_0(
+        .clock(clock),
+        .reset(reset),
+        .if_pc_i(if_pc),
+        .inst_i(if_inst),
+        .if_valid_i(if_valids),
+
+        .ex_is_branch_i(ex_is_branch),
+        .ex_branch_taken_i(ex_branch_taken),
+        .ex_branch_pc_i(br_pc_reg),
+        .ex_target_pc_i(correct_pc_target),
+        .ex_history_i(br_history_reg),
+        .mispredict_i(if_flush),
+
+        .next_pc_o(pred_pc),
+        .take_branch(pred_taken),
+        .history_o(if_history)
+    );
 
     //////////////////////////////////////////////////
     //                                              //
@@ -552,12 +606,16 @@ module cpu #(
                 if_id_reg[i].valid <= `FALSE; //close this valid
                 if_id_reg[i].NPC   <= 0;
                 if_id_reg[i].PC    <= 0;
+                if_id_reg[i].pred <= 0;
+                if_id_reg[i].bp_history <= 0;
             end
         end else if (if_id_enable) begin
             for(int i=0;i<`FETCH_WIDTH;i++) begin
                 if_id_reg[i].inst <= if_packet[i].inst;
                 if_id_reg[i].NPC <= if_packet[i].NPC;
                 if_id_reg[i].PC <= if_packet[i].PC;
+                if_id_reg[i].pred <= if_packet[i].pred;
+                if_id_reg[i].bp_history <= if_packet[i].bp_history;
                 if(if_packet[i].inst == 0 || !(if_packet[i].valid)) begin
                     if_id_reg[i].valid <= `FALSE;
                 end else begin
@@ -1222,7 +1280,10 @@ module cpu #(
         .fu_dest_prf_o(fu_dest_prf),
         .fu_rob_idx_o(fu_rob_idx),
         .fu_exception_o(fu_exception),
-        .fu_mispred_o(fu_mispred)
+        .fu_mispred_o(fu_mispred),
+        .fu_taken_o(fu_taken),
+        .br_pc_o(br_pc),
+        .br_history_o(br_history)
     );
 
     // always_ff @(negedge clock) begin
@@ -1247,6 +1308,9 @@ module cpu #(
             fu_rob_idx_reg <= '0;
             fu_exception_reg <= '0;
             fu_mispred_reg <= '0;
+            fu_taken_reg <= '0;
+            br_pc_reg <= '0;
+            br_history_reg <= '0;
         end else begin
             fu_valid_reg <= fu_valid;
             fu_value_reg <= fu_value;
@@ -1254,6 +1318,9 @@ module cpu #(
             fu_rob_idx_reg <= fu_rob_idx;
             fu_exception_reg <= fu_exception;
             fu_mispred_reg <= fu_mispred;
+            fu_taken_reg <= fu_taken;
+            br_pc_reg <= br_pc;
+            br_history_reg <= br_history;
 
 
             for(int i=0;i<`DISPATCH_WIDTH;i++) begin

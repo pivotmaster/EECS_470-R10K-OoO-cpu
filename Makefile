@@ -214,7 +214,14 @@ CPU_FILES = verilog/mult.sv \
 		   verilog/rs_single_entry.sv \
 		   verilog/rs_disp_selector.sv \
 		   verilog/issue_selector.sv \
-		   verilog/fu.sv
+		   verilog/fu.sv \
+		   verilog/BP/branch_predictor.sv \
+		   verilog/BP/btb.sv \
+		   verilog/BP/gshare.sv \
+		   verilog/BP/ras.sv \
+		   verilog/psel_gen.sv \
+		   verilog/BP/pre_decode.sv
+
 
 
 

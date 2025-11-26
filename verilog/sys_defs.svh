@@ -32,7 +32,7 @@
 `define FU_ALU `SINGLE_FU_NUM
 `define FU_MUL `SINGLE_FU_NUM
 `define FU_LOAD `SINGLE_FU_NUM
-`define FU_BRANCH `SINGLE_FU_NUM
+`define FU_BRANCH 1 //`SINGLE_FU_NUM TODO
 `define ALU_COUNT `FU_ALU
 `define MUL_COUNT `FU_MUL
 `define LOAD_COUNT `FU_LOAD
@@ -52,6 +52,21 @@
 `define ARCH_REGS 32
 `define XLEN 32
 `define OPCODE_N 7
+
+
+//BTB parameters
+`define BTB_SIZE 4
+`define BTB_INDEX_BITS $clog2(`BTB_SIZE)
+`define BTB_TAG_BITS 10
+`define BTB_VALUE_BITS 11
+
+//RAS parameters
+`define RAS_SIZE 16
+
+
+//GSHARE parameters
+`define GSHARE_SIZE 4
+`define HISTORY_BITS $clog2(`GSHARE_SIZE)
 
 // number of mult stages (2, 4) (you likely don't need 8)
 
@@ -289,17 +304,17 @@ typedef enum logic [2:0] {
     M_MULHU
 } MULT_FUNC;
 
-function automatic logic is_older(ROB_IDX a, ROB_IDX b, ROB_IDX head);
-    int dist_a, dist_b;
+// function automatic logic is_older(ROB_IDX a, ROB_IDX b, ROB_IDX head);
+//     int dist_a, dist_b;
     
-    if (a >= head) dist_a = a - head;
-    else           dist_a = (a + ROB_SIZE) - head;
+//     if (a >= head) dist_a = a - head;
+//     else           dist_a = (a + `ROB_SIZE) - head;
 
-    if (b >= head) dist_b = b - head;
-    else           dist_b = (b + ROB_SIZE) - head;
+//     if (b >= head) dist_b = b - head;
+//     else           dist_b = (b + `ROB_SIZE) - head;
 
-    return (dist_a < dist_b);
-endfunction
+//     return (dist_a < dist_b);
+// endfunction
 
 // typedef enum logic [2:0] {
 //     M_MUL     = 3'b000,
@@ -332,6 +347,8 @@ typedef struct packed {
     ADDR  PC;
     ADDR  NPC; // PC + 4
     logic valid;
+    logic pred;
+    logic [`HISTORY_BITS-1:0] bp_history;
 } IF_ID_PACKET;
 
 /**
@@ -444,6 +461,8 @@ typedef struct packed {
     logic    [1:0]fu_type;
 
     logic    valid;
+    logic    pred;
+    logic [`HISTORY_BITS-1:0] bp_history;
 } DISP_PACKET;
 
 typedef struct packed {
@@ -479,6 +498,7 @@ typedef struct packed {
     logic [$clog2(`ROB_DEPTH)-1:0] rob_idx;
     logic                         exception;
     logic                         mispred;
+    logic                         taken;  
 } fu_resp_t;
 
 typedef struct packed {

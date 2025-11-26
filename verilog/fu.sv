@@ -57,6 +57,7 @@ module alu_fu #(
     resp_o.rob_idx   = req_i.rob_idx;
     resp_o.exception = 1'b0;
     resp_o.mispred   = 1'b0;
+    resp_o.taken     = 1'b0;
     resp_o.is_lw     = 1'b0;
     resp_o.is_sw     = 1'b0;
     resp_o.sw_data   = '0;
@@ -146,6 +147,7 @@ module mul_fu #(
         resp_o.rob_idx   = req_i_list[`MULT_STAGES-1].rob_idx;
         resp_o.exception = 1'b0;
         resp_o.mispred   = 1'b0;
+        resp_o.taken     = 1'b0;
         resp_o.is_lw     = 1'b0;
         resp_o.is_sw     = 1'b0;
         resp_o.sw_data   = '0;
@@ -176,6 +178,7 @@ module ls_fu #(
     resp_o.rob_idx   = req_i.rob_idx;
     resp_o.exception = 1'b0;
     resp_o.mispred   = 1'b0;
+    resp_o.taken     = 1'b0;
 
     if (req_i.disp_packet.rd_mem) begin
       resp_o.is_lw     = 1'b1;
@@ -245,7 +248,8 @@ module branch_fu #(
     resp_o.dest_prf  = req_i.dest_tag;
     resp_o.rob_idx   = req_i.rob_idx;
     resp_o.exception = 1'b1; // TODO: is branch
-    resp_o.mispred   = take;
+    resp_o.mispred   = (take == req_i.disp_packet.pred) ? 1'b0: 1'b1;
+    resp_o.taken     = take;
     resp_o.is_lw     = 1'b0;
     resp_o.is_sw     = 1'b0;
     resp_o.sw_data   = '0;
@@ -287,8 +291,18 @@ module fu #(
     output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0][$clog2(PHYS_REGS)-1:0] fu_dest_prf_o,
     output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0][$clog2(ROB_DEPTH)-1:0] fu_rob_idx_o,
     output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0]                    fu_exception_o,
-    output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0]                    fu_mispred_o
+    output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0]                    fu_mispred_o,
+    output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0]                    fu_taken_o,
+    output ADDR [BR_COUNT-1:0] br_pc_o,
+    output logic [BR_COUNT-1:0] [`HISTORY_BITS-1:0] br_history_o
 );
+
+  always_comb begin
+    for (int i = 0; i < BR_COUNT; i++) begin
+      br_pc_o = br_req[i].disp_packet.PC;
+      br_history_o = br_req[i].disp_packet.bp_history;
+    end
+  end
 
   localparam int TOTAL_FU = ALU_COUNT + MUL_COUNT + LOAD_COUNT + BR_COUNT;
   // always_ff @(negedge clock)
@@ -355,6 +369,7 @@ module fu #(
       fu_rob_idx_o  [k] = fu_resp_bus[k].rob_idx;
       fu_exception_o[k] = fu_resp_bus[k].exception;
       fu_mispred_o  [k] = fu_resp_bus[k].mispred;
+      fu_taken_o    [k] = fu_resp_bus[k].taken;
     end
 
   end

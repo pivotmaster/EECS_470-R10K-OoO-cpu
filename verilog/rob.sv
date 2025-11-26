@@ -588,7 +588,7 @@ task automatic show_rob_output();
              head, tail, count, full, empty);
     for (int i = 0; i < ROB_DEPTH; i++) begin
         if (rob_table[i].valid) begin
-            $display("Entry %0d: Value=%h, PC=%h , valid=%b, ready=%b, rd_wen=%b, rd_arch=%0d, new_prf=%0d, old_prf=%0d, exception=%b, mispred=%b",
+            $display("Entry %0d: Value=%h, PC=%h , valid=%b, ready=%b, rd_wen=%b, rd_arch=%0d, new_prf=%0d, old_prf=%0d, exception=%b, mispred=%b, halt=%b",
                      i, 
                      rob_table[i].value,
                      rob_table[i].PC,
@@ -599,7 +599,8 @@ task automatic show_rob_output();
                      rob_table[i].new_prf,
                      rob_table[i].old_prf,
                      rob_table[i].exception,
-                     rob_table[i].mispred);
+                     rob_table[i].mispred,
+                     rob_table[i].halt);
         end else begin
             $display("Entry %0d: --- empty ---", i);
         end
@@ -647,6 +648,19 @@ endtask
             cycle_count <= cycle_count + 1;
             dump_rob_state(cycle_count);
             show_rob_output();
+
+            for(int i = 0; i < COMMIT_WIDTH; i++) begin
+                $display("wb_packet_o[%d]: data=%0h | reg_idx=%d | halt=%b | illegal=%b | valid=%b | NPC=%h, wb_valid_[]=%b", 
+                    i,
+                    wb_packet_o[i].data,
+                    wb_packet_o[i].reg_idx,
+                    wb_packet_o[i].halt,
+                    wb_packet_o[i].illegal,
+                    wb_packet_o[i].valid,
+                    wb_packet_o[i].NPC,
+                    wb_valid[i]
+                    );
+            end
         end
     end
 

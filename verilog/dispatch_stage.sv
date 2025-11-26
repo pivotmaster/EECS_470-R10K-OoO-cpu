@@ -140,6 +140,8 @@ module dispatch_stage #(
             disp_packet_o[i].NPC = if_packet_i[i].NPC;
             disp_packet_o[i].valid = if_packet_i[i].valid;
             disp_packet_o[i].dest_reg_idx = (disp_rs_rd_wen_o[i]) ? if_packet_i[i].inst.r.rd : `ZERO_REG;
+            disp_packet_o[i].pred = if_packet_i[i].pred;
+            disp_packet_o[i].bp_history = if_packet_i[i].bp_history;
         end
     end
 
