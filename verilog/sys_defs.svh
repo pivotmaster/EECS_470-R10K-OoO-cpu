@@ -21,7 +21,7 @@
 // this is *your* processor, you decide these values (try analyzing which is best!)
 
 // superscalar width
-`define N 2
+`define N 1
 `define SINGLE_FU_NUM 2
 `define RS_DEPTH 16
 `define ROB_DEPTH 32
@@ -461,7 +461,7 @@ typedef struct packed {
     logic                         valid;
     logic [`XLEN-1:0]                  value;
     logic [$clog2(`PHYS_REGS)-1:0] dest_prf;
-    logic [$clog2(`PHYS_REGS)-1:0] sw_addr;
+    logic [`XLEN-1:0] sw_data;
     logic                          is_lw;
     logic                          is_sw;
     logic [$clog2(`ROB_DEPTH)-1:0] rob_idx;

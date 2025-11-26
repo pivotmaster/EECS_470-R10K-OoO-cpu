@@ -59,7 +59,7 @@ module alu_fu #(
     resp_o.mispred   = 1'b0;
     resp_o.is_lw     = 1'b0;
     resp_o.is_sw     = 1'b0;
-    resp_o.sw_addr   = '0;
+    resp_o.sw_data   = '0;
   end
 endmodule
 
@@ -148,7 +148,7 @@ module mul_fu #(
         resp_o.mispred   = 1'b0;
         resp_o.is_lw     = 1'b0;
         resp_o.is_sw     = 1'b0;
-        resp_o.sw_addr   = '0;
+        resp_o.sw_data   = '0;
       end
     end
 
@@ -181,19 +181,19 @@ module ls_fu #(
       resp_o.is_lw     = 1'b1;
       resp_o.is_sw     = 1'b0;
       resp_o.dest_prf  = req_i.dest_tag;
-      resp_o.sw_addr   = '0;
+      resp_o.sw_data   = '0;
 
     end else if (req_i.disp_packet.wr_mem) begin
       resp_o.is_lw     = 1'b0;
       resp_o.is_sw     = 1'b1;
       resp_o.dest_prf  = '0;
-      resp_o.sw_addr   = req_i.src1_val;
+      resp_o.sw_data   = req_i.src2_val;
 
     end else begin
       resp_o.is_lw     = 1'b0;
       resp_o.is_sw     = 1'b0;
       resp_o.dest_prf  = '0;
-      resp_o.sw_addr   = '0;
+      resp_o.sw_data   = '0;
     end
   end
 endmodule
@@ -248,7 +248,7 @@ module branch_fu #(
     resp_o.mispred   = take;
     resp_o.is_lw     = 1'b0;
     resp_o.is_sw     = 1'b0;
-    resp_o.sw_addr   = '0;
+    resp_o.sw_data   = '0;
   end
 endmodule
 

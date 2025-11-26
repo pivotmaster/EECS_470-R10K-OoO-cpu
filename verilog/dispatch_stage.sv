@@ -111,7 +111,7 @@ module dispatch_stage #(
         end
     end
 
-    assign stall = (disp_n < 2);
+    assign stall = (disp_n < `N);
 
 
     always_comb begin

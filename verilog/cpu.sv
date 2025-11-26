@@ -214,8 +214,8 @@ module cpu #(
             raddr[1 + i*8] <= alu_req[i].src2_val; 
             raddr[2 + i*8] <= mul_req[i].src1_val; 
             raddr[3 + i*8] <= mul_req[i].src2_val; 
-            raddr[4 + i*8] <= load_req[i].src1_val; 
-            raddr[5 + i*8] <= load_req[i].src2_val; 
+            raddr[4 + i*8] <= load_req[i].src1_mux; 
+            raddr[5 + i*8] <= load_req[i].src2_mux; 
             raddr[6 + i*8] <= br_req[i].src1_mux; 
             raddr[7 + i*8] <= br_req[i].src2_mux;
         end
@@ -503,7 +503,7 @@ module cpu #(
         .if_flush (if_flush),  
         .take_branch(take_branch),   
 
-        .disp_n(2),  
+        .disp_n(`N),  //todo
 
         .pred_valid_i(pred_valid_i),     
         .pred_lane_i(pred_lane_i),      
@@ -546,7 +546,7 @@ module cpu #(
     // assign if_id_enable = 1'b1;//###
 
     always_ff @(posedge clock) begin
-        if (reset || stall_dispatch) begin
+        if (reset || if_flush) begin
             for(int i=0;i<`FETCH_WIDTH;i++) begin
                 if_id_reg[i].inst  <= `NOP;
                 if_id_reg[i].valid <= `FALSE; //close this valid
@@ -1185,7 +1185,7 @@ module cpu #(
             mul_req_reg[i].src1_val = rdata[2 + i*8];
             mul_req_reg[i].src2_val = mul_req_reg_org[i].src2_valid ? rdata[3 + i*8] : mul_req_reg_org[i].src2_val;
             load_req_reg[i].src1_val = rdata[4 + i*8];
-            load_req_reg[i].src2_val = load_req_reg_org[i].src2_valid ? rdata[5 + i*8] : load_req_reg_org[i].src2_val;
+            load_req_reg[i].src2_val = load_req_reg_org[i].src2_valid ? rdata[5 + i*8] : load_req_reg_org[i].src2_mux;
             br_req_reg[i].src1_mux = rdata[6 + i*8];
             br_req_reg[i].src2_mux = br_req_reg_org[i].src2_valid ? rdata[7 + i*8] : br_req_reg_org[i].src2_mux;
         end
