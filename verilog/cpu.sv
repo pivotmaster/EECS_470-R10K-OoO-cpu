@@ -1343,10 +1343,10 @@ lsq_top #(
     .reset                   (reset),
 
     // Dispatch Stage
-    .dispatch_valid          (dispatch_valid),
+    .dispatch_valid          (disp_rob_valid), //ok
     .dispatch_is_store       (dispatch_is_store),
     .dispatch_size           (dispatch_size),
-    .dispatch_rob_idx        (dispatch_rob_idx),
+    .dispatch_rob_idx        (disp_rob_idx), //ok
     .lsq_full                (lsq_full),
 
     // Execution Stage  (###ok)

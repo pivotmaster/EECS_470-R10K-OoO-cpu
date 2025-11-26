@@ -90,7 +90,13 @@ module lsq_top #(
     output logic [$clog2(LQ_SIZE+1)-1:0] lq_snapshot_count_o,
     input  lq_entry_t                lq_snapshot_data_i[LQ_SIZE-1:0],
     input  logic [LQ_IDX_WIDTH-1:0]  lq_snapshot_head_i, lq_snapshot_tail_i,
-    input  logic [$clog2(LQ_SIZE+1)-1:0] lq_snapshot_count_i
+    input  logic [$clog2(LQ_SIZE+1)-1:0] lq_snapshot_count_i,
+
+    // =======================================================
+    // ======== free slot count in sq/sq  =====================
+    // =======================================================
+    output logic [$clog2(LQ_SIZE+1)-1:0] lq_free_num_slot,
+    output logic [$clog2(SQ_SIZE+1)-1:0] sq_free_num_slot
 );
 
     // =====================================================
@@ -205,7 +211,9 @@ module lsq_top #(
         .snapshot_data_i(sq_snapshot_data_i),
         .snapshot_head_i(sq_snapshot_head_i),
         .snapshot_tail_i(sq_snapshot_tail_i),
-        .snapshot_count_i(sq_snapshot_count_i)
+        .snapshot_count_i(sq_snapshot_count_i),
+
+        .free_num_slot(sq_free_num_slot)
     );
 
     // 2. Load Queue Instance
@@ -264,7 +272,9 @@ module lsq_top #(
         .snapshot_data_i(lq_snapshot_data_i),
         .snapshot_head_i(lq_snapshot_head_i),
         .snapshot_tail_i(lq_snapshot_tail_i),
-        .snapshot_count_i(lq_snapshot_count_i)
+        .snapshot_count_i(lq_snapshot_count_i),
+
+        .free_num_slot(lq_free_num_slot)
     );
 
     // =====================================================

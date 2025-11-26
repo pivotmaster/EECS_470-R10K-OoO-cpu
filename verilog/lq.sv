@@ -48,6 +48,11 @@ module lq #(
 
     output logic       empty,
 
+    // =======================================================
+    // ======== free slot count in lq    =====================
+    // =======================================================
+    output logic [$clog2(LQ_SIZE+1)-1:0] free_num_slot,
+
     // Snapshot interface (Keep as is)
     input logic [DISPATCH_WIDTH-1:0] is_branch_i,
     input logic                      snapshot_restore_valid_i,
@@ -312,7 +317,7 @@ module lq #(
             end // else snapshot
         end // else reset
     end
-
+    assign free_num_slot = LQ_SIZE - count;
     // Snapshot output connections
     generate 
         for (genvar i = 0 ; i < LQ_SIZE ; i++) begin
