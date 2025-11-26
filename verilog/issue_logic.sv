@@ -140,6 +140,9 @@ module issue_logic #(
                     OPB_IS_J_IMM: src2_valid = 0;
                     default:      src2_valid = 1; // face feed
                 endcase
+                if(rs_entries_i[i].disp_packet.wr_mem) begin
+                    src2_valid = 1;
+                end
                  //$display("imm = %d", src2_mux);
                 issue_pkts[issue_slot].opcode =  rs_entries_i[i].disp_packet.alu_func; // 4 bit opcode for ALU(add/ sub...)
                 issue_pkts[issue_slot].src1_val  = src1_mux;
