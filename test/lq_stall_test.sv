@@ -1,6 +1,6 @@
 `include "sys_defs.svh"
 
-module lq_polling_tb;
+module lq_stall_test;
 
     // Parameters
     parameter int DISPATCH_WIDTH = 1;
@@ -11,43 +11,40 @@ module lq_polling_tb;
     // Clock & Reset
     logic clock, reset;
 
-    // Interfaces
+    // Inputs
     logic       enq_valid;
     ADDR        enq_addr;
     MEM_SIZE    enq_size;
     ROB_IDX     enq_rob_idx;
     logic       full;
 
-    logic       sq_forward_valid;
-    MEM_BLOCK   sq_forward_data;
-    ADDR        sq_forward_addr;
-    logic       sq_fwd_pending;
-    ADDR        sq_query_addr;
-    MEM_SIZE    sq_query_size;
+    // SQ View Input (這是我們要手動操縱的重點)
+    sq_entry_t  sq_view_i[SQ_SIZE-1:0];
 
+    // ROB Head (這也是操縱重點)
+    ROB_IDX     rob_head;
+
+    // D-Cache Request Output (觀察指標: 1=Issue, 0=Stall)
     logic       dc_req_valid;
     ADDR        dc_req_addr;
-    MEM_SIZE    dc_req_size;
-    logic       dc_req_accept;
-    logic [IDX_WIDTH-1:0] dc_req_tag;
-
-    MEM_BLOCK   dc_load_data;
-    logic       dc_load_valid;
-    logic [IDX_WIDTH-1:0] dc_load_tag;
-
-    ROB_IDX     rob_head;
-    logic       wb_valid;
-    ROB_IDX     wb_rob_idx;
-    MEM_BLOCK   wb_data;
-
-    logic       rob_commit_valid;
-    ROB_IDX     rob_commit_valid_idx;
-    logic       empty;
-
-    // Dummy Signals
-    sq_entry_t sq_view_i[SQ_SIZE-1:0];
+    
+    // Other signals (tied to 0 or ignored)
+    logic sq_forward_valid, sq_fwd_pending, dc_req_accept, dc_load_valid, rob_commit_valid, wb_valid, empty;
+    MEM_BLOCK sq_forward_data, dc_load_data, wb_data;
+    ADDR sq_forward_addr, sq_query_addr;
+    MEM_SIZE sq_query_size, dc_req_size;
+    ROB_IDX wb_rob_idx, rob_commit_valid_idx;
+    logic [IDX_WIDTH-1:0] dc_req_tag, dc_load_tag;
+    
+    // Dummy Snapshot
+    logic [DISPATCH_WIDTH-1:0] is_branch_i;
+    logic snapshot_restore_valid_i, checkpoint_valid_o;
     lq_entry_t snapshot_data_o[LQ_SIZE-1:0];
-    // ... other dummies tied to 0
+    logic [IDX_WIDTH-1:0] snap_h, snap_t;
+    logic [$clog2(LQ_SIZE+1)-1:0] snap_c;
+    lq_entry_t snapshot_data_i[LQ_SIZE-1:0];
+    logic [IDX_WIDTH-1:0] snap_hi, snap_ti;
+    logic [$clog2(LQ_SIZE+1)-1:0] snap_ci;
 
     // ===============================================================
     // DUT Instantiation
@@ -57,85 +54,52 @@ module lq_polling_tb;
         .LQ_SIZE(LQ_SIZE),
         .SQ_SIZE(SQ_SIZE)
     ) dut (
-        .clock(clock),
-        .reset(reset),
-
-        .enq_valid(enq_valid),
-        .enq_addr(enq_addr),
-        .enq_size(enq_size),
-        .enq_rob_idx(enq_rob_idx),
-        .full(full),
-
-        .sq_forward_valid(sq_forward_valid),
-        .sq_forward_data(sq_forward_data),
-        .sq_forward_addr(sq_forward_addr),
-        .sq_fwd_pending(sq_fwd_pending),
-        .sq_query_addr(sq_query_addr),
-        .sq_query_size(sq_query_size),
-
-        .dc_req_valid(dc_req_valid),
-        .dc_req_addr(dc_req_addr),
-        .dc_req_size(dc_req_size),
-        .dc_req_accept(dc_req_accept),
-        .dc_req_tag(dc_req_tag),
-
-        .dc_load_data(dc_load_data),
-        .dc_load_valid(dc_load_valid),
-        .dc_load_tag(dc_load_tag),
-
+        .clock(clock), .reset(reset),
+        .enq_valid(enq_valid), .enq_addr(enq_addr), .enq_size(enq_size), .enq_rob_idx(enq_rob_idx), .full(full),
+        
+        // 關鍵連接
         .rob_head(rob_head),
-        .wb_valid(wb_valid),
-        .wb_rob_idx(wb_rob_idx),
-        .wb_data(wb_data),
-
-        .rob_commit_valid(rob_commit_valid),
-        .rob_commit_valid_idx(rob_commit_valid_idx),
-        .empty(empty),
-
         .sq_view_i(sq_view_i),
+        .dc_req_valid(dc_req_valid),
         
         // Dummies
-        .is_branch_i('0), .snapshot_restore_valid_i('0),
-        .checkpoint_valid_o(), .snapshot_data_o(snapshot_data_o),
-        .snapshot_head_o(), .snapshot_tail_o(), .snapshot_count_o(),
-        .snapshot_data_i(), .snapshot_head_i('0), .snapshot_tail_i('0), .snapshot_count_i('0)
+        .sq_forward_valid(sq_forward_valid), .sq_forward_data(sq_forward_data), .sq_forward_addr(sq_forward_addr), .sq_fwd_pending(sq_fwd_pending),
+        .sq_query_addr(sq_query_addr), .sq_query_size(sq_query_size),
+        .dc_req_addr(dc_req_addr), .dc_req_size(dc_req_size), .dc_req_accept(dc_req_accept), .dc_req_tag(dc_req_tag),
+        .dc_load_data(dc_load_data), .dc_load_valid(dc_load_valid), .dc_load_tag(dc_load_tag),
+        .wb_valid(wb_valid), .wb_rob_idx(wb_rob_idx), .wb_data(wb_data),
+        .rob_commit_valid(rob_commit_valid), .rob_commit_valid_idx(rob_commit_valid_idx), .empty(empty),
+        .is_branch_i(is_branch_i), .snapshot_restore_valid_i(snapshot_restore_valid_i), .checkpoint_valid_o(checkpoint_valid_o),
+        .snapshot_data_o(snapshot_data_o), .snapshot_head_o(snap_h), .snapshot_tail_o(snap_t), .snapshot_count_o(snap_c),
+        .snapshot_data_i(snapshot_data_i), .snapshot_head_i(snap_hi), .snapshot_tail_i(snap_ti), .snapshot_count_i(snap_ci)
     );
 
-    // ===============================================================
-    // Clock
-    // ===============================================================
     always #5 clock = ~clock;
 
     // ===============================================================
-    // Tasks
+    // Helper Tasks
     // ===============================================================
     task sys_reset();
         reset = 1;
         enq_valid = 0;
-        sq_forward_valid = 0;
-        sq_fwd_pending = 0;
-        dc_req_accept = 0;
-        dc_load_valid = 0;
-        rob_commit_valid = 0;
         rob_head = 0;
-        // Init SQ view
+        sq_forward_valid = 0;
+        // 清空 SQ View
         for(int i=0; i<SQ_SIZE; i++) begin
-            sq_view_i[i]='0;
+            sq_view_i[i].valid = 0;
+            sq_view_i[i].addr_valid = 0;
+            sq_view_i[i].rob_idx = 0;
         end
-        @(posedge clock);
-        @(posedge clock);
+        @(posedge clock); @(posedge clock);
         reset = 0;
         @(posedge clock);
     endtask
 
     task dispatch_load(input ROB_IDX rob);
-        @(posedge clock);
         enq_valid = 1;
-        // enq_addr = addr;
+        enq_addr = 32'h1000; // 固定地址方便測試
         enq_size = WORD;
         enq_rob_idx = rob;
-        enq_addr = 32'h1000; // 固定地址方便測試
-        wait(!full);
         @(posedge clock);
         enq_valid = 0;
     endtask
