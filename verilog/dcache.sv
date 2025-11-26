@@ -29,7 +29,6 @@ module dcache (
     output ADDR        Dcache2mem_addr,
     output MEM_SIZE    Dcache2mem_size,
     output MEM_BLOCK   Dcache2mem_data,
-    output logic       Dcache2mem_valid,
     
     input  MEM_TAG   mem2proc_transaction_tag, //Tell you the tag for this to mem request (1 cycle after sending request)
     input  MEM_BLOCK mem2proc_data,
@@ -675,13 +674,11 @@ module dcache (
     always_comb begin : signal_to_mem
         // default
         Dcache2mem_command = MEM_NONE;
-        Dcache2mem_valid   = 1'b0;
         Dcache2mem_addr    = '0;
         Dcache2mem_size    = BYTE;  
         Dcache2mem_data    = '0;
 
         if (send_new_mem_req) begin
-            Dcache2mem_valid   = 1'b1;
             if (send_miss_0) begin
                 Dcache2mem_addr = {tag_0, index_0, bank_0, {OFFSET_BITS{1'b0}}};
             end else begin // send_miss_1

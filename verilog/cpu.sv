@@ -194,6 +194,39 @@ module cpu #(
     logic checkpoint_valid;//### 11/10 sychenn ###//
     logic has_snapshot; // guard restore until a snapshot is captured
 
+
+// D-Cache
+    MEM_COMMAND Dcache_command_0;
+    MEM_SIZE    Dcache_size_0;
+    MEM_BLOCK   Dcache_store_data_0;
+    logic [`LQ_IDX_WIDTH-1:0] Dcache_req_tag;
+
+    logic       Dcache_req_0_accept;
+    MEM_BLOCK   Dcache_data_out_0;
+    logic       Dcache_valid_out_0;
+    logic [`LQ_IDX_WIDTH-1:0] Dcache_load_tag;
+
+    // Port 1: usually Store port from LSQ
+    ADDR        Dcache_addr_1;
+    MEM_COMMAND Dcache_command_1;
+    MEM_SIZE    Dcache_size_1;
+    MEM_BLOCK   Dcache_store_data_1;
+
+    logic       Dcache_req_1_accept;
+    MEM_BLOCK   Dcache_data_out_1;
+    logic       Dcache_valid_out_1;
+
+    // Memory interface (to memory system)
+    MEM_COMMAND Dcache2mem_command;
+    ADDR        Dcache2mem_addr;
+    MEM_SIZE    Dcache2mem_size;
+    MEM_BLOCK   Dcache2mem_data;
+    logic       Dcache2mem_valid;
+
+    MEM_TAG     mem2proc_transaction_tag;
+    MEM_BLOCK   mem2proc_data;
+    MEM_TAG     mem2proc_data_tag;
+
 // Issue
 
     // =========================================================
@@ -337,16 +370,17 @@ module cpu #(
         // TODO: now only has icache
         proc2mem_command = Imem_command;
         proc2mem_addr    = Imem_addr;
-        // if (Dmem_command != MEM_NONE) begin  // read or write DATA from memory
-        //     proc2mem_command = Dmem_command_filtered;
-        //     proc2mem_size    = Dmem_size;
-        //     proc2mem_addr    = Dmem_addr;
-        // end else begin                      // read an INSTRUCTION from memory
-        //     proc2mem_command = Imem_command;
-        //     proc2mem_addr    = Imem_addr;
-        //     proc2mem_size    = DOUBLE;      // instructions load a full memory line (64 bits)
-        // end
-        // proc2mem_data = Dmem_store_data;
+        if (Dmem_command != MEM_NONE) begin  // read or write DATA from memory
+            // proc2mem_command = Dmem_command_filtered;
+            proc2mem_command = Dmem_command;
+            proc2mem_size    = Dmem_size;
+            proc2mem_addr    = Dmem_addr;
+        end else begin                      // read an INSTRUCTION from memory
+            proc2mem_command = Imem_command;
+            proc2mem_addr    = Imem_addr;
+            proc2mem_size    = DOUBLE;      // instructions load a full memory line (64 bits)
+        end
+        proc2mem_data = Dmem_store_data;
     end
     assign proc2mem_size = DOUBLE;
 
@@ -1297,6 +1331,9 @@ module cpu #(
 // =====================================================
 // LSQ top instance
 // =====================================================
+
+
+
 lsq_top #(
     .DISPATCH_WIDTH (`DISPATCH_WIDTH),
     .SQ_SIZE        (`SQ_SIZE),
@@ -1332,9 +1369,7 @@ lsq_top #(
     .wb_rob_idx              (wb_rob_idx),
     .wb_data                 (wb_data),
 
-    // =====================================================
     // 5. Dual Port D-Cache Interface
-    // =====================================================
 
     // --- Port 0: Load ---
     .Dcache_addr_0           (Dcache_addr_0),
@@ -1387,6 +1422,51 @@ lsq_top #(
     .lq_snapshot_count_i     (lq_snapshot_count_i)
 );
 
+    //////////////////////////////////////////////////
+    //                                              //
+    //               D-CACHE                        //
+    //                                              //
+    //////////////////////////////////////////////////
+
+
+
+dcache dcache_0 (
+
+    .clock                     (clock),
+    .reset                     (reset),
+
+    // Port 0 (Load / LSQ load port)
+    .Dcache_addr_0             (Dcache_addr_0),
+    .Dcache_command_0          (Dcache_command_0),
+    .Dcache_size_0             (Dcache_size_0),
+    .Dcache_store_data_0       (Dcache_store_data_0),
+    .Dcache_req_tag            (Dcache_req_tag),
+
+    .Dcache_req_0_accept       (Dcache_req_0_accept),
+    .Dcache_data_out_0         (Dcache_data_out_0),
+    .Dcache_valid_out_0        (Dcache_valid_out_0),
+    .Dcache_load_tag           (Dcache_load_tag),
+
+    // Port 1 (Store / LSQ store port)
+    .Dcache_addr_1             (Dcache_addr_1),
+    .Dcache_command_1          (Dcache_command_1),
+    .Dcache_size_1             (Dcache_size_1),
+    .Dcache_store_data_1       (Dcache_store_data_1),
+
+    .Dcache_req_1_accept       (Dcache_req_1_accept),
+    .Dcache_data_out_1         (Dcache_data_out_1),
+    .Dcache_valid_out_1        (Dcache_valid_out_1),
+
+    // Memory interface
+    .Dcache2mem_command        (Dmem_command),
+    .Dcache2mem_addr           (Dmem_addr),
+    .Dcache2mem_size           (Dmem_size),
+    .Dcache2mem_data           (Dmem_store_data),
+
+    .mem2proc_transaction_tag  (mem2proc_transaction_tag),
+    .mem2proc_data             (mem2proc_data),
+    .mem2proc_data_tag         (mem2proc_data_tag)
+);
 
     //////////////////////////////////////////////////
     //                                              //
