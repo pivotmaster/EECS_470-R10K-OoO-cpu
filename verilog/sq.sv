@@ -40,6 +40,11 @@ module sq #(
     output MEM_BLOCK   dc_store_data,   //need to solve this!!!
     input  logic       dc_req_accept,
 
+
+    // =======================================================
+    // ======== free slot count in sq    =====================
+    // =======================================================
+    output logic [$clog2(SQ_SIZE+1)-1:0] free_num_slot,
     // =======================================================
     // ======== Snapshot / Flush control =====================
     // =======================================================
@@ -308,6 +313,7 @@ module sq #(
   end
   assign dc_req_valid = dc_req_req;
   assign dc_req_cmd   = MEM_STORE;
+  assign free_num_slot = SQ_SIZE - count;
 
 
 // =======================================================
