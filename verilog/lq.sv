@@ -105,7 +105,7 @@ module lq #(
         // This acts as the candidate for BOTH Forwarding and D-Cache Issue
         for(i = 0; i < LQ_SIZE; i++) begin
             idx = (head + i) % LQ_SIZE; // Check from oldest to youngest
-            if(lq[idx].valid && !lq[idx].data_valid && !lq[idx].issued) begin
+            if(lq[idx].valid && !lq[idx].data_valid) begin
                 sq_query_addr = lq[idx].addr;
                 sq_query_size = lq[idx].size;
                 query_idx = idx;
@@ -260,9 +260,9 @@ module lq #(
                 // 3. Handling D-Cache Request Accepted
                 // ------------------------------------
                 // Mark as issued so we don't request again
-                if(dc_req_valid && dc_req_accept) begin
-                    lq[query_idx].issued <= 1'b1;
-                end
+                // if(dc_req_valid && dc_req_accept) begin
+                //     lq[query_idx].issued <= 1'b1;
+                // end
 
                 // ------------------------------------
                 // 4. Handling D-Cache Data Return
