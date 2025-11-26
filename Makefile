@@ -191,7 +191,7 @@ GREP = grep -E --color=auto
 
 # TODO: add more modules here
 # MODULES = cpu  
-MODULES = cpu 
+MODULES = sq
 
 # TODO: update this if you add more header files
 ALL_HEADERS = $(CPU_HEADERS)

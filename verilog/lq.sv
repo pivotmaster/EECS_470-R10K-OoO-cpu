@@ -100,16 +100,18 @@ module lq #(
         query_idx = '0;
         sq_query_addr = '0;
         sq_query_size = '0;
-        stall_older_store_unknown = 1'b0;
+        // stall_older_store_unknown = 1'b0;
         // Find the oldest valid entry that needs data (not valid, not issued)
         // This acts as the candidate for BOTH Forwarding and D-Cache Issue
         for(i = 0; i < LQ_SIZE; i++) begin
             idx = (head + i) % LQ_SIZE; // Check from oldest to youngest
             if(lq[idx].valid && !lq[idx].data_valid) begin
+                $display("[DEBUG] Found Candidate! Idx=%0d, Addr=%h", idx, lq[idx].addr);
                 sq_query_addr = lq[idx].addr;
                 sq_query_size = lq[idx].size;
                 query_idx = idx;
                 found_unissued = 1'b1;
+                $display("found_unissued = %0b" , found_unissued);
                 break; // Found the oldest one
             end
         end
@@ -122,6 +124,7 @@ module lq #(
         dc_req_valid = 1'b0;
         dc_req_addr  = '0;
         dc_req_size  = '0;
+        stall_older_store_unknown = 1'b0;
         $display("[DEBUG-ALWAYS LOAD QUEUE] Count=%0d, Tail=%0d, Head=%0d", count, tail, head);
 
         // 只有當準備 Issue 時才檢查
@@ -237,6 +240,7 @@ module lq #(
                     wb_valid   <= 1'b1;
                     wb_rob_idx <= lq[dc_load_tag].rob_idx; // 注意：要確認 tag 對應的 rob_idx 正確
                     wb_data    <= dc_load_data;
+                    // $display("wb_valid = %0b, wb_data = %0h" , wb_valid , wb_data);
                 end
                 // ------------------------------------
                 // 2. Handling SQ Forwarding Response

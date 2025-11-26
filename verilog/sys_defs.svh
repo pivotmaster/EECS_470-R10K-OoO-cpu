@@ -296,10 +296,10 @@ function automatic logic is_older(ROB_IDX a, ROB_IDX b, ROB_IDX head);
     int dist_a, dist_b;
     
     if (a >= head) dist_a = a - head;
-    else           dist_a = (a + ROB_SIZE) - head;
+    else           dist_a = (a + `ROB_DEPTH) - head;
 
     if (b >= head) dist_b = b - head;
-    else           dist_b = (b + ROB_SIZE) - head;
+    else           dist_b = (b + `ROB_DEPTH) - head;
 
     return (dist_a < dist_b);
 endfunction
