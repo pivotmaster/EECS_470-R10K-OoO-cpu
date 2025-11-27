@@ -235,6 +235,7 @@ module branch_fu #(
               default: take = `FALSE;
           endcase
     end
+    $display(" un_br=%b | fun3=%b |src1/2=%d,%d |take =%b", req_i.disp_packet.uncond_branch, req_i.disp_packet.inst.b.funct3, signed'(req_i.src1_mux),signed'(req_i.src2_mux), take);
   end
 
   // assign ready_o = 1'b1;
@@ -287,7 +288,7 @@ module fu #(
     output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0][$clog2(PHYS_REGS)-1:0] fu_dest_prf_o,
     output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0][$clog2(ROB_DEPTH)-1:0] fu_rob_idx_o,
     output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0]                    fu_exception_o,
-    output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0]                    fu_mispred_o
+    output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0]                    fu_mispred_o,
 
     //FU -> LSQ
     output logic [LOAD_COUNT-1:0]                                               fu_ls_valid_o,
@@ -310,7 +311,7 @@ module fu #(
     end
 
     // route fu_resp_bus to output to lsq 
-    for (int i; i < (ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT); i++) begin
+    for (int i =0; i < (ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT); i++) begin
       if (fu_resp_bus[i].is_sw || fu_resp_bus[i].is_lw) begin
         fu_ls_valid_o[idx] = fu_resp_bus[i].valid;
         fu_ls_rob_idx_o[idx] = fu_resp_bus[i].rob_idx;
@@ -378,12 +379,12 @@ module fu #(
   integer k;
   always_comb begin
     for (k = 0; k < TOTAL_FU; k++) begin
-      if (fu_resp_bus[k].rob_idx == 35 && fu_resp_bus[k].dest_prf ==110 ) begin
-        $display("value= aaa:%h",results[k]);
+      if (fu_resp_bus[k].is_sw || fu_resp_bus[k].is_lw) begin
+        fu_valid_o[k] = 0; // close load fu 
+      end else begin 
+        fu_valid_o[k] = fu_resp_bus[k].valid;
       end
-      if (fu_resp_bus[i].is_sw || fu_resp_bus[i].is_lw) fu_valid_o[k] = 0;
-      else fu_valid_o[k] = 1;
-  
+
       fu_value_o    [k] = fu_resp_bus[k].value;
       fu_dest_prf_o [k] = fu_resp_bus[k].dest_prf;
       fu_rob_idx_o  [k] = fu_resp_bus[k].rob_idx;
@@ -447,6 +448,9 @@ module fu #(
         end else begin
             fu_cycle_count <= fu_cycle_count + 1;
             dump_fu_state(fu_cycle_count);
+
+                        
+
         end
     end
 

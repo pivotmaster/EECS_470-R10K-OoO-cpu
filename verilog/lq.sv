@@ -2,8 +2,8 @@
 
 module lq #(
     parameter int DISPATCH_WIDTH = 1,
-    parameter int LQ_SIZE = 16,
-    parameter int SQ_SIZE = 16,
+    parameter int LQ_SIZE = 128,
+    parameter int SQ_SIZE = 128,
     parameter int IDX_WIDTH = $clog2(LQ_SIZE)
 )
 (   
@@ -40,7 +40,8 @@ module lq #(
     input  ROB_IDX     rob_head,
     output logic       wb_valid,
     output ROB_IDX     wb_rob_idx,
-    output MEM_BLOCK   wb_data,
+    output logic [31:0]   wb_data, //TODO: only WORD level now
+    output logic [$clog2(`PHYS_REGS)-1:0] wb_disp_rd_new_prf_o,
 
     // 6. Commit (From ROB - Free Entry)
     input  logic       rob_commit_valid,
@@ -53,16 +54,18 @@ module lq #(
     // =======================================================
     output logic [$clog2(LQ_SIZE+1)-1:0] free_num_slot,
 
+    input logic [DISPATCH_WIDTH-1:0][$clog2(`PHYS_REGS)-1:0]disp_rd_new_prf_i,
+
     // Snapshot interface (Keep as is)
     input logic [DISPATCH_WIDTH-1:0] is_branch_i,
     input logic                      snapshot_restore_valid_i,
     output logic                     checkpoint_valid_o,
     output lq_entry_t                snapshot_data_o[LQ_SIZE-1:0],
     output logic   [IDX_WIDTH-1 : 0] snapshot_head_o , snapshot_tail_o,
-    output logic   [$clog2(LQ_SIZE+1)-1:0] snapshot_count_o,
+    output logic   [$clog2(LQ_SIZE)-1:0] snapshot_count_o,
     input lq_entry_t                 snapshot_data_i[LQ_SIZE-1:0],
     input logic    [IDX_WIDTH-1 : 0] snapshot_head_i , snapshot_tail_i,
-    input logic   [$clog2(LQ_SIZE+1)-1:0] snapshot_count_i,
+    input logic   [$clog2(LQ_SIZE)-1:0] snapshot_count_i,
 
     input sq_entry_t sq_view_i [SQ_SIZE-1:0]
 );
@@ -183,6 +186,7 @@ module lq #(
                 lq[i].size <= '0;
                 lq[i].rob_idx <= '0;
                 lq[i].data <= '0;
+                lq[i].disp_rd_new_prf <= '0;
             end
         end else begin
             checkpoint_valid_o <= checkpoint_valid_next;
@@ -223,6 +227,7 @@ module lq #(
                     lq[tail].rob_idx <= enq_rob_idx;
                     lq[tail].data_valid <= 1'b0;
                     lq[tail].issued <= 1'b0;
+                    lq[tail].disp_rd_new_prf <= disp_rd_new_prf_i;
                     tail <= next_ptr(tail);
                     // count <= count + 1'b1;
                 end
@@ -244,7 +249,8 @@ module lq #(
                     // modify by zhengge in 11/25 TODO
                     wb_valid   <= 1'b1;
                     wb_rob_idx <= lq[dc_load_tag].rob_idx; // 注意：要確認 tag 對應的 rob_idx 正確
-                    wb_data    <= dc_load_data;
+                    wb_data    <= dc_load_data.word_level[0]; //TODO: Only consider WORD Data now
+                    wb_disp_rd_new_prf_o <= lq[query_idx].disp_rd_new_prf;
                     // $display("wb_valid = %0b, wb_data = %0h" , wb_valid , wb_data);
                 end
                 // ------------------------------------
@@ -262,7 +268,8 @@ module lq #(
                     // 或者在這裡直接觸發 wb_valid 也可以。
                     wb_valid   <= 1'b1;
                     wb_rob_idx <= lq[query_idx].rob_idx;
-                    wb_data    <= sq_forward_data;
+                    wb_data    <= sq_forward_data.word_level[0]; //TODO: Only consider WORD Data now
+                    wb_disp_rd_new_prf_o <= lq[query_idx].disp_rd_new_prf;
                 end
 
                 // ------------------------------------
@@ -329,6 +336,7 @@ module lq #(
             assign snapshot_data_o[i].data_valid = lq[i].data_valid;
             assign snapshot_data_o[i].data = lq[i].data;
             assign snapshot_data_o[i].issued = lq[i].issued;
+            assign snapshot_data_o[i].disp_rd_new_prf = lq[i].disp_rd_new_prf;
         end
     endgenerate
     assign snapshot_head_o = head;

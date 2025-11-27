@@ -1,9 +1,11 @@
 `include "sys_defs.svh"
 
+//TODO: Need to have address valid bit (from FU)
+
 module lsq_top #(
     parameter int DISPATCH_WIDTH = 1,
-    parameter int SQ_SIZE = 16,
-    parameter int LQ_SIZE = 16,
+    parameter int SQ_SIZE = 128,
+    parameter int LQ_SIZE = 128,
     // 用於 snapshot 介面的計算
     parameter int SQ_IDX_WIDTH = $clog2(SQ_SIZE),
     parameter int LQ_IDX_WIDTH = $clog2(LQ_SIZE)
@@ -39,8 +41,8 @@ module lsq_top #(
     // =====================================================
     output logic       wb_valid,
     output ROB_IDX     wb_rob_idx,
-    output MEM_BLOCK   wb_data,
-
+    output logic [31:0]   wb_data, //TODO: only WORD level now
+ 
     // =====================================================
     // 5. Dual Port D-Cache Interface
     // =====================================================
@@ -96,7 +98,15 @@ module lsq_top #(
     // ======== free slot count in sq/sq  =====================
     // =======================================================
     output logic [$clog2(LQ_SIZE+1)-1:0] lq_free_num_slot,
-    output logic [$clog2(SQ_SIZE+1)-1:0] sq_free_num_slot
+    output logic [$clog2(SQ_SIZE+1)-1:0] sq_free_num_slot,
+
+    // =======================================================
+    // ======== disp_rd_new_prf          =====================
+    // =======================================================
+    // Dispatch ->lsq
+    input logic [DISPATCH_WIDTH-1:0][$clog2(`PHYS_REGS)-1:0]disp_rd_new_prf_i,
+    // lsq -> complete stage
+    output logic [$clog2(`PHYS_REGS)-1:0] wb_disp_rd_new_prf_o
 );
 
     // =====================================================
@@ -274,7 +284,9 @@ module lsq_top #(
         .snapshot_tail_i(lq_snapshot_tail_i),
         .snapshot_count_i(lq_snapshot_count_i),
 
-        .free_num_slot(lq_free_num_slot)
+        .free_num_slot(lq_free_num_slot),
+        .disp_rd_new_prf_i(disp_rd_new_prf_i),
+        .wb_disp_rd_new_prf_o(wb_disp_rd_new_prf_o)
     );
 
     // =====================================================
@@ -308,5 +320,47 @@ module lsq_top #(
     assign sq_req_accept       = Dcache_req_1_accept;
 
     assign sq_snapshot_data_o = sq_internal_state;
+
+    // =====================================================
+    // Debug Display Task
+    // =====================================================
+    task automatic show_lsq_status();
+        $display("=== LSQ Status (Cycle %0d) ===", $time);
+        
+        // Basic LSQ status
+        $display("LSQ Control: dispatch_valid=%b, dispatch_is_store=%b, commit_valid=%b, rob_head=%0d, commit_rob_idx=%0d",
+                dispatch_valid, dispatch_is_store, commit_valid, rob_head, commit_rob_idx);
+        
+        // D-Cache Interface Status
+        $display("\n=== D-Cache Interface ===");
+        $display("Load Port (0): cmd=%s, addr=%h, size=%0d, accept=%b, valid_out=%b, data_out=%h, lq_req_valid=%s",
+                Dcache_command_0.name(), Dcache_addr_0, Dcache_size_0, 
+                Dcache_req_0_accept, Dcache_valid_out_0, Dcache_data_out_0,lq_req_valid);
+        
+        $display("Store Port (1): cmd=%s, addr=%h, size=%0d, accept=%b, valid_out=%b, data_out=%h, sq_req_valid=%s",
+                Dcache_command_1.name(), Dcache_addr_1, Dcache_size_1,
+                Dcache_req_1_accept, Dcache_valid_out_1, Dcache_data_out_1,sq_req_valid);
+        
+        // Writeback Status
+        $display("\n=== Writeback ===");
+        $display("WB Valid: %b, ROB IDX: %0d, Data: %h", 
+                wb_valid, wb_rob_idx, wb_data);
+        
+        $display("==================================\n");
+    endtask
+
+
+    // Call the debug display on every clock edge (can be modified to trigger on specific conditions)
+    always_ff @(posedge clock) begin
+        if (!reset) begin
+            // Uncomment the line below to enable continuous debugging
+            show_lsq_status();
+            
+            // Or add specific conditions to trigger the display, for example:
+            // if (dispatch_valid || commit_valid || wb_valid || Dcache_valid_out_0 || Dcache_valid_out_1) begin
+            //     show_lsq_status();
+            // end
+        end
+    end
 
 endmodule

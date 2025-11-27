@@ -100,7 +100,16 @@ module dispatch_stage #(
     output DISP_PACKET [DISPATCH_WIDTH-1:0] disp_packet_o,
     output logic stall,
 
-    output logic [$clog2(DISPATCH_WIDTH+1)-1:0] disp_n
+    output logic [$clog2(DISPATCH_WIDTH+1)-1:0] disp_n,
+
+    // Dispatch <-> LSQ
+    output  logic     [DISPATCH_WIDTH-1:0]  dispatch_valid,
+    output  logic      [DISPATCH_WIDTH-1:0] dispatch_is_store, // 1=Store, 0=Load
+    output  MEM_SIZE   [DISPATCH_WIDTH-1:0] dispatch_size,
+    output  ROB_IDX    [DISPATCH_WIDTH-1:0] disp_rob_idx_o,
+
+    input   logic   [$clog2(`LQ_SIZE+1)-1:0]    lq_count,         
+    input   logic    [$clog2(`LQ_SIZE+1)-1:0]   st_count          
 
 );
     //### 11/10 sychenn ###// (for map table restore)
@@ -113,12 +122,13 @@ module dispatch_stage #(
 
     assign stall = (disp_n < `N);
 
-
     always_comb begin
         disp_n = DISPATCH_WIDTH;
         if (free_rs_slots_i < disp_n)  disp_n = free_rs_slots_i;
         if (free_rob_slots_i < disp_n) disp_n = free_rob_slots_i;
         if (free_regs_i < disp_n)      disp_n = free_regs_i;
+        // if (lq_count < disp_n)         disp_n = lq_count;
+        // if (st_count < disp_n)         disp_n = st_count;
     end
 
     always_ff @(posedge clock) begin
@@ -219,6 +229,20 @@ module dispatch_stage #(
 
                     // To map table
                     dest_new_prf[i] = new_reg_i[i];
+
+                    // To LSQ
+                    if (disp_packet_o[i].rd_mem || disp_packet_o[i].wr_mem) begin
+                      dispatch_valid[i] = 1;
+                      dispatch_is_store[i] = disp_packet_o[i].wr_mem; // store = 1
+                      dispatch_size[i] = WORD;
+                      disp_rob_idx_o[i] = disp_rob_idx_i[i];
+                    end else begin
+                      dispatch_valid[i] = 0;
+                      dispatch_is_store[i] = disp_packet_o[i].wr_mem; // store = 1
+                      dispatch_size[i] = WORD;
+                      disp_rob_idx_o[i] = disp_rob_idx_i[i];
+                    end
+                    
                 end 
               end
           end

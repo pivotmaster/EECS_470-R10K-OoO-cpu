@@ -249,7 +249,7 @@ module rob #(
 
     output logic [DISPATCH_WIDTH-1:0] disp_ready_o,
     output logic [DISPATCH_WIDTH-1:0] disp_alloc_o,
-    output logic [DISPATCH_WIDTH-1:0][$clog2(ROB_DEPTH)-1:0]  disp_rob_idx_o,
+    output ROB_IDX [DISPATCH_WIDTH-1:0]  disp_rob_idx_o,
     output logic [$clog2(ROB_DEPTH+1)-1:0] disp_enable_space_o, 
 
     // Writeback
@@ -269,11 +269,11 @@ module rob #(
 
     // Branch flush ##TODO: What is this for?
     output logic flush_o,
-    output logic [$clog2(ROB_DEPTH)-1:0] flush_upto_rob_idx_o,
+    output ROB_IDX flush_upto_rob_idx_o,
 
     // Branch flush ### (sychenn 11/6) ###
     input logic mispredict_i,
-    input logic [$clog2(ROB_DEPTH)-1:0] mispredict_rob_idx_i,
+    input ROB_IDX  mispredict_rob_idx_i,
 
     //### TODO: for debug only (sychenn 11/6) ###
     //  to free list
@@ -281,10 +281,14 @@ module rob #(
     output logic [ROB_DEPTH-1:0] flush_free_regs_valid,
     output logic [(PHYS_REGS)-1:0] flush_free_regs,
 
-    output COMMIT_PACKET [`N-1:0] wb_packet_o
+    output COMMIT_PACKET [`N-1:0] wb_packet_o,
 
+    // ROB -> LSQ
+    output ROB_IDX      [COMMIT_WIDTH-1:0]   retire_rob_idx_o, 
+    output ROB_IDX       rob_head_o 
 );
 
+    
     // ===== ROB Entry Struct =====
     typedef struct packed {
         logic valid;
@@ -304,8 +308,10 @@ module rob #(
 
     rob_entry_t rob_table [ROB_DEPTH];
 
-    logic [$clog2(ROB_DEPTH)-1:0] head, tail;
+    ROB_IDX head, tail;
     logic [$clog2(ROB_DEPTH):0] count;
+
+    assign rob_head_o = head; // sent to lsq
 
     // ===== Internal Signals =====
     logic full, empty, empty_org;
@@ -447,6 +453,7 @@ module rob #(
             count  <= '0;
             flush_o <= 1'b0;
             flush_upto_rob_idx_o <= '0;
+            retire_rob_idx_o <= '0;
             
             for(int i = 0 ; i< `N; i++)begin
                 wb_packet[i] <= '0;
@@ -528,6 +535,10 @@ module rob #(
 
                     // end else begin
                     // cleaar the rob entry
+
+                    // retire rob idx
+                    retire_rob_idx_o <= head + i;
+
                     rob_table[head + i].valid <= 1'b0;
                     // Output commit data
                     commit_valid_o[i]   <= 1'b1;
@@ -575,6 +586,8 @@ module rob #(
         end
     end
     end
+
+
     // always_ff @(negedge clock)begin
     //    // $display("head = %0d  , tail = %0d\n" , head, tail);
     //    $display("disp_rob_idx_o=%d | commit_old_prf_o: %d", disp_rob_idx_o[0], commit_old_prf_o[0]);

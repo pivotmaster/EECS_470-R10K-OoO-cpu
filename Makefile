@@ -191,7 +191,7 @@ GREP = grep -E --color=auto
 
 # TODO: add more modules here
 # MODULES = cpu  
-MODULES = sq
+MODULES = cpu
 
 # TODO: update this if you add more header files
 ALL_HEADERS = $(CPU_HEADERS)
@@ -214,7 +214,11 @@ CPU_FILES = verilog/mult.sv \
 		   verilog/rs_single_entry.sv \
 		   verilog/rs_disp_selector.sv \
 		   verilog/issue_selector.sv \
-		   verilog/fu.sv
+		   verilog/fu.sv \
+		   verilog/dcache.sv \
+		   verilog/sq.sv \
+		   verilog/lq.sv \
+		   verilog/lsq_top.sv
 
 
 
