@@ -8,12 +8,12 @@ module dcache (
     input  MEM_COMMAND Dcache_command_0, // MEM_LOAD or MEM_STORE or MEM_NONE
     input  MEM_SIZE    Dcache_size_0, // WORD/BYTE/HALF
     input  MEM_BLOCK   Dcache_store_data_0, // load = 0
-    input [`LQ_IDX_WIDTH-1:0] Dcache_req_tag,
+    input  logic [`LQ_IDX_WIDTH-1:0] Dcache_req_tag,
 
     output logic       Dcache_req_0_accept, // if bank conflict (two request go to the same bank), it might be 0 and need to be resent at the next cycle
     output MEM_BLOCK   Dcache_data_out_0,
     output logic       Dcache_valid_out_0,
-    output [`LQ_IDX_WIDTH-1:0] Dcache_load_tag,
+    output logic [`LQ_IDX_WIDTH-1:0] Dcache_load_tag,
     
     input  ADDR        Dcache_addr_1,      // Request 1
     input  MEM_COMMAND Dcache_command_1,
@@ -67,18 +67,19 @@ module dcache (
     logic [INDEX_BITS-1:0] cache_read_addr_0;
     logic [INDEX_BITS-1:0] cache_read_addr_1;
     // Read Data
-    MEM_BLOCK cache_data_read_0 [CACHE_WAYS-1:0];
-    MEM_BLOCK cache_data_read_1 [CACHE_WAYS-1:0];
+    MEM_BLOCK [CACHE_WAYS-1:0] cache_data_read_0 ;
+    MEM_BLOCK [CACHE_WAYS-1:0] cache_data_read_1;
     MEM_BLOCK line_data_0, line_data_1;  //this is the read result in the whole line format
+    MEM_BLOCK updated_line_0 ,updated_line_1; // if store: modified the line and put it back to the cache line
     
     // ---------- WRITE ---------- 
     // Write enable signals
-    logic cache_write_en_0 [CACHE_WAYS-1:0];
-    logic cache_write_en_1 [CACHE_WAYS-1:0];
-    logic cache_write_en_hit_0 [CACHE_WAYS-1:0];
-    logic cache_write_en_hit_1 [CACHE_WAYS-1:0];
-    logic cache_write_en_refill_0 [CACHE_WAYS-1:0];
-    logic cache_write_en_refill_1 [CACHE_WAYS-1:0];
+    logic  [CACHE_WAYS-1:0] cache_write_en_0;
+    logic  [CACHE_WAYS-1:0] cache_write_en_1;
+    logic  [CACHE_WAYS-1:0] cache_write_en_hit_0;
+    logic  [CACHE_WAYS-1:0] cache_write_en_hit_1;
+    logic  [CACHE_WAYS-1:0] cache_write_en_refill_0;
+    logic  [CACHE_WAYS-1:0] cache_write_en_refill_1;
 
     // Write addresses 
     logic [INDEX_BITS-1:0] cache_write_addr_0, cache_write_addr_hit_0, cache_write_addr_refill_0;
@@ -259,7 +260,7 @@ module dcache (
     // ----------  Get Read Result ---------- 
     always_comb begin
         Dcache_load_tag = (Dcache_valid_out_0) ? Dcache_req_tag : '0; // if cache miss, tag = 0 //### 11/25 ###//
-        Dcache_valid_out_0 = cacheload_cache_hit_0 && Dcache_req_0_accept; //Actually Dcache_req_0_accept contains (Dcache_command_0 != MEM_NONE)
+        Dcache_valid_out_0 = load_cache_hit_0 && Dcache_req_0_accept; //Actually Dcache_req_0_accept contains (Dcache_command_0 != MEM_NONE)
         Dcache_valid_out_1 = load_cache_hit_1 && Dcache_req_1_accept;
         Dcache_data_out_0 = '0; //8 byte per line = 64 bits
         Dcache_data_out_1 = '0;
@@ -311,22 +312,7 @@ module dcache (
             endcase
         end
     end
-    // ---------- MSHR for Non-Blocking ----------   
-    typedef struct packed {
-        logic valid;
-        logic [TAG_BITS-1:0] tag;
-        logic [INDEX_BITS-1:0] index;
-        logic [BANK_BITS-1:0] bank;
-        logic [$clog2(CACHE_WAYS)-1:0] way;
-        logic [OFFSET_BITS-1:0] offset;
-        MEM_COMMAND command;
-        MEM_SIZE size;
-        MEM_BLOCK store_data;
-        // logic [3:0] request_id;
-        MEM_TAG     mem_tag; 
-        [`LQ_IDX_WIDTH-1:0] Dcache_req_tag;
-        // logic victim_hit;  // Request went to victim cache
-    } mshr_entry_t;
+
 
     // =========================================================
     // Store (Write) Logic
@@ -388,16 +374,6 @@ module dcache (
         cache_write_data_hit_1 = updated_line_1;
     end
 
-    // ---------- Write Dirty Bit ---------- 
-    always_ff @(posedge clock or posedge reset) begin : dirty_bit
-        if (reset) begin
-            cache_dirty <= '0; //TODO: is this legal?
-        end else begin
-            if (store_cache_hit_0 && Dcache_req_0_accept) cache_dirty[bank_0][index_0][hit_way_0] <= 1'b1;
-            if (store_cache_hit_1 && Dcache_req_1_accept) cache_dirty[bank_1][index_1][hit_way_1] <= 1'b1;
-        end
-    end
-
     // ----------  Cache Miss Path ----------     
     // 0/1 here is from REQUEST
     logic miss_0, miss_1;
@@ -429,7 +405,7 @@ module dcache (
         MEM_BLOCK store_data;
         // logic [3:0] request_id;
         MEM_TAG     mem_tag; 
-        [`LQ_IDX_WIDTH-1:0] Dcache_req_tag;
+        logic [`LQ_IDX_WIDTH-1:0] Dcache_req_tag;
         // logic victim_hit;  // Request went to victim cache
     } mshr_entry_t;
 
@@ -665,7 +641,11 @@ module dcache (
                 cache_valid[mshr[refill_mshr_id].bank][mshr[refill_mshr_id].index][mshr[refill_mshr_id].way]  <= 1'b1;
                 // Store only store in cache not memory so dirty bit = 1
                 cache_dirty[mshr[refill_mshr_id].bank][mshr[refill_mshr_id].index][mshr[refill_mshr_id].way]  <= (mshr[refill_mshr_id].command == MEM_STORE);
-                mshr[refill_mshr_id].valid <= 1'b0;
+                mshr[refill_mshr_id].valid <= 1'b0; 
+
+                // ---------- Write Dirty Bit ---------- 
+                if (store_cache_hit_0 && Dcache_req_0_accept) cache_dirty[bank_0][index_0][hit_way_0] <= 1'b1;
+                if (store_cache_hit_1 && Dcache_req_1_accept) cache_dirty[bank_1][index_1][hit_way_1] <= 1'b1;
             end
         end
     end
@@ -711,5 +691,42 @@ module dcache (
             end
         end
     end
+
+
+ task automatic show_status(); 
+ $display("-------------------------------------------------------------------");
+ $display("Dcache_command_0 = %p Accept0=[%0b%0b%0b] valid0=%0d dat0=%h | Dcache_command_1 = %p accept1=%0d valid1=%0d dat1=%h",
+             Dcache_command_0, Dcache_req_0_accept,req_0_accept, mshr_hit_0, Dcache_valid_out_0, Dcache_data_out_0.dbbl_level, Dcache_command_1, Dcache_req_1_accept, Dcache_valid_out_1, Dcache_data_out_1.dbbl_level);
+  $display("req_to_bank=[%b%b%b%b]", req_0_to_bank_0,req_0_to_bank_1,req_1_to_bank_0,req_1_to_bank_1 );
+  
+  $write("way_hit_0= ");
+  for (int w = 0; w < CACHE_WAYS; w++) begin
+    $write("%b", way_hit_0[w]);
+  end
+  $display(" ");
+  $write("way_hit_1= ");
+  for (int w = 0; w < CACHE_WAYS; w++) begin
+    $write("%b", way_hit_1[w]);
+  end
+  $display(" ");
+  $display("send_new_mem_req=%b |free_mshr_idx=%0d |pending_mshr_id=%d | pending_req_to_mem=%b", send_new_mem_req,free_mshr_idx,pending_mshr_id,pending_req_to_mem);
+
+  for (int i = 0; i < MSHR_SIZE; i++) begin
+    if (mshr[i].valid) begin
+      $display("mashr[%0d] mem tag = %d", i, mshr[i].mem_tag);
+    end
+  end
+
+  $display("memory response: tag=%d | data=%d | data_tag =%d",mem2proc_transaction_tag,mem2proc_data,mem2proc_data_tag );
+   $display("Dcache_command_0 = %p Accept0=[%0b%0b%0b] valid0=%0d dat0=%h | Dcache_command_1 = %p accept1=%0d valid1=%0d dat1=%h",
+             Dcache_command_0, Dcache_req_0_accept,req_0_accept, mshr_hit_0, Dcache_valid_out_0, Dcache_data_out_0.dbbl_level, Dcache_command_1, Dcache_req_1_accept, Dcache_valid_out_1, Dcache_data_out_1.dbbl_level);
+ $display("-------------------------------------------------------------------");
+ endtask 
+
+always_ff @(negedge clock) begin
+    if (!reset) begin
+        //show_status();
+    end
+end
 
 endmodule

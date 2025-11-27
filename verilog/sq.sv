@@ -2,7 +2,7 @@
 
 module sq #(
   parameter int DISPATCH_WIDTH = 1,
-  parameter int SQ_SIZE = 16,
+  parameter int SQ_SIZE = 128,
   parameter int IDX_WIDTH = $clog2(SQ_SIZE)
 )(
     input logic clock, reset,
@@ -177,7 +177,7 @@ module sq #(
         if (enq_valid && !full)begin
           // $display("[RTL-SQ] Enqueue at tail=%0d, ROB=%0d, Addr=%h", tail, enq_rob_idx, enq_addr);
           sq[tail].valid <= 1'b1;
-          sq[tail].addr <= enq_addr;
+          sq[tail].addr <= '0;
           sq[tail].addr_valid <= 1'b1;
           sq[tail].size <= enq_size;
           sq[tail].data_valid <= 1'b0;
@@ -303,7 +303,8 @@ module sq #(
     dc_req_size = '0;
     dc_store_data = '0;
     if (count != 0) begin
-      if (sq[head].valid && sq[head].commited && sq[head].data_valid) begin
+      if (sq[head].valid && sq[head].data_valid) begin
+        $display("insude: sq[head].valid=%b, sq[head].commited=%b, sq[head].data_valid=%b", sq[head].valid, sq[head].commited, sq[head].data_valid);
         dc_req_req = 1'b1;
         dc_req_addr = sq[head].addr;
         dc_req_size = sq[head].size;

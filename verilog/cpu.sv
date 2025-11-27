@@ -114,7 +114,10 @@ module cpu #(
     rs_entry_t  [`DISPATCH_WIDTH-1:0] rs_packets;
     // ROB
     logic [`DISPATCH_WIDTH-1:0] disp_rob_space;
-    logic [`DISPATCH_WIDTH-1:0] disp_rob_valid;
+    logic [`DISPATCH_WIDTH-1:0] disp_rob_valid;      
+    logic [`DISPATCH_WIDTH-1:0] dispatch_is_store;  
+    logic [`DISPATCH_WIDTH-1:0] dispatch_size;  
+
     logic [`DISPATCH_WIDTH-1:0] disp_rob_rd_wen;
     logic [`DISPATCH_WIDTH-1:0][$clog2(`ARCH_REGS)-1:0] disp_rd_arch;
     logic [`DISPATCH_WIDTH-1:0][$clog2(`PHYS_REGS)-1:0] disp_rd_new_prf;
@@ -153,6 +156,7 @@ module cpu #(
     logic [`DISPATCH_WIDTH-1:0] disp_ready;
     logic [`DISPATCH_WIDTH-1:0] disp_alloc;
     logic [`DISPATCH_WIDTH-1:0][$clog2(`ROB_DEPTH)-1:0] disp_rob_idx;
+    logic [`DISPATCH_WIDTH-1:0][$clog2(`ROB_DEPTH)-1:0] disp_rob_idx_o;
     logic [$clog2(`ROB_DEPTH+1)-1:0] free_rob_slots;
     // Commit
     logic [`COMMIT_WIDTH-1:0] commit_valid;
@@ -168,6 +172,14 @@ module cpu #(
     logic flush_rob_debug;
     logic [`ROB_DEPTH-1:0] flush_free_regs_valid;
     logic [`PHYS_REGS-1:0] flush_free_regs;
+
+    // TO LSQ
+     ROB_IDX      [`COMMIT_WIDTH-1:0]   retire_rob_idx;
+     ROB_IDX       rob_head ;
+     // lsq -> complete
+     logic [$clog2(`PHYS_REGS)-1:0] wb_disp_rd_new_prf;
+
+
 
 
 // RS
@@ -194,8 +206,45 @@ module cpu #(
     logic checkpoint_valid;//### 11/10 sychenn ###//
     logic has_snapshot; // guard restore until a snapshot is captured
 
+// lsq
+    logic lsq_wb_valid;
+    ROB_IDX lsq_wb_rob_idx;
+    DATA wb_data;
+    lq_entry_t  lq_snapshot_reg [`LQ_SIZE-1:0];
+    lq_entry_t  lq_snapshot_data_i [`LQ_SIZE-1:0];
+    lq_entry_t  lq_snapshot_data_o [`LQ_SIZE-1:0];
+
+    logic       [`LQ_IDX_WIDTH-1:0]lq_snapshot_head_i;
+    logic       [`LQ_IDX_WIDTH-1:0]lq_snapshot_tail_i;
+    logic       [`LQ_IDX_WIDTH-1:0]lq_snapshot_count_i;
+    logic       [`SQ_IDX_WIDTH-1:0]sq_snapshot_head_i;
+    logic       [`SQ_IDX_WIDTH-1:0]sq_snapshot_tail_i;
+    logic       [`SQ_IDX_WIDTH-1:0]sq_snapshot_count_i;
+
+    logic       [`LQ_IDX_WIDTH-1:0]lq_snapshot_head_o;
+    logic       [`LQ_IDX_WIDTH-1:0]lq_snapshot_tail_o;
+    logic       [`LQ_IDX_WIDTH-1:0]lq_snapshot_count_o;
+    logic       [`SQ_IDX_WIDTH-1:0]sq_snapshot_head_o;
+    logic       [`SQ_IDX_WIDTH-1:0]sq_snapshot_tail_o;
+    logic       [`SQ_IDX_WIDTH-1:0]sq_snapshot_count_o;
+
+    logic       [`LQ_IDX_WIDTH-1:0]lq_snapshot_head_reg;
+    logic       [`LQ_IDX_WIDTH-1:0]lq_snapshot_tail_reg;
+    logic       [`LQ_IDX_WIDTH-1:0]lq_snapshot_count_reg;
+    logic       [`SQ_IDX_WIDTH-1:0]sq_snapshot_head_reg;
+    logic       [`SQ_IDX_WIDTH-1:0]sq_snapshot_tail_reg;
+    logic       [`SQ_IDX_WIDTH-1:0]sq_snapshot_count_reg;
+
+    sq_entry_t  sq_snapshot_data_i [`SQ_SIZE-1:0];
+    sq_entry_t  sq_snapshot_data_o [`SQ_SIZE-1:0];
+    sq_entry_t  sq_snapshot_reg [`SQ_SIZE-1:0];
+    
+    logic [$clog2(`LQ_SIZE+1)-1:0] lq_count;
+    logic [$clog2(`SQ_SIZE+1)-1:0] st_count;
+    logic [`DISPATCH_WIDTH-1:0] disp_rob_valid_lsq;    
 
 // D-Cache
+    ADDR Dcache_addr_0;
     MEM_COMMAND Dcache_command_0;
     MEM_SIZE    Dcache_size_0;
     MEM_BLOCK   Dcache_store_data_0;
@@ -223,10 +272,10 @@ module cpu #(
     MEM_BLOCK   Dcache2mem_data;
     logic       Dcache2mem_valid;
 
-    MEM_TAG     mem2proc_transaction_tag;
-    MEM_BLOCK   mem2proc_data;
-    MEM_TAG     mem2proc_data_tag;
-
+    // mem output
+     MEM_TAG   mem2proc_transaction_tag_dcache; // Memory tag for current transaction
+     MEM_BLOCK mem2proc_data_dcache;            // Data coming back from memory
+     MEM_TAG   mem2proc_data_tag_dcache;        // Tag for which transaction data is for
 // Issue
 
     // =========================================================
@@ -299,7 +348,6 @@ module cpu #(
     logic [`LOAD_COUNT-1:0] fu_ls_valid_o_reg; 
     logic [`LOAD_COUNT-1:0] fu_ls_rob_idx_o_reg; 
     logic [`LOAD_COUNT-1:0] fu_ls_addr_o_reg; 
-    logic [`LOAD_COUNT-1:0] fu_sw_data_o_reg; 
 
 // Complete-stage
     // PR
@@ -368,11 +416,10 @@ module cpu #(
 
     always_comb begin
         // TODO: now only has icache
-        proc2mem_command = Imem_command;
-        proc2mem_addr    = Imem_addr;
+        // proc2mem_command = Imem_command;
+        // proc2mem_addr    = Imem_addr;
         if (Dmem_command != MEM_NONE) begin  // read or write DATA from memory
-            // proc2mem_command = Dmem_command_filtered;
-            proc2mem_command = Dmem_command;
+            proc2mem_command = Dmem_command_filtered;
             proc2mem_size    = Dmem_size;
             proc2mem_addr    = Dmem_addr;
         end else begin                      // read an INSTRUCTION from memory
@@ -381,8 +428,10 @@ module cpu #(
             proc2mem_size    = DOUBLE;      // instructions load a full memory line (64 bits)
         end
         proc2mem_data = Dmem_store_data;
+        
     end
-    assign proc2mem_size = DOUBLE;
+
+    // assign proc2mem_size = DOUBLE; // needed when only has icache
 
     //////////////////////////////////////////////////
     //                                              //
@@ -690,7 +739,17 @@ module cpu #(
         .disp_packet_o(disp_packet),
         .stall(stall),
 
-        .disp_n(disp_n)
+        .disp_n(disp_n),
+
+        // to lsq
+        .dispatch_valid          (disp_rob_valid_lsq), //ok
+        .dispatch_is_store       (dispatch_is_store),
+        .dispatch_size           (dispatch_size),
+        .disp_rob_idx_o        (disp_rob_idx_o),
+
+        // lsq -> dispatch
+        .lq_count(lq_count),
+        .st_count(st_count)
     );
 
     //////////////////////////////////////////////////
@@ -750,7 +809,11 @@ module cpu #(
         .flush_i(flush_rob_debug),
         .flush_free_regs_valid(flush_free_regs_valid),
         .flush_free_regs(flush_free_regs),
-        .wb_packet_o(wb_packet)
+        .wb_packet_o(wb_packet),
+
+        //to lsq
+        .retire_rob_idx_o(retire_rob_idx),
+        .rob_head_o(rob_head)
     );
 
     //////////////////////////////////////////////////
@@ -1342,12 +1405,15 @@ lsq_top #(
     .clock                   (clock),
     .reset                   (reset),
 
-    // Dispatch Stage
-    .dispatch_valid          (disp_rob_valid), //ok
+    // Dispatch Stage (ok)
+    .dispatch_valid          (disp_rob_valid_lsq), 
     .dispatch_is_store       (dispatch_is_store),
     .dispatch_size           (dispatch_size),
-    .dispatch_rob_idx        (disp_rob_idx), //ok
-    .lsq_full                (lsq_full),
+    .dispatch_rob_idx        (disp_rob_idx_o), 
+    .disp_rd_new_prf_i  (disp_rd_new_prf),
+
+    .lq_free_num_slot                (lq_count), // output
+    .sq_free_num_slot                (st_count), //output
 
     // Execution Stage  (###ok)
     .sq_data_valid           (fu_ls_valid_o_reg),
@@ -1356,20 +1422,22 @@ lsq_top #(
     .dispatch_addr           (fu_ls_addr_o_reg),
 
     // =====================================================
-    // 3. Commit Stage (from ROB)
+    // 3. Commit Stage (from ROB) (OK)
     // =====================================================
     .rob_head                (rob_head),
     .commit_valid            (commit_valid),
-    .commit_rob_idx          (commit_rob_idx),
+    .commit_rob_idx          (retire_rob_idx),
+    .wb_disp_rd_new_prf_o    (wb_disp_rd_new_prf),
 
     // =====================================================
     // 4. Writeback Stage (Load -> CDB/ROB)
     // =====================================================
-    .wb_valid                (wb_valid),
-    .wb_rob_idx              (wb_rob_idx),
+    // ALL Outputs
+    .wb_valid                (lsq_wb_valid),
+    .wb_rob_idx              (lsq_wb_rob_idx),
     .wb_data                 (wb_data),
 
-    // 5. Dual Port D-Cache Interface
+    // 5. Dual Port D-Cache Interface (ok)
 
     // --- Port 0: Load ---
     .Dcache_addr_0           (Dcache_addr_0),
@@ -1422,11 +1490,142 @@ lsq_top #(
     .lq_snapshot_count_i     (lq_snapshot_count_i)
 );
 
+
+always_ff @(posedge clock) begin : checkpoint_LSQ
+        if (reset) begin
+            for(int i =0 ; i <`LQ_SIZE ; i++)begin
+                sq_snapshot_data_i[i] <= '0;
+                lq_snapshot_data_i[i] <= '0;
+            end
+            sq_snapshot_count_i <= '0;
+            sq_snapshot_head_i <= '0;
+            sq_snapshot_tail_i <= '0;
+            lq_snapshot_count_i <= '0;
+            lq_snapshot_head_i <= '0;
+            lq_snapshot_tail_i <= '0;
+        end else begin
+            // $display("snapshot_reg:");
+            // for(int i =0 ; i < `ARCH_REGS ; i++)begin
+            //     $display("snapshot_reg[%0d] = %d (%d)",i,snapshot_reg[i].phys,snapshot_reg[i].valid);
+            // end
+            if (if_flush && has_snapshot) begin
+                for(int i =0 ; i <`LQ_SIZE ; i++)begin
+                    lq_snapshot_data_i[i] <= lq_snapshot_reg[i];
+                    sq_snapshot_data_i[i] <= sq_snapshot_reg[i];
+                    // lq_snapshot_data_i[i].valid <= snapshot_reg[i].valid;
+                end
+                sq_snapshot_count_i <=  sq_snapshot_count_reg;
+                sq_snapshot_head_i <= sq_snapshot_head_reg;
+                sq_snapshot_tail_i <= sq_snapshot_tail_reg;
+                lq_snapshot_count_i <=  lq_snapshot_count_reg;
+                lq_snapshot_head_i <= lq_snapshot_head_reg;
+                lq_snapshot_tail_i <= lq_snapshot_tail_reg;
+            end else if (checkpoint_valid) begin
+                for(int i =0 ; i < `LQ_SIZE ; i++)begin
+                    lq_snapshot_reg[i] <= lq_snapshot_data_o[i];
+                    sq_snapshot_reg[i] <= sq_snapshot_data_o[i];
+                end
+                sq_snapshot_count_reg <= sq_snapshot_count_i;
+                sq_snapshot_head_reg <= sq_snapshot_head_i;
+                sq_snapshot_tail_reg <= sq_snapshot_tail_i;
+                lq_snapshot_count_reg <= lq_snapshot_count_i;
+                lq_snapshot_head_reg <= lq_snapshot_head_i;
+                lq_snapshot_tail_reg <= lq_snapshot_tail_i;
+                // has_snapshot <= 1'b1;
+            end else begin
+                // snapshot_restore_i <= 1'b0;
+            end
+        end
+    end
+
+
+
     //////////////////////////////////////////////////
     //                                              //
     //               D-CACHE                        //
     //                                              //
     //////////////////////////////////////////////////
+
+    // LSQ Debug Displays
+    always_ff @(negedge clock) begin
+        if (!reset) begin
+            // LSQ Dispatch Debug
+            if (disp_rob_valid_lsq) begin
+                $display("[LSQ_DISPATCH] %s: rob_idx=%0d, addr=%h, size=%0d", 
+                         dispatch_is_store ? "STORE" : "LOAD ",
+                         disp_rob_idx_o,
+                         fu_ls_addr_o_reg,
+                         dispatch_size);
+            end
+            
+            // LSQ Store Data Available
+            if (fu_ls_valid_o_reg) begin
+                $display("[LSQ_STORE_DATA] rob_idx=%0d, addr=%h, data=%h, size=%0d",
+                         fu_ls_rob_idx_o_reg,
+                         fu_ls_addr_o_reg,
+                         fu_sw_data_o_reg,
+                         Dcache_size_1);
+            end
+            
+            // LSQ Load Completion
+            if (lsq_wb_valid) begin
+                $display("[LSQ_LOAD_COMPLETE] rob_idx=%0d, data=%h",
+                         lsq_wb_rob_idx,
+                         wb_data);
+            end
+            
+            // LSQ to D-Cache Interface (Port 0 - Load)
+            // if (Dcache_command_0 != MEM_NONE) begin
+                $display("[LSQ->DCACHE_LOAD] cmd=%0d, addr=%h, size=%0d, tag=%0d, accept=%b",
+                         Dcache_command_0,
+                         Dcache_addr_0,
+                         Dcache_size_0,
+                         Dcache_req_tag,
+                         Dcache_req_0_accept);
+            // end
+            
+            // LSQ to D-Cache Interface (Port 1 - Store)
+            if (Dcache_command_1 != MEM_NONE) begin
+                $display("[LSQ->DCACHE_STORE] cmd=%0d, addr=%h, data=%h, size=%0d, accept=%b",
+                         Dcache_command_1,
+                         Dcache_addr_1,
+                         Dcache_store_data_1,
+                         Dcache_size_1,
+                         Dcache_req_1_accept);
+            end
+            
+            // D-Cache to Memory Interface
+            if (Dmem_command != MEM_NONE) begin
+                $display("[DCACHE->MEM] cmd=%0d, addr=%h, size=%0d, data=%h",
+                         Dmem_command,
+                         Dmem_addr,
+                         Dmem_size,
+                         Dmem_store_data);
+            end
+            
+            // Memory to D-Cache Response
+            if (mem2proc_data_tag_dcache != MEM_NONE) begin
+                $display("[MEM->DCACHE] tag=%0d, data=%h",
+                         mem2proc_data_tag_dcache,
+                         mem2proc_data_dcache);
+            end
+            
+            // D-Cache to LSQ Response (Load)
+            if (Dcache_valid_out_0) begin
+                $display("[DCACHE->LSQ_LOAD] tag=%0d, data=%h, valid=%b",
+                         Dcache_load_tag,
+                         Dcache_data_out_0,
+                         Dcache_valid_out_0);
+            end
+            
+            // D-Cache to LSQ Response (Store)
+            if (Dcache_valid_out_1) begin
+                $display("[DCACHE->LSQ_STORE] data=%h, valid=%b",
+                         Dcache_data_out_1,
+                         Dcache_valid_out_1);
+            end
+        end
+    end
 
 
 
@@ -1463,9 +1662,9 @@ dcache dcache_0 (
     .Dcache2mem_size           (Dmem_size),
     .Dcache2mem_data           (Dmem_store_data),
 
-    .mem2proc_transaction_tag  (mem2proc_transaction_tag),
-    .mem2proc_data             (mem2proc_data),
-    .mem2proc_data_tag         (mem2proc_data_tag)
+    .mem2proc_transaction_tag  (mem2proc_transaction_tag_dcache),
+    .mem2proc_data             (mem2proc_data_dcache),
+    .mem2proc_data_tag         (mem2proc_data_tag_dcache)
 );
 
     //////////////////////////////////////////////////
@@ -1505,7 +1704,15 @@ dcache dcache_0 (
         .wb_value_o(fu_value_wb), ///### sychenn 11/7 ###///
 
         // cdb
-        .cdb_o(cdb_packets)
+        .cdb_o(cdb_packets),
+
+
+        //lsq
+        .wb_valid(lsq_wb_valid),
+        .wb_rob_idx(lsq_wb_rob_idx),
+        .wb_data(wb_data),
+        .wb_disp_rd_new_prf_i(wb_disp_rd_new_prf)
+
     );
     // always_ff @(negedge clock) begin
     //     $display("Complete input: CDB_alu_value=%d | CDB_mul_value=%d | CDB_br_value=%d", fu_value_reg[0], fu_value_reg[1], fu_value_reg[3]);
@@ -1548,13 +1755,16 @@ dcache dcache_0 (
     // New address if:
     // 1) Previous instruction wasn't a load
     // 2) Load address changed
+    logic [1:0] ex_mem_reg;
     logic valid_load;
-    //assign valid_load = ex_mem_reg.valid && ex_mem_reg.rd_mem; 
+    assign valid_load = (ex_mem_reg == 1);
+    // assign valid_load = ex_mem_reg.valid && ex_mem_reg.rd_mem; 
     assign new_load = valid_load && !rd_mem_q;
 
     assign mem_tag_match = outstanding_mem_tag == mem2proc_data_tag;
 
-//    assign Dmem_command_filtered = new_load || ex_mem_reg.wr_mem ? Dmem_command : MEM_NONE;
+//    assign Dmem_command_filtered = (new_load || ex_mem_reg.wr_mem) ? Dmem_command : MEM_NONE;
+   assign Dmem_command_filtered = (new_load || (ex_mem_reg == 2)) ? Dmem_command : MEM_NONE;
 
     always_ff @(posedge clock) begin
         if (reset) begin
@@ -1564,6 +1774,18 @@ dcache dcache_0 (
             rd_mem_q            <= valid_load;
             outstanding_mem_tag <= new_load      ? mem2proc_transaction_tag : 
                                    mem_tag_match ? '0 : outstanding_mem_tag;
+        end
+    end
+
+    always_ff @(posedge clock or posedge reset) begin
+        if (reset) begin
+            ex_mem_reg <= '0;
+        end else begin
+            if (disp_rob_valid_lsq) begin
+                ex_mem_reg <= (dispatch_is_store) ? 2 : 1; // store = 2; load = 1;
+            end else begin
+                ex_mem_reg <= '0;
+            end
         end
     end
 
@@ -1578,6 +1800,7 @@ dcache dcache_0 (
 always_ff @(posedge clock) begin
     if (!reset) begin
         integer i;
+        $display("Imem_command = %d", Imem_command);
         for (i = 0; i < `N; i++) begin
             if(committed_insts[i].valid) begin
             $display("Commit[%0d]: valid=%b halt=%b illegal=%b reg=%0d data=%h NPC=%h",

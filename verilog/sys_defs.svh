@@ -30,6 +30,7 @@
 `define SQ_SIZE 128
 `define LQ_SIZE 128  
 `define LQ_IDX_WIDTH 7 //### clog2(128) 
+`define SQ_IDX_WIDTH 7
 
 // fixed data
 `define FU_ALU `SINGLE_FU_NUM
@@ -508,6 +509,7 @@ typedef struct packed {
     logic     data_valid;
     MEM_BLOCK data;
     logic     issued;  //whether request was sent to dcache
+    logic [$clog2(`PHYS_REGS)-1:0]disp_rd_new_prf;
 } lq_entry_t;
 
 
