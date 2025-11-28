@@ -496,7 +496,7 @@ module rob #(
             for (int i = 0; i < DISPATCH_WIDTH; i++) begin
                 if (disp_alloc_o[i]) begin
                     rob_table[disp_rob_idx_o[i]].valid     <= 1'b1;
-                    rob_table[disp_rob_idx_o[i]].ready     <= 1'b0;
+                    rob_table[disp_rob_idx_o[i]].ready     <= disp_packet_i[i].wr_mem; // IF STORE = 1;
                     rob_table[disp_rob_idx_o[i]].rd_wen    <= disp_rd_wen_i[i];
                     rob_table[disp_rob_idx_o[i]].rd_arch   <= disp_rd_arch_i[i];
                     rob_table[disp_rob_idx_o[i]].new_prf   <= disp_rd_new_prf_i[i];
