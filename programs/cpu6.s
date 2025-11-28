@@ -13,7 +13,10 @@ addi x31, x0, 1         # fail code 1
 jal next_test
 t1_pass:
 addi x31, x0, 0
-jal next_test
+wfi
+wfi
+wfi
+# jal next_test
 
 
 ###############################################################

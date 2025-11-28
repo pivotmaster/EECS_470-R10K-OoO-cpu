@@ -227,14 +227,14 @@ module dcache (
         end
         
         // hit or miss
-        cache_hit_0 = ((|way_hit_0) && (Dcache_command_0 != MEM_NONE));
-        cache_hit_1 = ((|way_hit_1) && (Dcache_command_1 != MEM_NONE));
+        cache_hit_0 = (|way_hit_0) ;
+        cache_hit_1 = (|way_hit_1);
 
-        load_cache_hit_0 = cache_hit_0 && (Dcache_command_0 == MEM_LOAD);
-        load_cache_hit_1 = cache_hit_1 && (Dcache_command_1 == MEM_LOAD);
+        load_cache_hit_0 = cache_hit_0 && Dcache_command_0 == MEM_LOAD;
+        load_cache_hit_1 = cache_hit_1 && Dcache_command_1 == MEM_LOAD;
 
-        store_cache_hit_0 = cache_hit_0 && (Dcache_command_0 == MEM_STORE);
-        store_cache_hit_1 = cache_hit_1 && (Dcache_command_1 == MEM_STORE);
+        store_cache_hit_0 = cache_hit_0 && Dcache_command_0 == MEM_STORE;
+        store_cache_hit_1 = cache_hit_1 && Dcache_command_1 == MEM_STORE;
 
         // check which way hit
         for (int w = 0; w < CACHE_WAYS; w++) begin
@@ -260,8 +260,8 @@ module dcache (
     // ----------  Get Read Result ---------- 
     always_comb begin
         Dcache_load_tag = (Dcache_valid_out_0) ? Dcache_req_tag : '0; // if cache miss, tag = 0 //### 11/25 ###//
-        Dcache_valid_out_0 = load_cache_hit_0 && Dcache_req_0_accept; //Actually Dcache_req_0_accept contains (Dcache_command_0 != MEM_NONE)
-        Dcache_valid_out_1 = load_cache_hit_1 && Dcache_req_1_accept;
+        Dcache_valid_out_0 = (load_cache_hit_0) && Dcache_req_0_accept; //Actually Dcache_req_0_accept contains (Dcache_command_0 != MEM_NONE)
+        Dcache_valid_out_1 = (load_cache_hit_1) && Dcache_req_1_accept;
         Dcache_data_out_0 = '0; //8 byte per line = 64 bits
         Dcache_data_out_1 = '0;
         line_data_0 = '0;
@@ -531,15 +531,19 @@ module dcache (
     // Find refill MSHR id (when data tag comes back from memory)
     //### Handle the case that transaction tag and data tag come back at the same cycle ###//
     int refill_mshr_id;
+    logic refill_enable;
     always_comb begin : blockName
         refill_mshr_id =  0;
+        refill_enable = 0;
         if (mem2proc_data_tag != 0) begin
             if ((mem2proc_transaction_tag == mem2proc_data_tag)) begin
-                refill_mshr_id = pending_mshr_id;
+                refill_mshr_id = pending_mshr_id;   
+                refill_enable = 1;
             end else begin
                 for (int i = 0; i < MSHR_SIZE; i++) begin
                     if (mshr[i].valid && (mshr[i].mem_tag == mem2proc_data_tag)) begin
                         refill_mshr_id = i;
+                        refill_enable = 1;
                     end
                 end
             end 
@@ -552,19 +556,12 @@ module dcache (
             // Record #MSHR that was used
             pending_mshr_id <= '0;
             pending_req_to_mem <= 0;
-            cache_write_addr_refill_0 <= '0;
-            cache_write_addr_refill_1 <= '0;
+
 
             // Allocate to the MSHR
             for (int i = 0; i < MSHR_SIZE; i++) begin
                 mshr[i].valid   <= 0;
                 mshr[i].mem_tag <= '0;
-            end
-
-            // Get result from mem and write to cache
-            for (int w = 0; w < CACHE_WAYS; w++) begin
-                cache_write_en_refill_0[w] <= 1'b0;
-                cache_write_en_refill_1[w] <= 1'b0;
             end
 
             // initial helper tags array
@@ -578,12 +575,6 @@ module dcache (
                 end
             end
         end else begin
-            // clear write enable (become 1 after previous refill)
-            for (int w = 0; w < CACHE_WAYS; w++) begin
-                cache_write_en_refill_0[w] <= 1'b0;
-                cache_write_en_refill_1[w] <= 1'b0;
-            end
-
             // ---------- Record #MSHR that was used & Allocate to the MSHR ---------- 
             if (send_new_mem_req && !pending_req_to_mem) begin
                 // Record #MSHR
@@ -609,33 +600,11 @@ module dcache (
                 // $display("tag = %d | ",mem2proc_transaction_tag);
                 mshr[pending_mshr_id].mem_tag <= mem2proc_transaction_tag;
                 pending_req_to_mem <= 0;
+                pending_mshr_id <= 0;
             end
 
-            //  Get Result from memory => Write result to cache OR Write Data to Cache 
-            if (mem2proc_data_tag != 0) begin
-                MEM_BLOCK fill_data;
-                fill_data = mem2proc_data;
-
-                // If store, first store data in and fill back to cache; If load, just fill back to cache
-                if (mshr[refill_mshr_id].command == MEM_STORE) begin
-                    unique case (mshr[refill_mshr_id].size) 
-                        BYTE:    fill_data.byte_level[mshr[refill_mshr_id].offset] = mshr[refill_mshr_id].store_data.byte_level[0];
-                        HALF:    fill_data.half_level[mshr[refill_mshr_id].offset[OFFSET_BITS-1:1]] =  mshr[refill_mshr_id].store_data.half_level[0];
-                        WORD:    fill_data.word_level[mshr[refill_mshr_id].offset[OFFSET_BITS-1:2]] = mshr[refill_mshr_id].store_data.word_level[0];
-                        DOUBLE:  fill_data.dbbl_level = mshr[refill_mshr_id].store_data.dbbl_level;
-                    endcase
-                end
-       
-                if (mshr[refill_mshr_id].bank == 1'b0) begin
-                    cache_write_addr_refill_0  <= mshr[refill_mshr_id].index;
-                    cache_write_data_refill_0  <= fill_data;
-                    cache_write_en_refill_0[mshr[refill_mshr_id].way] <= 1'b1;
-                end else begin
-                    cache_write_addr_refill_1 <= mshr[refill_mshr_id].index;
-                    cache_write_data_refill_1 <= fill_data;
-                    cache_write_en_refill_1[mshr[refill_mshr_id].way] <= 1'b1;
-                end
-
+            //  Get Result from memory => update cache state
+            if (mem2proc_data_tag != 0 && refill_enable) begin
                 // update cache tags and clear mshr entry
                 cache_tags [mshr[refill_mshr_id].bank][mshr[refill_mshr_id].index][mshr[refill_mshr_id].way]  <= mshr[refill_mshr_id].tag;
                 cache_valid[mshr[refill_mshr_id].bank][mshr[refill_mshr_id].index][mshr[refill_mshr_id].way]  <= 1'b1;
@@ -644,8 +613,49 @@ module dcache (
                 mshr[refill_mshr_id].valid <= 1'b0; 
 
                 // ---------- Write Dirty Bit ---------- 
-                if (store_cache_hit_0 && Dcache_req_0_accept) cache_dirty[bank_0][index_0][hit_way_0] <= 1'b1;
-                if (store_cache_hit_1 && Dcache_req_1_accept) cache_dirty[bank_1][index_1][hit_way_1] <= 1'b1;
+                if (mshr[refill_mshr_id].command == MEM_STORE) cache_dirty[mshr[refill_mshr_id].bank][mshr[refill_mshr_id].index][mshr[refill_mshr_id].way] <= 1'b1;
+            end
+
+            // ---------- Write Dirty Bit ---------- (store cache hit)
+            if (store_cache_hit_0) begin
+                cache_dirty[bank_0][index_0][hit_way_0] <= 1'b1;
+            end
+            if (store_cache_hit_1) begin
+                cache_dirty[bank_1][index_1][hit_way_1] <= 1'b1;
+            end
+        end
+    end
+
+    //  Get Result from memory => update cache data with received data
+    always_comb begin 
+        cache_write_en_refill_0 ='0;
+        cache_write_en_refill_1 ='0;
+        cache_write_addr_refill_0 = '0;
+        cache_write_addr_refill_1 = '0;
+        cache_write_data_refill_0 = '0;
+        cache_write_data_refill_1 = '0;
+        if (mem2proc_data_tag != 0 && mshr[refill_mshr_id].valid ) begin
+            MEM_BLOCK fill_data;
+            fill_data = mem2proc_data;
+
+            // If store, first store data in and fill back to cache; If load, just fill back to cache
+            if (mshr[refill_mshr_id].command == MEM_STORE) begin
+                unique case (mshr[refill_mshr_id].size) 
+                    BYTE:    fill_data.byte_level[mshr[refill_mshr_id].offset] = mshr[refill_mshr_id].store_data.byte_level[0];
+                    HALF:    fill_data.half_level[mshr[refill_mshr_id].offset[OFFSET_BITS-1:1]] =  mshr[refill_mshr_id].store_data.half_level[0];
+                    WORD:    fill_data.word_level[mshr[refill_mshr_id].offset[OFFSET_BITS-1:2]] = mshr[refill_mshr_id].store_data.word_level[0];
+                    DOUBLE:  fill_data.dbbl_level = mshr[refill_mshr_id].store_data.dbbl_level;
+                endcase
+            end
+    
+            if (mshr[refill_mshr_id].bank == 1'b0) begin
+                cache_write_addr_refill_0  = mshr[refill_mshr_id].index;
+                cache_write_data_refill_0  = fill_data;
+                cache_write_en_refill_0[mshr[refill_mshr_id].way] = 1'b1;
+            end else begin
+                cache_write_addr_refill_1 = mshr[refill_mshr_id].index;
+                cache_write_data_refill_1  = fill_data;
+                cache_write_en_refill_1[mshr[refill_mshr_id].way] = 1'b1;
             end
         end
     end
@@ -677,13 +687,15 @@ module dcache (
         mshr_hit_0 = 1'b0;
         mshr_hit_1 = 1'b0;
         for (int i = 0; i < MSHR_SIZE; i++) begin
-            if (mshr[i].valid &&
+            if (Dcache_command_0 != MEM_NONE &&
+                mshr[i].valid &&
                 mshr[i].tag   == tag_0   &&
                 mshr[i].index == index_0 &&
                 mshr[i].bank  == bank_0) begin
                 mshr_hit_0 = 1'b1;
             end
-            if (mshr[i].valid &&
+            if (Dcache_command_1 != MEM_NONE && 
+                mshr[i].valid &&    
                 mshr[i].tag   == tag_1   &&
                 mshr[i].index == index_1 &&
                 mshr[i].bank  == bank_1) begin
@@ -693,14 +705,14 @@ module dcache (
     end
 
 
- task automatic show_status(); 
+ task automatic show_status_old(); 
  $display("-------------------------------------------------------------------");
  $display("Dcache_command_0 = %p Accept0=[%0b%0b%0b] valid0=%0d dat0=%h | Dcache_command_1 = %p accept1=%0d valid1=%0d dat1=%h",
              Dcache_command_0, Dcache_req_0_accept,req_0_accept, mshr_hit_0, Dcache_valid_out_0, Dcache_data_out_0.dbbl_level, Dcache_command_1, Dcache_req_1_accept, Dcache_valid_out_1, Dcache_data_out_1.dbbl_level);
   $display("req_to_bank=[%b%b%b%b]", req_0_to_bank_0,req_0_to_bank_1,req_1_to_bank_0,req_1_to_bank_1 );
   
   $write("way_hit_0= ");
-  for (int w = 0; w < CACHE_WAYS; w++) begin
+  for (int w = 0; w < CACHE_WAYS; w++) begin 
     $write("%b", way_hit_0[w]);
   end
   $display(" ");
@@ -708,6 +720,10 @@ module dcache (
   for (int w = 0; w < CACHE_WAYS; w++) begin
     $write("%b", way_hit_1[w]);
   end
+
+  $display("cache_hit_0=%b, cache_hit_1=%b", cache_hit_0,cache_hit_1);
+
+  
   $display(" ");
   $display("send_new_mem_req=%b |free_mshr_idx=%0d |pending_mshr_id=%d | pending_req_to_mem=%b", send_new_mem_req,free_mshr_idx,pending_mshr_id,pending_req_to_mem);
 
@@ -723,9 +739,149 @@ module dcache (
  $display("-------------------------------------------------------------------");
  endtask 
 
+task automatic show_status();
+    $display("===================================================================");
+    $display("D-Cache Status @ time %0t", $time);
+
+    // =================================================================
+    // Request 0 Pipeline  (Req0 -> Bank -> Hit/Miss -> MSHR -> Mem)
+    // =================================================================
+    $display("== Request 0 ======================================================");
+    $display("[REQ0] cmd=%s size=%s addr=%h store_data=%h tag(LQ)=%0d",
+             Dcache_command_0.name(), Dcache_size_0.name(),
+             Dcache_addr_0, Dcache_store_data_0.dbbl_level, Dcache_req_tag);
+    $display("[REQ0] bank=%0d index=%0d offset=%0d",
+             bank_0, index_0, offset_0);
+
+    // bank routing / accept
+    $display("[REQ0] to_bank0=%b to_bank1=%b  req_0_accept=%b  Dcache_req_0_accept=%b",
+             req_0_to_bank_0, req_0_to_bank_1,
+             req_0_accept, Dcache_req_0_accept);
+
+    // hit / miss / mshr
+    $display("[REQ0] way_hit=%b  hit_way=%0d  cache_hit=%b  load_hit=%b  store_hit=%b",
+             way_hit_0, hit_way_0, cache_hit_0, load_cache_hit_0, store_cache_hit_0);
+    $display("[REQ0] miss=%b  mshr_hit=%b",
+             miss_0, mshr_hit_0);
+
+    // data out / valid
+    $display("[REQ0] valid_out=%b  data_out=%h  load_tag=%0d",
+             Dcache_valid_out_0, Dcache_data_out_0.dbbl_level, Dcache_load_tag);
+
+    // =================================================================
+    // Request 1 Pipeline  (Req1 -> Bank -> Hit/Miss -> MSHR -> Mem)
+    // =================================================================
+    $display("== Request 1 ======================================================");
+    $display("[REQ1] cmd=%s size=%s addr=%h store_data=%h",
+             Dcache_command_1.name(), Dcache_size_1.name(),
+             Dcache_addr_1, Dcache_store_data_1.dbbl_level);
+    $display("[REQ1] bank=%0d index=%0d offset=%0d",
+             bank_1, index_1, offset_1);
+
+    $display("[REQ1] to_bank0=%b to_bank1=%b  req_1_accept=%b  Dcache_req_1_accept=%b",
+             req_1_to_bank_0, req_1_to_bank_1,
+             req_1_accept, Dcache_req_1_accept);
+
+    $display("[REQ1] way_hit=%b  hit_way=%0d  cache_hit=%b  load_hit=%b  store_hit=%b",
+             way_hit_1, hit_way_1, cache_hit_1, load_cache_hit_1, store_cache_hit_1);
+    $display("[REQ1] miss=%b  mshr_hit=%b",
+             miss_1, mshr_hit_1);
+
+    $display("[REQ1] valid_out=%b  data_out=%h",
+             Dcache_valid_out_1, Dcache_data_out_1.dbbl_level);
+
+    // =================================================================
+    // Bank / Cache Array Control
+    // =================================================================
+    $display("== Bank / Cache Control ===========================================");
+    $display("[BANK] req_to_bank = {req0->b0,b1, req1->b0,b1} = %b%b%b%b",
+             req_0_to_bank_0, req_0_to_bank_1, req_1_to_bank_0, req_1_to_bank_1);
+    $display("[BANK] has_req_to_mem=%b  send_miss_0=%b  send_miss_1=%b",
+             has_req_to_mem, send_miss_0, send_miss_1);
+
+    // read path
+    $display("[READ]  en={b0,b1} = %b %b  addr={b0,b1} = %0d %0d",
+             cache_read_en_0, cache_read_en_1,
+             cache_read_addr_0, cache_read_addr_1);
+
+    // write path
+    $display("[WRITE] hit_en_0=%b  refill_en_0=%b  final_we_0=%b  waddr_0=%0d",
+             cache_write_en_hit_0, cache_write_en_refill_0,
+             cache_write_en_0, cache_write_addr_0);
+    $display("[WRITE] hit_en_1=%b  refill_en_1=%b  final_we_1=%b  waddr_1=%0d",
+             cache_write_en_hit_1, cache_write_en_refill_1,
+             cache_write_en_1, cache_write_addr_1);
+
+    // =================================================================
+    // MSHR / Miss Handling
+    // =================================================================
+    $display("== MSHR / Miss Handling ===========================================");
+    $display("[MSHR] send_new_mem_req=%b  mshr_found=%b  free_mshr_idx=%0d",
+             send_new_mem_req, mshr_found, free_mshr_idx);
+    $display("[MSHR] pending_mshr_id=%0d  pending_req_to_mem=%b",
+             pending_mshr_id, pending_req_to_mem);
+    $display("[MSHR] miss_0=%b miss_1=%b  has_req_to_mem=%b",
+             miss_0, miss_1, has_req_to_mem);
+
+    // 列出所有有效 MSHR entry
+    for (int i = 0; i < MSHR_SIZE; i++) begin
+            $display("[MSHR[%0d]] valid=%b tag=%h idx=%0d bank=%0d way=%0d cmd=%s size=%s",
+                     i,
+                     mshr[i].valid, mshr[i].tag, mshr[i].index, mshr[i].bank,
+                     mshr[i].way,
+                     mshr[i].command.name(), mshr[i].size.name());
+            $display("           offset=%0d  mem_tag=%0d  LQ_tag=%0d  store_data=%h",
+                     mshr[i].offset,
+                     mshr[i].mem_tag,
+                     mshr[i].Dcache_req_tag,
+                     mshr[i].store_data.dbbl_level);
+        end
+
+    // =================================================================
+    // Full Cache Contents (per bank / set / way)
+    // =================================================================
+    $display("== Cache Contents (tags / valid / dirty / LRU) =====================");
+    for (int b = 0; b < BANKS; b++) begin
+        for (int s = 0; s < SETS_PER_BANK; s++) begin
+            // Summary line of valid/dirty bits for this set
+            $write("[BANK%0d SET%0d] valid=", b, s);
+            for (int w = 0; w < CACHE_WAYS; w++) begin
+                $write("%b", cache_valid[b][s][w]);
+            end
+            $write(" dirty=");
+            for (int w = 0; w < CACHE_WAYS; w++) begin
+                $write("%b", cache_dirty[b][s][w]);
+            end
+            $display("");
+
+            // Per-way detail: tag and LRU
+            for (int w = 0; w < CACHE_WAYS; w++) begin
+                $write("    way%0d: tag=%h  LRU=%0d", w,
+                         cache_tags[b][s][w], lru_bits[b][s][w]);
+            end
+
+        end
+    end
+    
+
+
+    // =================================================================
+    // Memory Interface
+    // =================================================================
+    $display("== Memory Interface ===============================================");
+    $display("[TO  MEM] cmd=%s addr=%h size=%s data=%h",
+             Dcache2mem_command.name(), Dcache2mem_addr,
+             Dcache2mem_size.name(), Dcache2mem_data.dbbl_level);
+    $display("[FROM MEM] trans_tag=%0d  data_tag=%0d  data=%h",
+             mem2proc_transaction_tag, mem2proc_data_tag, mem2proc_data.dbbl_level);
+
+    $display("===================================================================");
+endtask
+
+
 always_ff @(negedge clock) begin
     if (!reset) begin
-        //show_status();
+        show_status();
     end
 end
 

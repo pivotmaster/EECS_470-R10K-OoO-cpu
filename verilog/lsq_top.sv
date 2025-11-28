@@ -313,7 +313,8 @@ module lsq_top #(
     assign Dcache_command_1    = sq_req_valid ? sq_req_cmd : MEM_NONE;
     
     assign Dcache_addr_1       = sq_req_addr;
-    assign Dcache_size_1       = sq_req_size;
+    // assign Dcache_size_1       = sq_req_size;
+    assign Dcache_size_1       = WORD;
     assign Dcache_store_data_1 = sq_req_data;
     
     // 將 Cache 的 Accept 回傳給 SQ
@@ -326,6 +327,10 @@ module lsq_top #(
     // =====================================================
     task automatic show_lsq_status();
         $display("=== LSQ Status (Cycle %0d) ===", $time);
+        $display("sq_data_valid=%b", sq_data_valid);
+
+        // SQ Status
+        $display("SQ Status: dispatch_addr = %0h , Dcache_addr_1 = %0h", dispatch_addr, Dcache_addr_1);
         
         // Basic LSQ status
         $display("LSQ Control: dispatch_valid=%b, dispatch_is_store=%b, commit_valid=%b, rob_head=%0d, commit_rob_idx=%0d",

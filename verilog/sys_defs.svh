@@ -22,7 +22,7 @@
 
 // superscalar width
 `define N 1
-`define SINGLE_FU_NUM 2
+`define SINGLE_FU_NUM 1
 `define RS_DEPTH 16
 `define ROB_DEPTH 32
 `define MULT_STAGES 4

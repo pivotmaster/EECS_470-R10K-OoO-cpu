@@ -292,9 +292,9 @@ module fu #(
 
     //FU -> LSQ
     output logic [LOAD_COUNT-1:0]                                               fu_ls_valid_o,
-    output logic [LOAD_COUNT-1:0]                                               fu_ls_rob_idx_o,
-    output logic [LOAD_COUNT-1:0]                                               fu_ls_addr_o,
-    output logic [LOAD_COUNT-1:0]                                                fu_sw_data_o  //only for store instr.
+    output logic [LOAD_COUNT-1:0]             [$clog2(ROB_DEPTH)-1:0]           fu_ls_rob_idx_o,
+    output ADDR [LOAD_COUNT-1:0]                                               fu_ls_addr_o,
+    output logic [LOAD_COUNT-1:0]       [XLEN-1:0]                                 fu_sw_data_o  //only for store instr.
 
 );
 
@@ -315,6 +315,8 @@ module fu #(
       if (fu_resp_bus[i].is_sw || fu_resp_bus[i].is_lw) begin
         fu_ls_valid_o[idx] = fu_resp_bus[i].valid;
         fu_ls_rob_idx_o[idx] = fu_resp_bus[i].rob_idx;
+        $display("idx =%d | fu_resp_bus[i].rob_idx=%d", idx, fu_resp_bus[i].rob_idx);
+        $display("idx =%d | fu_ls_rob_idx_o[i].rob_idx=%d", idx, fu_ls_rob_idx_o[idx]);
         fu_ls_addr_o[idx] = fu_resp_bus[i].value;
         fu_sw_data_o[idx] = fu_resp_bus[i].sw_data;
 
@@ -448,6 +450,7 @@ module fu #(
         end else begin
             fu_cycle_count <= fu_cycle_count + 1;
             dump_fu_state(fu_cycle_count);
+            $display("fu_ls_valid_o=%b | fu_ls_rob_idx_o=%d|fu_sw_data_o=%h", fu_ls_valid_o,fu_ls_rob_idx_o[0],fu_sw_data_o);
 
                         
 

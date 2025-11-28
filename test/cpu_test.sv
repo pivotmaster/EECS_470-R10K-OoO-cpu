@@ -360,7 +360,7 @@ module testbench;
     // end
 
     always_ff @(negedge clock) begin
-        if(clock_count > 1600) begin
+        if(clock_count > 300) begin
             $display("forced finished");
             $finish;
         end

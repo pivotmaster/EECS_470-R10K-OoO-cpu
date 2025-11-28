@@ -333,9 +333,9 @@ module cpu #(
 
     //FU -> LSQ
     logic [`LOAD_COUNT-1:0] fu_ls_valid_o; 
-    logic [`LOAD_COUNT-1:0] fu_ls_rob_idx_o; 
-    logic [`LOAD_COUNT-1:0] fu_ls_addr_o; 
-    logic [`LOAD_COUNT-1:0] fu_sw_data_o; 
+    logic [`LOAD_COUNT-1:0] [$clog2(`ROB_DEPTH)-1:0]   fu_ls_rob_idx_o; 
+    ADDR [`LOAD_COUNT-1:0] fu_ls_addr_o; 
+    logic [`LOAD_COUNT-1:0][`XLEN-1:0]      fu_sw_data_o; 
 
 //EX_C_REG
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_valid_reg;
@@ -344,10 +344,10 @@ module cpu #(
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0][$clog2(`ROB_DEPTH)-1:0] fu_rob_idx_reg;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_exception_reg;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_mispred_reg;
-    logic [`LOAD_COUNT-1:0] fu_sw_data_o_reg; 
+    logic [`LOAD_COUNT-1:0] [`XLEN-1:0] fu_sw_data_o_reg; 
     logic [`LOAD_COUNT-1:0] fu_ls_valid_o_reg; 
-    logic [`LOAD_COUNT-1:0] fu_ls_rob_idx_o_reg; 
-    logic [`LOAD_COUNT-1:0] fu_ls_addr_o_reg; 
+    logic [`LOAD_COUNT-1:0] [$clog2(`ROB_DEPTH)-1:0] fu_ls_rob_idx_o_reg; 
+    ADDR [`LOAD_COUNT-1:0] fu_ls_addr_o_reg; 
 
 // Complete-stage
     // PR
@@ -1662,9 +1662,9 @@ dcache dcache_0 (
     .Dcache2mem_size           (Dmem_size),
     .Dcache2mem_data           (Dmem_store_data),
 
-    .mem2proc_transaction_tag  (mem2proc_transaction_tag_dcache),
-    .mem2proc_data             (mem2proc_data_dcache),
-    .mem2proc_data_tag         (mem2proc_data_tag_dcache)
+    .mem2proc_transaction_tag  (mem2proc_transaction_tag),
+    .mem2proc_data             (mem2proc_data),
+    .mem2proc_data_tag         (mem2proc_data_tag)
 );
 
     //////////////////////////////////////////////////

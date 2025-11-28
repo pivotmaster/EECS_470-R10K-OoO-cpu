@@ -177,10 +177,10 @@ module sq #(
         if (enq_valid && !full)begin
           // $display("[RTL-SQ] Enqueue at tail=%0d, ROB=%0d, Addr=%h", tail, enq_rob_idx, enq_addr);
           sq[tail].valid <= 1'b1;
-          sq[tail].addr <= '0;
+          sq[tail].addr <= enq_addr;
           sq[tail].addr_valid <= 1'b1;
           sq[tail].size <= enq_size;
-          sq[tail].data_valid <= 1'b0;
+          sq[tail].data_valid <= 1'b1;
           sq[tail].commited <= 1'b0;
           sq[tail].rob_idx <= enq_rob_idx;
           // tail <= tail + 1'b1;
@@ -189,12 +189,14 @@ module sq #(
         end 
 
         // store data arrived(match by rob_idx)
-        if (data_valid)begin
+        if (data_valid)begin 
           // $display("[RTL-SQ] Update Data Request for ROB=%0d, Data=%h", data_rob_idx, data);
           for(int i = 0 ; i < SQ_SIZE ; i++)begin // simple linear search
             $display("   Checking idx=%0d: Valid=%b, ROB=%0d", i, sq[i].valid, sq[i].rob_idx);
+            $display("outside: sq[i].valid =%b | sq[i].rob_idx= %d | data_rob_idx=%d",sq[i].valid ,sq[i].rob_idx, data_rob_idx);
+
             if(sq[i].valid && (sq[i].rob_idx == data_rob_idx))begin
-              // $display("[RTL-SQ]   -> MATCH FOUND at idx=%0d! Updating Data.", i);
+              $display("sq[i].valid =%b | sq[i].rob_idx= %d | data_rob_idx=%d",sq[i].valid ,sq[i].rob_idx, data_rob_idx);
               sq[i].data <= data;
               sq[i].data_valid <= 1'b1;
               break;
@@ -215,8 +217,11 @@ module sq #(
 
         //commit from ROB: mark matching store as commited (so it can be sent when head)
         if(commit_valid)begin
+
           for(int i = 0 ; i < SQ_SIZE ; i++)begin
-            if(sq[i].valid && sq[i].data_valid && (sq[i].rob_idx == commit_rob_idx))begin
+        $display(" i = %d , commit_valid=%d |sq[i].valid=%d|sq[i].data_valid =%d|sq[i].rob_idx=%d|commit_rob_idx=%d",i, commit_valid,sq[i].valid,sq[i].data_valid,sq[i].rob_idx,commit_rob_idx); 
+
+            if(sq[i].valid && (sq[i].rob_idx == commit_rob_idx))begin
               sq[i].commited <= 1'b1;
               // dc_store_data <= sq[i].data;
               break;
@@ -302,9 +307,13 @@ module sq #(
     dc_req_addr = '0;
     dc_req_size = '0;
     dc_store_data = '0;
+    $display("out: count=%d| sq[head].valid=%b, sq[head].commited=%b, sq[head].data_valid=%b", count, sq[head].valid, sq[head].commited, sq[head].data_valid);
+
     if (count != 0) begin
-      if (sq[head].valid && sq[head].data_valid) begin
-        $display("insude: sq[head].valid=%b, sq[head].commited=%b, sq[head].data_valid=%b", sq[head].valid, sq[head].commited, sq[head].data_valid);
+      // if (sq[head].valid  && sq[head].data_valid) begin
+      if (sq[head].valid &&sq[head].commited && sq[head].data_valid) begin
+        $display("store data to cache!!");
+        // $display("insude: sq[head].valid=%b, sq[head].commited=%b, sq[head].data_valid=%b", sq[head].valid, sq[head].commited, sq[head].data_valid);
         dc_req_req = 1'b1;
         dc_req_addr = sq[head].addr;
         dc_req_size = sq[head].size;
