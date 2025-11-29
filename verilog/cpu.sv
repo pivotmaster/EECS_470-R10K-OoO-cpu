@@ -248,12 +248,15 @@ module cpu #(
     MEM_COMMAND Dcache_command_0;
     MEM_SIZE    Dcache_size_0;
     MEM_BLOCK   Dcache_store_data_0;
-    logic [`LQ_IDX_WIDTH-1:0] Dcache_req_tag;
 
     logic       Dcache_req_0_accept;
     MEM_BLOCK   Dcache_data_out_0;
     logic       Dcache_valid_out_0;
-    logic [`LQ_IDX_WIDTH-1:0] Dcache_load_tag;
+    
+    ROB_IDX     Dcache_req_rob_idx_0;
+    ROB_IDX     Dcache_data_rob_idx_0;
+    ROB_IDX     Dcache_req_rob_idx_1;
+    ROB_IDX     Dcache_data_rob_idx_1;
 
     // Port 1: usually Store port from LSQ
     ADDR        Dcache_addr_1;
@@ -419,7 +422,7 @@ module cpu #(
         // proc2mem_command = Imem_command;
         // proc2mem_addr    = Imem_addr;
         if (Dmem_command != MEM_NONE) begin  // read or write DATA from memory
-            proc2mem_command = Dmem_command_filtered;
+            proc2mem_command = Dmem_command;
             proc2mem_size    = Dmem_size;
             proc2mem_addr    = Dmem_addr;
         end else begin                      // read an INSTRUCTION from memory
@@ -561,7 +564,7 @@ module cpu #(
 
         // Inputs
         // From memory
-        .Imem2proc_transaction_tag(mem2proc_transaction_tag), 
+        .Imem2proc_transaction_tag(mem2proc_transaction_tag_icache), 
         .Imem2proc_data(mem2proc_data),
         .Imem2proc_data_tag(mem2proc_data_tag),
 
@@ -742,10 +745,11 @@ module cpu #(
         .disp_n(disp_n),
 
         // to lsq
-        .dispatch_valid          (disp_rob_valid_lsq), //ok
-        .dispatch_is_store       (dispatch_is_store),
-        .dispatch_size           (dispatch_size),
-        .disp_rob_idx_o        (disp_rob_idx_o),
+        //todo: signal n way, lsq one way 
+        .dispatch_valid          (disp_rob_valid_lsq[0]),
+        .dispatch_is_store       (dispatch_is_store[0]),
+        .dispatch_size           (dispatch_size[0]),
+        .disp_rob_idx_o        (disp_rob_idx_o[0]),
 
         // lsq -> dispatch
         .lq_count(lq_count),
@@ -1419,7 +1423,7 @@ lsq_top #(
     .sq_data_valid           (fu_ls_valid_o_reg),
     .sq_data                 (fu_sw_data_o_reg),
     .sq_data_rob_idx         (fu_ls_rob_idx_o_reg),
-    .dispatch_addr           (fu_ls_addr_o_reg),
+    .sq_data_addr           (fu_ls_addr_o_reg),
 
     // =====================================================
     // 3. Commit Stage (from ROB) (OK)
@@ -1444,12 +1448,12 @@ lsq_top #(
     .Dcache_command_0        (Dcache_command_0),
     .Dcache_size_0           (Dcache_size_0),
     .Dcache_store_data_0     (Dcache_store_data_0),
-    .Dcache_req_tag          (Dcache_req_tag),
+    .Dcache_req_rob_idx_0          (Dcache_req_rob_idx_0),
     .Dcache_req_0_accept     (Dcache_req_0_accept),
 
     .Dcache_data_out_0       (Dcache_data_out_0),
     .Dcache_valid_out_0      (Dcache_valid_out_0),
-    .Dcache_load_tag         (Dcache_load_tag),
+    .Dcache_data_rob_idx_0         (Dcache_data_rob_idx_0),
 
     // --- Port 1: Store ---
     .Dcache_addr_1           (Dcache_addr_1),
@@ -1457,9 +1461,11 @@ lsq_top #(
     .Dcache_size_1           (Dcache_size_1),
     .Dcache_store_data_1     (Dcache_store_data_1),
     .Dcache_req_1_accept     (Dcache_req_1_accept),
+    .Dcache_req_rob_idx_1          (Dcache_req_rob_idx_1),
 
     .Dcache_data_out_1       (Dcache_data_out_1),
     .Dcache_valid_out_1      (Dcache_valid_out_1),
+    .Dcache_data_rob_idx_1         (Dcache_data_rob_idx_1),
 
     // =====================================================
     // 6. Snapshot / Recovery Interface
@@ -1538,7 +1544,11 @@ always_ff @(posedge clock) begin : checkpoint_LSQ
         end
     end
 
-
+// always_ff @(posedge clock) begin
+//     if (!reset) begin
+//         $display("from fu : fu_ls_addr_o = %h", fu_ls_addr_o);
+//     end
+// end
 
     //////////////////////////////////////////////////
     //                                              //
@@ -1546,88 +1556,34 @@ always_ff @(posedge clock) begin : checkpoint_LSQ
     //                                              //
     //////////////////////////////////////////////////
 
-    // LSQ Debug Displays
-    always_ff @(negedge clock) begin
-        if (!reset) begin
-            // LSQ Dispatch Debug
-            if (disp_rob_valid_lsq) begin
-                $display("[LSQ_DISPATCH] %s: rob_idx=%0d, addr=%h, size=%0d", 
-                         dispatch_is_store ? "STORE" : "LOAD ",
-                         disp_rob_idx_o,
-                         fu_ls_addr_o_reg,
-                         dispatch_size);
-            end
-            
-            // LSQ Store Data Available
-            if (fu_ls_valid_o_reg) begin
-                $display("[LSQ_STORE_DATA] rob_idx=%0d, addr=%h, data=%h, size=%0d",
-                         fu_ls_rob_idx_o_reg,
-                         fu_ls_addr_o_reg,
-                         fu_sw_data_o_reg,
-                         Dcache_size_1);
-            end
-            
-            // LSQ Load Completion
-            if (lsq_wb_valid) begin
-                $display("[LSQ_LOAD_COMPLETE] rob_idx=%0d, data=%h",
-                         lsq_wb_rob_idx,
-                         wb_data);
-            end
-            
-            // LSQ to D-Cache Interface (Port 0 - Load)
-            // if (Dcache_command_0 != MEM_NONE) begin
-                $display("[LSQ->DCACHE_LOAD] cmd=%0d, addr=%h, size=%0d, tag=%0d, accept=%b",
-                         Dcache_command_0,
-                         Dcache_addr_0,
-                         Dcache_size_0,
-                         Dcache_req_tag,
-                         Dcache_req_0_accept);
-            // end
-            
-            // LSQ to D-Cache Interface (Port 1 - Store)
-            if (Dcache_command_1 != MEM_NONE) begin
-                $display("[LSQ->DCACHE_STORE] cmd=%0d, addr=%h, data=%h, size=%0d, accept=%b",
-                         Dcache_command_1,
-                         Dcache_addr_1,
-                         Dcache_store_data_1,
-                         Dcache_size_1,
-                         Dcache_req_1_accept);
-            end
-            
-            // D-Cache to Memory Interface
-            if (Dmem_command != MEM_NONE) begin
-                $display("[DCACHE->MEM] cmd=%0d, addr=%h, size=%0d, data=%h",
-                         Dmem_command,
-                         Dmem_addr,
-                         Dmem_size,
-                         Dmem_store_data);
-            end
-            
-            // Memory to D-Cache Response
-            if (mem2proc_data_tag_dcache != MEM_NONE) begin
-                $display("[MEM->DCACHE] tag=%0d, data=%h",
-                         mem2proc_data_tag_dcache,
-                         mem2proc_data_dcache);
-            end
-            
-            // D-Cache to LSQ Response (Load)
-            if (Dcache_valid_out_0) begin
-                $display("[DCACHE->LSQ_LOAD] tag=%0d, data=%h, valid=%b",
-                         Dcache_load_tag,
-                         Dcache_data_out_0,
-                         Dcache_valid_out_0);
-            end
-            
-            // D-Cache to LSQ Response (Store)
-            if (Dcache_valid_out_1) begin
-                $display("[DCACHE->LSQ_STORE] data=%h, valid=%b",
-                         Dcache_data_out_1,
-                         Dcache_valid_out_1);
-            end
-        end
+MEM_COMMAND Dcache_command_0_reg;
+MEM_COMMAND Dcache_command_1_reg;
+MEM_TAG mem2proc_transaction_tag_dcache;
+MEM_TAG mem2proc_transaction_tag_icache;
+logic dcache_send_new_mem_req;
+
+always_ff @(posedge clock) begin
+    if (reset) begin
+        Dcache_command_0_reg <= MEM_NONE;
+        Dcache_command_1_reg <= MEM_NONE;
+    end else begin
+        Dcache_command_0_reg <=  (dcache_send_new_mem_req) ? Dcache_command_0 : MEM_NONE;
+        Dcache_command_1_reg <=  (dcache_send_new_mem_req) ? Dcache_command_1 : MEM_NONE;
+        $display("Dcache_command_0_reg = %d, Dcache_command_1_reg = %d", Dcache_command_0_reg, Dcache_command_1_reg);
+        $display("mem2proc_transaction_tag_dcache = %d, mem2proc_transaction_tag_icache = %d, mem2proc_transaction_tag = %d", mem2proc_transaction_tag_dcache, mem2proc_transaction_tag_icache, mem2proc_transaction_tag);
     end
 
+end
 
+assign mem2proc_transaction_tag_dcache =
+    (Dcache_command_0_reg != MEM_NONE || Dcache_command_1_reg != MEM_NONE )
+        ? mem2proc_transaction_tag
+        : '0;
+
+assign mem2proc_transaction_tag_icache =
+    (Dcache_command_0_reg != MEM_NONE || Dcache_command_1_reg != MEM_NONE )
+        ? '0
+        : mem2proc_transaction_tag;
 
 dcache dcache_0 (
 
@@ -1639,30 +1595,33 @@ dcache dcache_0 (
     .Dcache_command_0          (Dcache_command_0),
     .Dcache_size_0             (Dcache_size_0),
     .Dcache_store_data_0       (Dcache_store_data_0),
-    .Dcache_req_tag            (Dcache_req_tag),
+    .Dcache_req_rob_idx_0            (Dcache_req_rob_idx_0),
 
     .Dcache_req_0_accept       (Dcache_req_0_accept),
     .Dcache_data_out_0         (Dcache_data_out_0),
     .Dcache_valid_out_0        (Dcache_valid_out_0),
-    .Dcache_load_tag           (Dcache_load_tag),
+    .Dcache_data_rob_idx_0           (Dcache_data_rob_idx_0),
 
     // Port 1 (Store / LSQ store port)
     .Dcache_addr_1             (Dcache_addr_1),
     .Dcache_command_1          (Dcache_command_1),
     .Dcache_size_1             (Dcache_size_1),
     .Dcache_store_data_1       (Dcache_store_data_1),
+    .Dcache_req_rob_idx_1            (Dcache_req_rob_idx_1),
 
     .Dcache_req_1_accept       (Dcache_req_1_accept),
     .Dcache_data_out_1         (Dcache_data_out_1),
     .Dcache_valid_out_1        (Dcache_valid_out_1),
+    .Dcache_data_rob_idx_1           (Dcache_data_rob_idx_1),
 
     // Memory interface
     .Dcache2mem_command        (Dmem_command),
     .Dcache2mem_addr           (Dmem_addr),
     .Dcache2mem_size           (Dmem_size),
     .Dcache2mem_data           (Dmem_store_data),
+    .send_new_mem_req          (dcache_send_new_mem_req),
 
-    .mem2proc_transaction_tag  (mem2proc_transaction_tag),
+    .mem2proc_transaction_tag  (mem2proc_transaction_tag_dcache),
     .mem2proc_data             (mem2proc_data),
     .mem2proc_data_tag         (mem2proc_data_tag)
 );
@@ -1752,42 +1711,28 @@ dcache dcache_0 (
         .retire_cnt_o(retire_cnt)
     );
 
-    // New address if:
-    // 1) Previous instruction wasn't a load
-    // 2) Load address changed
-    logic [1:0] ex_mem_reg;
-    logic valid_load;
-    assign valid_load = (ex_mem_reg == 1);
-    // assign valid_load = ex_mem_reg.valid && ex_mem_reg.rd_mem; 
-    assign new_load = valid_load && !rd_mem_q;
+//     // New address if:
+//     // 1) Previous instruction wasn't a load
+//     // 2) Load address changed
+//     logic valid_load;
+//     assign valid_load = ex_mem_reg.valid && ex_mem_reg.rd_mem; 
+//     assign new_load = valid_load && !rd_mem_q;
 
-    assign mem_tag_match = outstanding_mem_tag == mem2proc_data_tag;
+//     assign mem_tag_match = outstanding_mem_tag == mem2proc_data_tag;
 
-//    assign Dmem_command_filtered = (new_load || ex_mem_reg.wr_mem) ? Dmem_command : MEM_NONE;
-   assign Dmem_command_filtered = (new_load || (ex_mem_reg == 2)) ? Dmem_command : MEM_NONE;
+// //    assign Dmem_command_filtered = (new_load || ex_mem_reg.wr_mem) ? Dmem_command : MEM_NONE;
+//    assign Dmem_command_filtered = (new_load) ? Dmem_command : MEM_NONE;
 
-    always_ff @(posedge clock) begin
-        if (reset) begin
-            rd_mem_q            <= 1'b0;
-            outstanding_mem_tag <= '0;
-        end else begin
-            rd_mem_q            <= valid_load;
-            outstanding_mem_tag <= new_load      ? mem2proc_transaction_tag : 
-                                   mem_tag_match ? '0 : outstanding_mem_tag;
-        end
-    end
-
-    always_ff @(posedge clock or posedge reset) begin
-        if (reset) begin
-            ex_mem_reg <= '0;
-        end else begin
-            if (disp_rob_valid_lsq) begin
-                ex_mem_reg <= (dispatch_is_store) ? 2 : 1; // store = 2; load = 1;
-            end else begin
-                ex_mem_reg <= '0;
-            end
-        end
-    end
+//     always_ff @(posedge clock) begin
+//         if (reset) begin
+//             rd_mem_q            <= 1'b0;
+//             outstanding_mem_tag <= '0;
+//         end else begin
+//             rd_mem_q            <= valid_load;
+//             outstanding_mem_tag <= new_load      ? mem2proc_transaction_tag : 
+//                                    mem_tag_match ? '0 : outstanding_mem_tag;
+//         end
+//     end
 
     //////////////////////////////////////////////////
     //                                              //

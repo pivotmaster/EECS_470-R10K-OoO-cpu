@@ -9,7 +9,7 @@ module sq #(
 
     // enqueue store addr
     input  logic       enq_valid,
-    input  ADDR        enq_addr,
+    input  ADDR        enq_addr, //### sychen this addr comes from FU (with data) not dispatch
     input  MEM_SIZE    enq_size,
     input  ROB_IDX     enq_rob_idx,
     output logic       full,
@@ -38,6 +38,7 @@ module sq #(
     output MEM_SIZE    dc_req_size,
     output MEM_COMMAND dc_req_cmd,  // MEM_STORE
     output MEM_BLOCK   dc_store_data,   //need to solve this!!!
+    output ROB_IDX     dc_rob_idx,
     input  logic       dc_req_accept,
 
 
@@ -177,10 +178,11 @@ module sq #(
         if (enq_valid && !full)begin
           // $display("[RTL-SQ] Enqueue at tail=%0d, ROB=%0d, Addr=%h", tail, enq_rob_idx, enq_addr);
           sq[tail].valid <= 1'b1;
-          sq[tail].addr <= enq_addr;
+          sq[tail].addr <= '0; //### sychen have not get addr when dispatch
           sq[tail].addr_valid <= 1'b1;
           sq[tail].size <= enq_size;
           sq[tail].data_valid <= 1'b1;
+          sq[tail].data <= '0; //### sychen have not get data when dispatch
           sq[tail].commited <= 1'b0;
           sq[tail].rob_idx <= enq_rob_idx;
           // tail <= tail + 1'b1;
@@ -192,13 +194,14 @@ module sq #(
         if (data_valid)begin 
           // $display("[RTL-SQ] Update Data Request for ROB=%0d, Data=%h", data_rob_idx, data);
           for(int i = 0 ; i < SQ_SIZE ; i++)begin // simple linear search
-            $display("   Checking idx=%0d: Valid=%b, ROB=%0d", i, sq[i].valid, sq[i].rob_idx);
-            $display("outside: sq[i].valid =%b | sq[i].rob_idx= %d | data_rob_idx=%d",sq[i].valid ,sq[i].rob_idx, data_rob_idx);
+            // $display("   Checking idx=%0d: Valid=%b, ROB=%0d", i, sq[i].valid, sq[i].rob_idx);
+            // $display("outside: sq[i].valid =%b | sq[i].rob_idx= %d | data_rob_idx=%d",sq[i].valid ,sq[i].rob_idx, data_rob_idx);
 
             if(sq[i].valid && (sq[i].rob_idx == data_rob_idx))begin
-              $display("sq[i].valid =%b | sq[i].rob_idx= %d | data_rob_idx=%d",sq[i].valid ,sq[i].rob_idx, data_rob_idx);
+              // $display("sq[i].valid =%b | sq[i].rob_idx= %d | data_rob_idx=%d",sq[i].valid ,sq[i].rob_idx, data_rob_idx);
               sq[i].data <= data;
               sq[i].data_valid <= 1'b1;
+              sq[i].addr <= enq_addr;
               break;
             end 
           end
@@ -219,7 +222,7 @@ module sq #(
         if(commit_valid)begin
 
           for(int i = 0 ; i < SQ_SIZE ; i++)begin
-        $display(" i = %d , commit_valid=%d |sq[i].valid=%d|sq[i].data_valid =%d|sq[i].rob_idx=%d|commit_rob_idx=%d",i, commit_valid,sq[i].valid,sq[i].data_valid,sq[i].rob_idx,commit_rob_idx); 
+        // $display(" i = %d , commit_valid=%d |sq[i].valid=%d|sq[i].data_valid =%d|sq[i].rob_idx=%d|commit_rob_idx=%d",i, commit_valid,sq[i].valid,sq[i].data_valid,sq[i].rob_idx,commit_rob_idx); 
 
             if(sq[i].valid && (sq[i].rob_idx == commit_rob_idx))begin
               sq[i].commited <= 1'b1;
@@ -256,7 +259,7 @@ module sq #(
     pending_found = 1'b0;
     found_data = '0;
     found_addr = '0;
-    $display("[DEBUG-ALWAYS STORE QUEUE] Count=%0d, Tail=%0d, Head=%0d", count, tail, head);
+    // $display("[DEBUG-ALWAYS STORE QUEUE] Count=%0d, Tail=%0d, Head=%0d", count, tail, head);
     if(count != 0)begin
       int checked = 0;
       // start at tail - 1 (most recent store) and go backwards up to count entries
@@ -268,10 +271,10 @@ module sq #(
         if(i<0)i = i + SQ_SIZE;
         // $display("[DEBUG-FWD] Checking indx = %0d, sq[%0d] = %0d , k=%0d , start = %0d" , i , i , sq[i].valid , k , start);
         if(sq[i].valid)begin
-          $display("[DEBUG-FWD] Checking idx=%0d. SQ_Addr=%h, SQ_Size=%0d | Load_Addr=%h, Load_Size=%0d", 
-                   i, sq[i].addr, sq[i].size, load_addr, load_size);
+          // $display("[DEBUG-FWD] Checking idx=%0d. SQ_Addr=%h, SQ_Size=%0d | Load_Addr=%h, Load_Size=%0d", 
+          //          i, sq[i].addr, sq[i].size, load_addr, load_size);
           if(addr_overlap(sq[i].addr , sq[i].size , load_addr , load_size))begin
-            $display("[RTL-SQ-FWD] Overlap at idx=%0d. DataValid=%b. Data=%h", i, sq[i].data_valid, sq[i].data);
+            // $display("[RTL-SQ-FWD] Overlap at idx=%0d. DataValid=%b. Data=%h", i, sq[i].data_valid, sq[i].data);
             if(sq[i].data_valid)begin
               found = 1'b1;
               pending_found = 1'b0;
@@ -280,7 +283,7 @@ module sq #(
               // $display("[RTL-SQ-FWD]found = %0b , ")
               break;
             end else begin
-              $display("[DEBUG-ALWAYS] Loop idx=%0d has Valid=0! (This is wrong)", i);
+              // $display("[DEBUG-ALWAYS] Loop idx=%0d has Valid=0! (This is wrong)", i);
               pending_found = 1'b1;break;
             end
           end
@@ -307,17 +310,18 @@ module sq #(
     dc_req_addr = '0;
     dc_req_size = '0;
     dc_store_data = '0;
-    $display("out: count=%d| sq[head].valid=%b, sq[head].commited=%b, sq[head].data_valid=%b", count, sq[head].valid, sq[head].commited, sq[head].data_valid);
+    dc_rob_idx = '0;
 
     if (count != 0) begin
       // if (sq[head].valid  && sq[head].data_valid) begin
       if (sq[head].valid &&sq[head].commited && sq[head].data_valid) begin
-        $display("store data to cache!!");
-        // $display("insude: sq[head].valid=%b, sq[head].commited=%b, sq[head].data_valid=%b", sq[head].valid, sq[head].commited, sq[head].data_valid);
+        $display("sent data to dcache!!");
+        $display("dc_req_addr=%h, dc_req_size=%t, dc_store_data=%h", dc_req_addr, dc_req_size, dc_store_data);
         dc_req_req = 1'b1;
         dc_req_addr = sq[head].addr;
         dc_req_size = sq[head].size;
         dc_store_data = sq[head].data;
+        dc_rob_idx = sq[head].rob_idx;
       end
     end
   end
@@ -350,6 +354,32 @@ module sq #(
     // =======================================================
     // =======================================================
 
+  // Simple debug display for Store Queue state
+  task automatic show_sq_status();
+    int i;
+    $display("===================================================================");
+    $display("Store Queue Status @ time %0t", $time);
+    $display("[SQ] head=%0d tail=%0d count=%0d full=%0b", head, tail, count, full);
+    for (i = 0; i < SQ_SIZE; i++) begin
+      if (sq[i].valid) begin
+        $display("[SQ[%0d]] valid=%b addr=%h size=%0d rob_idx=%0d data_valid=%b commited=%b data=%h",
+                 i,
+                 sq[i].valid,
+                 sq[i].addr,
+                 sq[i].size,
+                 sq[i].rob_idx,
+                 sq[i].data_valid,
+                 sq[i].commited,
+                 sq[i].data);
+      end
+    end
+    $display("-------------------------------------------------------------------");
+  endtask
 
+  always_ff @(posedge clock) begin
+    if (!reset) begin
+      show_sq_status();
+    end
+  end
 
 endmodule

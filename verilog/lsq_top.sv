@@ -27,7 +27,7 @@ module lsq_top #(
     input  logic       sq_data_valid,  // resp_o.valid
     input  MEM_BLOCK   sq_data, //resp_o.sw_data
     input  ROB_IDX     sq_data_rob_idx, // resp_o.rob_idx
-    input  ADDR        dispatch_addr,  //resp_o.value 
+    input  ADDR        sq_data_addr,  //resp_o.value 
 
     // =====================================================
     // 3. Commit Stage (來自 ROB)
@@ -52,23 +52,25 @@ module lsq_top #(
     output MEM_COMMAND Dcache_command_0,   // MEM_LOAD / MEM_NONE
     output MEM_SIZE    Dcache_size_0,
     output MEM_BLOCK   Dcache_store_data_0, // 對 Load 來說無用，補 0
-    output [LQ_IDX_WIDTH-1:0] Dcache_req_tag,
+    output ROB_IDX     Dcache_req_rob_idx_0,
     input  logic       Dcache_req_0_accept, // Bank Conflict 處理
     
     input  MEM_BLOCK   Dcache_data_out_0,   // Load Data Return
     input  logic       Dcache_valid_out_0,  // Load Data Valid
-    input [LQ_IDX_WIDTH-1:0] Dcache_load_tag,
+    input   ROB_IDX    Dcache_data_rob_idx_0,
 
     // --- Port 1: 用於 Store ---
     output ADDR        Dcache_addr_1,
     output MEM_COMMAND Dcache_command_1,   // MEM_STORE / MEM_NONE
     output MEM_SIZE    Dcache_size_1,
     output MEM_BLOCK   Dcache_store_data_1, // Store Data
+    output ROB_IDX     Dcache_req_rob_idx_1,
     input  logic       Dcache_req_1_accept, // Bank Conflict 處理
     
     // Port 1 的回傳通常 Store 不用 (除非 atomic)，暫時忽略
     input  MEM_BLOCK   Dcache_data_out_1,   
     input  logic       Dcache_valid_out_1,
+    input  ROB_IDX    Dcache_data_rob_idx_1,
 
     // =====================================================
     // 6. Snapshot / Recovery Interface
@@ -133,7 +135,7 @@ module lsq_top #(
     ADDR        lq_req_addr;
     MEM_SIZE    lq_req_size;
     logic       lq_req_accept;
-
+    ROB_IDX     lq_req_rob_idx;
 
     /////////////////
     sq_entry_t sq_internal_state [SQ_SIZE-1:0]; //TODO
@@ -145,22 +147,31 @@ module lsq_top #(
     MEM_COMMAND sq_req_cmd;       // SQ 內部產生的 Command
     MEM_BLOCK   sq_req_data;
     logic       sq_req_accept;
+    ROB_IDX     sq_req_rob_idx;
+
+
+    // =====================================================
+    // Fix bug 
+    // =====================================================
+    // todo: (debug) dont know why dispatch valid would be 1 for multyple cycles -> same instr disaptch multy times
+    ROB_IDX  pre_dispatch_rob;
+    logic   new_dispatch;
+    assign  new_dispatch = (dispatch_valid && (dispatch_rob_idx!= pre_dispatch_rob));
+
+    //### sychen 
+    always_ff @(posedge clock or posedge reset) begin 
+        if (reset) begin
+            pre_dispatch_rob <= '0;
+        end else if (dispatch_valid) begin
+            pre_dispatch_rob <= dispatch_rob_idx;
+        end
+    end
 
     // =====================================================
     // Dispatch Steering Logic (分流)
     // =====================================================
-    always_comb begin
-        sq_enq_valid = 1'b0;
-        lq_enq_valid = 1'b0;
-        
-        if (dispatch_valid) begin
-            if (dispatch_is_store) begin
-                sq_enq_valid = 1'b1;
-            end else begin
-                lq_enq_valid = 1'b1;
-            end
-        end
-    end
+    assign sq_enq_valid = (new_dispatch &&  dispatch_is_store);
+    assign lq_enq_valid = (new_dispatch && !dispatch_is_store);
 
     // 如果 dispatch Store 但 SQ 滿，或 dispatch Load 但 LQ 滿 -> Stall
     assign lsq_full = (dispatch_is_store && sq_full) || (!dispatch_is_store && lq_full);
@@ -179,7 +190,6 @@ module lsq_top #(
 
         // Enqueue
         .enq_valid(sq_enq_valid),
-        .enq_addr(dispatch_addr),
         .enq_size(dispatch_size),
         .enq_rob_idx(dispatch_rob_idx),
         .full(sq_full),
@@ -188,6 +198,7 @@ module lsq_top #(
         .data_valid(sq_data_valid),
         .data(sq_data),
         .data_rob_idx(sq_data_rob_idx),
+        .enq_addr(sq_data_addr), 
 
         // Forwarding Logic (Service LQ query)
         .load_addr(fwd_query_addr),
@@ -208,7 +219,7 @@ module lsq_top #(
         .dc_req_cmd(sq_req_cmd),
         .dc_store_data(sq_req_data), // 修正名稱對應
         .dc_req_accept(sq_req_accept),
-        // .dc_req_tag()
+        .dc_rob_idx(sq_req_rob_idx),
 
         // Snapshot
         .is_branch_i(is_branch_i),
@@ -236,7 +247,7 @@ module lsq_top #(
 
         // Enqueue
         .enq_valid(lq_enq_valid),
-        .enq_addr(dispatch_addr),
+        .enq_addr(sq_data_addr),
         .enq_size(dispatch_size),
         .enq_rob_idx(dispatch_rob_idx),
         .full(lq_full),
@@ -254,12 +265,12 @@ module lsq_top #(
         .dc_req_addr(lq_req_addr),
         .dc_req_size(lq_req_size),
         .dc_req_accept(lq_req_accept),
-        .dc_req_tag(lq_req_tag), // TODO
+        .dc_rob_idx(lq_req_rob_idx), // TODO
 
         // Input from D-Cache
         .dc_load_data(Dcache_data_out_0),   // 連接 Port 0 回傳
         .dc_load_valid(Dcache_valid_out_0), // 連接 Port 0 Valid
-        .dc_load_tag(Dcache_load_tag), //TODO
+        .dc_load_tag(Dcache_data_tag_0), //TODO
 
         // Writeback / Commit
         .rob_head(rob_head),
@@ -302,7 +313,7 @@ module lsq_top #(
     assign Dcache_addr_0       = lq_req_addr;
     assign Dcache_size_0       = lq_req_size;
     assign Dcache_store_data_0 = '0; // Load 不寫入資料
-    assign Dcache_req_tag      = lq_req_tag; //TODO
+    assign Dcache_req_rob_idx_0      = lq_req_rob_idx; //TODO
     // 將 Cache 的 Accept 回傳給 LQ
     assign lq_req_accept       = Dcache_req_0_accept;
 
@@ -316,7 +327,7 @@ module lsq_top #(
     // assign Dcache_size_1       = sq_req_size;
     assign Dcache_size_1       = WORD;
     assign Dcache_store_data_1 = sq_req_data;
-    
+    assign Dcache_req_rob_idx_1      = sq_req_rob_idx; //TODO    
     // 將 Cache 的 Accept 回傳給 SQ
     assign sq_req_accept       = Dcache_req_1_accept;
 
@@ -327,15 +338,15 @@ module lsq_top #(
     // =====================================================
     task automatic show_lsq_status();
         $display("=== LSQ Status (Cycle %0d) ===", $time);
-        $display("sq_data_valid=%b", sq_data_valid);
+        
+        // LSQ Status
+        $display("LSQ Dispatch");
+        $display("LQ Status: lq_enq_valid=%b, dispatch_size=%p, dispatch_rob_idx=%d", lq_enq_valid, dispatch_size, dispatch_rob_idx);
+        $display("SQ Status: sq_enq_valid=%b,  dispatch_size=%p, dispatch_rob_idx=%d", sq_enq_valid,dispatch_size, dispatch_rob_idx); 
 
-        // SQ Status
-        $display("SQ Status: dispatch_addr = %0h , Dcache_addr_1 = %0h", dispatch_addr, Dcache_addr_1);
-        
-        // Basic LSQ status
-        $display("LSQ Control: dispatch_valid=%b, dispatch_is_store=%b, commit_valid=%b, rob_head=%0d, commit_rob_idx=%0d",
-                dispatch_valid, dispatch_is_store, commit_valid, rob_head, commit_rob_idx);
-        
+        $display("LSQ Get DATA/ADDR");
+        $display("LSQ: addr=%h | data=%h(%b) | rob_idx=%d", sq_data_addr, sq_data, sq_data_valid, sq_data_rob_idx);
+
         // D-Cache Interface Status
         $display("\n=== D-Cache Interface ===");
         $display("Load Port (0): cmd=%s, addr=%h, size=%0d, accept=%b, valid_out=%b, data_out=%h, lq_req_valid=%s",
