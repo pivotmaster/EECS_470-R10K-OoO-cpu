@@ -504,6 +504,7 @@ typedef struct packed {
 typedef struct packed {
     logic     valid;
     ADDR      addr;
+    logic     addr_valid; //### sychenn
     MEM_SIZE  size;
     ROB_IDX   rob_idx;
     logic     data_valid;
