@@ -165,6 +165,7 @@ module lsq_top #(
         end else if (dispatch_valid) begin
             pre_dispatch_rob <= dispatch_rob_idx;
         end
+        $display("dispatch_is_store=%b, dispatch_valid=%b, new_dispatch=%b, dispatch_rob_idx=%d, pre_dispatch_rob=%d", dispatch_is_store, dispatch_valid, new_dispatch, dispatch_rob_idx, pre_dispatch_rob);
     end
 
     // =====================================================
@@ -247,10 +248,15 @@ module lsq_top #(
 
         // Enqueue
         .enq_valid(lq_enq_valid),
-        .enq_addr(sq_data_addr),
         .enq_size(dispatch_size),
         .enq_rob_idx(dispatch_rob_idx),
         .full(lq_full),
+
+        // Data Update
+        .data_valid(sq_data_valid),
+        .data(sq_data), //not use for load
+        .data_rob_idx(sq_data_rob_idx),
+        .enq_addr(sq_data_addr), 
 
         // Forwarding Logic (Ask SQ)
         .sq_forward_valid(fwd_valid),

@@ -11,10 +11,16 @@ module lq #(
 
     // 1. Enqueue (Dispatch)
     input logic         enq_valid, 
-    input ADDR          enq_addr,
     input MEM_SIZE      enq_size,
     input ROB_IDX       enq_rob_idx,
     output logic        full,
+
+
+    //###sychenn : addr arrived from fu 
+    input  logic       data_valid,
+    input  MEM_BLOCK   data,
+    input  ROB_IDX     data_rob_idx,
+    input ADDR          enq_addr, // this is addr from FU
 
     // 2. SQ Forwarding (Query & Response)
     input  logic       sq_forward_valid,
@@ -115,12 +121,12 @@ module lq #(
         for(i = 0; i < LQ_SIZE; i++) begin
             idx = (head + i) % LQ_SIZE; // Check from oldest to youngest
             if(lq[idx].valid && !lq[idx].data_valid) begin
-                $display("[DEBUG] Found Candidate! Idx=%0d, Addr=%h", idx, lq[idx].addr);
+                // $display("[DEBUG] Found Candidate! Idx=%0d, Addr=%h", idx, lq[idx].addr);
                 sq_query_addr = lq[idx].addr;
                 sq_query_size = lq[idx].size;
                 query_idx = idx;
                 found_unissued = 1'b1;
-                $display("found_unissued = %0b" , found_unissued);
+                // $display("found_unissued = %0b" , found_unissued);
                 break; // Found the oldest one
             end
         end
@@ -134,7 +140,7 @@ module lq #(
         dc_req_addr  = '0;
         dc_req_size  = '0;
         stall_older_store_unknown = 1'b0;
-        $display("[DEBUG-ALWAYS LOAD QUEUE] Count=%0d, Tail=%0d, Head=%0d", count, tail, head);
+        // $display("[DEBUG-ALWAYS LOAD QUEUE] Count=%0d, Tail=%0d, Head=%0d", count, tail, head);
 
         // 只有當準備 Issue 時才檢查
         if (found_unissued) begin
@@ -223,7 +229,8 @@ module lq #(
                 // ------------------------------------
                 if(enq_valid && !full) begin
                     lq[tail].valid <= 1'b1;
-                    lq[tail].addr <= enq_addr;
+                    lq[tail].addr <= '0; //### sychen have not get addr when dispatch
+                    lq[tail].addr_valid <= 1'b0; //### sychen 
                     lq[tail].size <= enq_size;
                     lq[tail].rob_idx <= enq_rob_idx;
                     lq[tail].data_valid <= 1'b0;
@@ -231,6 +238,17 @@ module lq #(
                     lq[tail].disp_rd_new_prf <= disp_rd_new_prf_i;
                     tail <= next_ptr(tail);
                     // count <= count + 1'b1;
+                end        
+                //### sychenn
+                // store addr arrived(match by rob_idx)
+                if (data_valid)begin 
+                    for(int i = 0 ; i < LQ_SIZE ; i++)begin // simple linear search
+                        if(lq[i].valid && (lq[i].rob_idx == data_rob_idx))begin
+                            lq[i].addr_valid <= 1'b1;
+                            lq[i].addr <= enq_addr;
+                            break;
+                        end 
+                    end
                 end
 
                 if(wb_from_cache) begin
