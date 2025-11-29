@@ -35,6 +35,7 @@ module lq #(
     input  MEM_BLOCK   dc_load_data,
     input  logic       dc_load_valid,
     input  logic [IDX_WIDTH-1:0] dc_load_tag,
+    output ROB_IDX     dc_rob_idx,
 
     // 5. Writeback (To CDB/ROB - Data Ready)
     input  ROB_IDX     rob_head,

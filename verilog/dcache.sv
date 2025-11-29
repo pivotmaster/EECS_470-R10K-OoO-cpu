@@ -8,27 +8,30 @@ module dcache (
     input  MEM_COMMAND Dcache_command_0, // MEM_LOAD or MEM_STORE or MEM_NONE
     input  MEM_SIZE    Dcache_size_0, // WORD/BYTE/HALF
     input  MEM_BLOCK   Dcache_store_data_0, // load = 0
-    input  logic [`LQ_IDX_WIDTH-1:0] Dcache_req_tag,
+    input  ROB_IDX     Dcache_req_rob_idx_0,
 
     output logic       Dcache_req_0_accept, // if bank conflict (two request go to the same bank), it might be 0 and need to be resent at the next cycle
     output MEM_BLOCK   Dcache_data_out_0,
     output logic       Dcache_valid_out_0,
-    output logic [`LQ_IDX_WIDTH-1:0] Dcache_load_tag,
+    output ROB_IDX     Dcache_data_rob_idx_0,
     
     input  ADDR        Dcache_addr_1,      // Request 1
     input  MEM_COMMAND Dcache_command_1,
     input  MEM_SIZE    Dcache_size_1,
     input  MEM_BLOCK   Dcache_store_data_1,
+    input  ROB_IDX     Dcache_req_rob_idx_1,
 
     output logic       Dcache_req_1_accept,  // if bank conflict (two request go to the same bank), it might be 0
     output MEM_BLOCK   Dcache_data_out_1,
     output logic       Dcache_valid_out_1,
+    output ROB_IDX     Dcache_data_rob_idx_1,
     
     // Memory interface (non-blocking)
     output MEM_COMMAND Dcache2mem_command,
     output ADDR        Dcache2mem_addr,
     output MEM_SIZE    Dcache2mem_size,
     output MEM_BLOCK   Dcache2mem_data,
+    output logic       send_new_mem_req,
     
     input  MEM_TAG   mem2proc_transaction_tag, //Tell you the tag for this to mem request (1 cycle after sending request)
     input  MEM_BLOCK mem2proc_data,
@@ -56,54 +59,6 @@ module dcache (
     parameter int OFFSET_BITS = $clog2(LINE_SIZE); // # offset = 8 bytes (3 bits)
     parameter int INDEX_BITS = $clog2(BANK_SIZE / CACHE_WAYS);      // # set = 4 = 16 lines / 4 ways (2 bits per bank)
     parameter int TAG_BITS = `XLEN - INDEX_BITS - OFFSET_BITS - BANK_BITS; // 3 for byte offset
-    
-    // =========================================================
-    // Cache Signals (sent to mem_dp)
-    // =========================================================
-    // ---------- READ ---------- 
-    // Read enable signals
-    logic cache_read_en_0, cache_read_en_1;
-    // Read addresses 
-    logic [INDEX_BITS-1:0] cache_read_addr_0;
-    logic [INDEX_BITS-1:0] cache_read_addr_1;
-    // Read Data
-    MEM_BLOCK [CACHE_WAYS-1:0] cache_data_read_0 ;
-    MEM_BLOCK [CACHE_WAYS-1:0] cache_data_read_1;
-    MEM_BLOCK line_data_0, line_data_1;  //this is the read result in the whole line format
-    MEM_BLOCK updated_line_0 ,updated_line_1; // if store: modified the line and put it back to the cache line
-    
-    // ---------- WRITE ---------- 
-    // Write enable signals
-    logic  [CACHE_WAYS-1:0] cache_write_en_0;
-    logic  [CACHE_WAYS-1:0] cache_write_en_1;
-    logic  [CACHE_WAYS-1:0] cache_write_en_hit_0;
-    logic  [CACHE_WAYS-1:0] cache_write_en_hit_1;
-    logic  [CACHE_WAYS-1:0] cache_write_en_refill_0;
-    logic  [CACHE_WAYS-1:0] cache_write_en_refill_1;
-
-    // Write addresses 
-    logic [INDEX_BITS-1:0] cache_write_addr_0, cache_write_addr_hit_0, cache_write_addr_refill_0;
-    logic [INDEX_BITS-1:0] cache_write_addr_1, cache_write_addr_hit_1, cache_write_addr_refill_1;
-
-    // Write Data
-    MEM_BLOCK cache_write_data_0, cache_write_data_hit_0, cache_write_data_refill_0;
-    MEM_BLOCK cache_write_data_1, cache_write_data_hit_1, cache_write_data_refill_1;
-
-    genvar w;
-    for (w = 0; w < CACHE_WAYS; w++) begin
-        assign cache_write_en_0[w] = cache_write_en_hit_0[w] | cache_write_en_refill_0[w];
-        assign cache_write_en_1[w] = cache_write_en_hit_1[w] | cache_write_en_refill_1[w];
-    end
-
-    assign cache_write_addr_0 =
-        (|cache_write_en_refill_0) ? cache_write_addr_refill_0 : cache_write_addr_hit_0;
-    assign cache_write_addr_1 =
-        (|cache_write_en_refill_1) ? cache_write_addr_refill_1 : cache_write_addr_hit_1;
-
-    assign cache_write_data_0 =
-        (|cache_write_en_refill_0) ? cache_write_data_refill_0 : cache_write_data_hit_0;
-    assign cache_write_data_1 =
-        (|cache_write_en_refill_1) ? cache_write_data_refill_1 : cache_write_data_hit_1;
 
     // =========================================================
     // Cache helper bits
@@ -117,64 +72,7 @@ module dcache (
     // ---------- LRU tracking for replacement ---------- 
     logic [$clog2(CACHE_WAYS)-1:0] lru_bits [BANKS-1:0][SETS_PER_BANK-1:0][CACHE_WAYS-1:0];
 
-    // =========================================================
-    // Main Cache Arrays
-    // =========================================================
-    // even bank (bank bit = 0)
-    genvar i;
-    for (i = 0; i < CACHE_WAYS; i++) begin : gen_cache_data_bank_even
-        memDP #(
-            .WIDTH(LINE_SIZE * 8),           // MEM_BLOCK width (in bytes)
-            .DEPTH(SETS_PER_BANK),  // = set size = 4 (each DP contains 1 way)
-            .READ_PORTS(1),       
-            .BYPASS_EN(1)         // Enable bypass for write-through
-        ) cache_data_0 (
-            .clock(clock),
-            .reset(reset),
-            .re(cache_read_en_0),
-            .raddr(cache_read_addr_0),
-            .rdata(cache_data_read_0[i]),
-            .we(cache_write_en_0[i]),
-            .waddr(cache_write_addr_0),
-            .wdata(cache_write_data_0)
-        );
-    end 
-
-    // odd bank (bank bit = 1)
-    genvar j;
-    for (j = 0; j < CACHE_WAYS; j++) begin : gen_cache_data_bank_odd
-        memDP #(
-            .WIDTH(LINE_SIZE * 8),           // MEM_BLOCK width (in bytes)
-            .DEPTH(SETS_PER_BANK),  //= set size (each DP contains 1 way)
-            .READ_PORTS(1),       
-            .BYPASS_EN(1)         // Enable bypass for write-through
-        ) cache_data_1 (
-            .clock(clock),
-            .reset(reset),
-            .re(cache_read_en_1),
-            .raddr(cache_read_addr_1),
-            .rdata(cache_data_read_1[j]),
-            .we(cache_write_en_1[j]),
-            .waddr(cache_write_addr_1),
-            .wdata(cache_write_data_1)
-        );
-    end 
-    
-    // // =========================================================
-    // // Victim Cache
-    // // =========================================================
-    // typedef struct packed {
-    //     logic valid;
-    //     logic [CACHE_TAG_BITS-1:0] tag;
-    //     logic [CACHE_INDEX_BITS-1:0] index;
-    //     MEM_BLOCK data;
-    //     logic dirty;
-    // } victim_entry_t;
-
-    // victim_entry_t victim_cache [VICTIM_SIZE-1:0];
-    // logic [$clog2(VICTIM_SIZE)-1:0] victim_lru [VICTIM_SIZE-1:0];
-
-
+  
     // =========================================================
     // Cache Control
     // =========================================================
@@ -214,6 +112,10 @@ module dcache (
     logic [1:0] hit_way_0, hit_way_1;  //which way hit (ex: 2)
     logic cache_hit_0, cache_hit_1, load_cache_hit_0, load_cache_hit_1, store_cache_hit_0, store_cache_hit_1;
 
+    int refill_mshr_id;
+    logic refill_enable;
+    logic transaction_data_tag_the_same_time;
+
     always_comb begin
         way_hit_0 = '0;
         way_hit_1 = '0;
@@ -227,8 +129,8 @@ module dcache (
         end
         
         // hit or miss
-        cache_hit_0 = (|way_hit_0) ;
-        cache_hit_1 = (|way_hit_1);
+        cache_hit_0 = Dcache_req_0_accept && (|way_hit_0);
+        cache_hit_1 = Dcache_req_1_accept && (|way_hit_1);
 
         load_cache_hit_0 = cache_hit_0 && Dcache_command_0 == MEM_LOAD;
         load_cache_hit_1 = cache_hit_1 && Dcache_command_1 == MEM_LOAD;
@@ -244,7 +146,103 @@ module dcache (
     end
 
     // =========================================================
+    // Cache Signals (sent to mem_dp)
+    // =========================================================
+    // ---------- READ ---------- 
+    // Read enable signals
+    logic cache_read_en_0, cache_read_en_1;
+    // Read addresses 
+    logic [INDEX_BITS-1:0] cache_read_addr_0;
+    logic [INDEX_BITS-1:0] cache_read_addr_1;
+    // Read Data
+    MEM_BLOCK [CACHE_WAYS-1:0] cache_data_read_0 ;
+    MEM_BLOCK [CACHE_WAYS-1:0] cache_data_read_1;
+    MEM_BLOCK line_data_0, line_data_1;  //this is the read result in the whole line format
+    MEM_BLOCK updated_line_0 ,updated_line_1; // if store: modified the line and put it back to the cache line
+    
+    // ---------- WRITE ---------- 
+    // Write enable signals
+    logic  [CACHE_WAYS-1:0] cache_write_en_0;
+    logic  [CACHE_WAYS-1:0] cache_write_en_1;
+    logic  [CACHE_WAYS-1:0] cache_write_en_hit_0;
+    logic  [CACHE_WAYS-1:0] cache_write_en_hit_1;
+    logic  [CACHE_WAYS-1:0] cache_write_en_refill_0;
+    logic  [CACHE_WAYS-1:0] cache_write_en_refill_1;
+
+    // Write addresses 
+    logic [INDEX_BITS-1:0] cache_write_addr_0, cache_write_addr_hit_0, cache_write_addr_refill_0;
+    logic [INDEX_BITS-1:0] cache_write_addr_1, cache_write_addr_hit_1, cache_write_addr_refill_1;
+
+    // Write Data
+    MEM_BLOCK cache_write_data_0, cache_write_data_hit_0, cache_write_data_refill_0;
+    MEM_BLOCK cache_write_data_1, cache_write_data_hit_1, cache_write_data_refill_1;
+
+    // here 0/1 means banks
+    genvar w;
+    for (w = 0; w < CACHE_WAYS; w++) begin
+        assign cache_write_en_0[w] = cache_write_en_hit_0[w] | cache_write_en_refill_0[w];
+        assign cache_write_en_1[w] = cache_write_en_hit_1[w] | cache_write_en_refill_1[w];
+    end
+
+    assign cache_write_addr_0 =
+        (cache_write_en_0) ? (|cache_write_en_refill_0) ? cache_write_addr_refill_0 : cache_write_addr_hit_0 : '0;
+    assign cache_write_addr_1 =
+        (cache_write_en_1) ? (|cache_write_en_refill_1) ? cache_write_addr_refill_1 : cache_write_addr_hit_1 : '0;
+
+    assign cache_write_data_0 =
+        (cache_write_en_0) ? (|cache_write_en_refill_0) ? cache_write_data_refill_0 : cache_write_data_hit_0 : '0;
+    assign cache_write_data_1 =
+        (cache_write_en_1) ? (|cache_write_en_refill_1) ? cache_write_data_refill_1 : cache_write_data_hit_1 : '0;
+
+    // =========================================================
+    // Main Cache Arrays
+    // =========================================================
+    // even bank (bank bit = 0)
+    genvar i;
+    for (i = 0; i < CACHE_WAYS; i++) begin : gen_cache_data_bank_even
+        memDP #(
+            .WIDTH(LINE_SIZE * 8),           // MEM_BLOCK width (in bytes)
+            .DEPTH(SETS_PER_BANK),  // = set size = 4 (each DP contains 1 way)
+            .READ_PORTS(1),       
+            .BYPASS_EN(1)         // Enable bypass for write-through
+        ) cache_data_0 (
+            .clock(clock),
+            .reset(reset),
+            .re(cache_read_en_0),
+            .raddr(cache_read_addr_0),
+            .rdata(cache_data_read_0[i]),
+            .we(cache_write_en_0[i]),
+            .waddr(cache_write_addr_0),
+            .wdata(cache_write_data_0)
+        );
+    end 
+
+    // odd bank (bank bit = 1)
+    genvar j;
+    for (j = 0; j < CACHE_WAYS; j++) begin : gen_cache_data_bank_odd
+        memDP #(
+            .WIDTH(LINE_SIZE * 8),           // MEM_BLOCK width (in bytes)
+            .DEPTH(SETS_PER_BANK),  //= set size (each DP contains 1 way)
+            .READ_PORTS(1),       
+            .BYPASS_EN(1)         // Enable bypass for write-through
+        ) cache_data_1 (
+            .clock(clock),
+            .reset(reset),
+            .re(cache_read_en_1),
+            .raddr(cache_read_addr_1),
+            .rdata(cache_data_read_1[j]), // read 4 ways
+            .we(cache_write_en_1[j]), // which way to write (write one way)
+            .waddr(cache_write_addr_1), //index (set)
+            .wdata(cache_write_data_1)
+        );
+    end
+
+    // =========================================================
     // Load (Read) Logic 
+    // if this cycle accept :
+    //    if cache hit : read hit line
+    //    if cache miss: read replace line (for wb to mem)
+    // => always read the cache when request was accepeted (it will output 4 ways)
     //
     // ### Cannot use load_cache_hit because it still need to read the whole line while write! ###//
     // =========================================================  
@@ -254,16 +252,18 @@ module dcache (
 
     // ----------  Assign Read address ----------    
     // Only need index to determine which set 
+
     assign cache_read_addr_0 = (req_0_to_bank_0) ? index_0 : (req_1_to_bank_0) ? index_1 : '0;
     assign cache_read_addr_1 = (req_0_to_bank_1) ? index_0 : (req_1_to_bank_1) ? index_1 : '0;
 
     // ----------  Get Read Result ---------- 
     always_comb begin
-        Dcache_load_tag = (Dcache_valid_out_0) ? Dcache_req_tag : '0; // if cache miss, tag = 0 //### 11/25 ###//
-        Dcache_valid_out_0 = (load_cache_hit_0) && Dcache_req_0_accept; //Actually Dcache_req_0_accept contains (Dcache_command_0 != MEM_NONE)
-        Dcache_valid_out_1 = (load_cache_hit_1) && Dcache_req_1_accept;
+        Dcache_valid_out_0 = 0; //Actually Dcache_req_0_accept contains (Dcache_command_0 != MEM_NONE)
+        Dcache_valid_out_1 = 0;
         Dcache_data_out_0 = '0; //8 byte per line = 64 bits
         Dcache_data_out_1 = '0;
+        Dcache_data_rob_idx_0 = '0;
+        Dcache_data_rob_idx_1 = '0;
         line_data_0 = '0;
         line_data_1 = '0;
 
@@ -278,7 +278,12 @@ module dcache (
         end 
 
         // Choose the data to cpu by data size and offset
-        if (load_cache_hit_0 || load_cache_hit_1) begin
+        // TODO: NEED TO HANDLE THE SAME CYCLE CACHE HIT/MSHR RESPONSE
+        if ((load_cache_hit_0 && Dcache_req_0_accept) || (load_cache_hit_1 && Dcache_req_1_accept)) begin
+            Dcache_valid_out_0 = load_cache_hit_0;
+            Dcache_valid_out_1 = load_cache_hit_1;
+            Dcache_data_rob_idx_0 = (load_cache_hit_0) ? Dcache_req_rob_idx_0 : '0;
+            Dcache_data_rob_idx_1 = (load_cache_hit_1) ? Dcache_req_rob_idx_1 : '0;
             unique case (Dcache_size_0)
                 BYTE:    Dcache_data_out_0.byte_level[0] = line_data_0.byte_level[offset_0];
                 HALF:    Dcache_data_out_0.half_level[0] = line_data_0.half_level[offset_0[OFFSET_BITS-1:1]];
@@ -295,7 +300,11 @@ module dcache (
             endcase
 
         // Data from memory refill_mshr_id
-        end else if (mem2proc_data_tag != 0) begin
+        end else if ((mem2proc_data_tag == mshr[refill_mshr_id].mem_tag || transaction_data_tag_the_same_time) && mshr[refill_mshr_id].valid && mshr[refill_mshr_id].command == MEM_STORE) begin
+            Dcache_valid_out_0 = (mshr[refill_mshr_id].port_id == 0);
+            Dcache_valid_out_1 = (mshr[refill_mshr_id].port_id == 1);  
+            Dcache_data_rob_idx_0 = (mshr[refill_mshr_id].port_id == 0) ? mshr[refill_mshr_id].rob_idx: '0;
+            Dcache_data_rob_idx_1 = (mshr[refill_mshr_id].port_id == 1) ? mshr[refill_mshr_id].rob_idx : '0;          
             unique case (Dcache_size_0)
                 BYTE:    Dcache_data_out_0.byte_level[0] = mem2proc_data.byte_level[offset_0];
                 HALF:    Dcache_data_out_0.half_level[0] = mem2proc_data.half_level[offset_0[OFFSET_BITS-1:1]];
@@ -345,28 +354,49 @@ module dcache (
 
     // ---------- Write Data ---------- 
     always_comb begin
+        // banks 0/1
         updated_line_0 = line_data_0; // from read memDP
         updated_line_1 = line_data_1; // from read memDP
 
         // Get hit line and update the value we want to write 
-        if (store_cache_hit_0) begin
-            unique case (Dcache_size_0)
-                BYTE:    updated_line_0.byte_level[offset_0] = Dcache_store_data_0.byte_level[0];
-                HALF:    updated_line_0.half_level[offset_0[OFFSET_BITS-1:1]] = Dcache_store_data_0.half_level[0];
-                WORD:    updated_line_0.word_level[offset_0[OFFSET_BITS-1:2]] = Dcache_store_data_0.word_level[0];
-                DOUBLE:  updated_line_0.dbbl_level = Dcache_store_data_0.dbbl_level;
-                default: updated_line_0.dbbl_level = Dcache_store_data_0.dbbl_level;
-            endcase
+        if (store_cache_hit_0) begin // req 0/1
+            if (req_0_to_bank_0) begin
+                unique case (Dcache_size_0) // req 0/1
+                    BYTE:    updated_line_0.byte_level[offset_0] = Dcache_store_data_0.byte_level[0];
+                    HALF:    updated_line_0.half_level[offset_0[OFFSET_BITS-1:1]] = Dcache_store_data_0.half_level[0];
+                    WORD:    updated_line_0.word_level[offset_0[OFFSET_BITS-1:2]] = Dcache_store_data_0.word_level[0];
+                    DOUBLE:  updated_line_0.dbbl_level = Dcache_store_data_0.dbbl_level;
+                    default: updated_line_0.dbbl_level = Dcache_store_data_0.dbbl_level;
+                endcase
+            end else if (req_0_to_bank_1) begin
+                unique case (Dcache_size_0)
+                    BYTE:    updated_line_1.byte_level[offset_1] = Dcache_store_data_0.byte_level[0];
+                    HALF:    updated_line_1.half_level[offset_1[OFFSET_BITS-1:1]] = Dcache_store_data_0.half_level[0];
+                    WORD:    updated_line_1.word_level[offset_1[OFFSET_BITS-1:2]] = Dcache_store_data_0.word_level[0];
+                    DOUBLE:  updated_line_1.dbbl_level = Dcache_store_data_0.dbbl_level;
+                    default: updated_line_1.dbbl_level = Dcache_store_data_0.dbbl_level;
+                endcase
+            end
         end
 
-        if (store_cache_hit_1) begin
-            unique case (Dcache_size_1)
-                BYTE:    updated_line_1.byte_level[offset_1] = Dcache_store_data_1.byte_level[0];
-                HALF:    updated_line_1.half_level[offset_1[OFFSET_BITS-1:1]] = Dcache_store_data_1.half_level[0];
-                WORD:    updated_line_1.word_level[offset_1[OFFSET_BITS-1:2]] = Dcache_store_data_1.word_level[0];
-                DOUBLE:  updated_line_1.dbbl_level = Dcache_store_data_1.dbbl_level;
-                default: updated_line_1.dbbl_level = Dcache_store_data_1.dbbl_level;
-            endcase
+        if (store_cache_hit_1) begin // req 0/1
+            if (req_1_to_bank_0) begin
+                unique case (Dcache_size_1)
+                    BYTE:    updated_line_0.byte_level[offset_0] = Dcache_store_data_1.byte_level[0];
+                    HALF:    updated_line_0.half_level[offset_0[OFFSET_BITS-1:1]] = Dcache_store_data_1.half_level[0];
+                    WORD:    updated_line_0.word_level[offset_0[OFFSET_BITS-1:2]] = Dcache_store_data_1.word_level[0];
+                    DOUBLE:  updated_line_0.dbbl_level = Dcache_store_data_1.dbbl_level;
+                    default: updated_line_0.dbbl_level = Dcache_store_data_1.dbbl_level;
+                endcase
+            end else if (req_1_to_bank_1) begin
+                unique case (Dcache_size_1)
+                    BYTE:    updated_line_1.byte_level[offset_1] = Dcache_store_data_1.byte_level[0];
+                    HALF:    updated_line_1.half_level[offset_1[OFFSET_BITS-1:1]] = Dcache_store_data_1.half_level[0];
+                    WORD:    updated_line_1.word_level[offset_1[OFFSET_BITS-1:2]] = Dcache_store_data_1.word_level[0];
+                    DOUBLE:  updated_line_1.dbbl_level = Dcache_store_data_1.dbbl_level;
+                    default: updated_line_1.dbbl_level = Dcache_store_data_1.dbbl_level;
+                endcase
+            end
         end
 
         // store the updated line we write
@@ -403,9 +433,9 @@ module dcache (
         MEM_COMMAND command;
         MEM_SIZE size;
         MEM_BLOCK store_data;
-        // logic [3:0] request_id;
+        logic port_id; // FROM WHICH PORT
         MEM_TAG     mem_tag; 
-        logic [`LQ_IDX_WIDTH-1:0] Dcache_req_tag;
+        ROB_IDX     rob_idx;
         // logic victim_hit;  // Request went to victim cache
     } mshr_entry_t;
 
@@ -416,12 +446,11 @@ module dcache (
     logic [$clog2(MSHR_SIZE)-1:0] pending_mshr_id;
     logic pending_req_to_mem;
     
-    logic send_new_mem_req; // have req to memory & has MSHR entry
+    // logic send_new_mem_req; // have req to memory & has MSHR entry
     int free_mshr_idx;
     
 
     // ----------  LRU logic ----------  
-    //### LRU update at hit ###//
     // Find the replacement way
     always_comb begin : LRU
         int max_val_0 = -1;
@@ -469,7 +498,6 @@ module dcache (
     end
 
     // Update LRU Bits
-    // ### only update when cache hit ###//
     always_ff @(posedge clock or posedge reset) begin : update_LRU
         if (reset) begin
             for (int b = 0; b < BANKS; b++) begin
@@ -480,33 +508,42 @@ module dcache (
                 end
             end
         end else begin
+            //---------------when cache hit---------------//
             // cpu reauest 0
             if (cache_hit_0 && Dcache_req_0_accept) begin
-                int b0   = bank_0;
-                int s0   = index_0;
-                int w0   = hit_way_0;
-                logic [$clog2(CACHE_WAYS)-1:0] old = lru_bits[b0][s0][w0];
-
                 for (int w = 0; w < CACHE_WAYS; w++) begin
-                    if (w == w0) begin
-                        lru_bits[b0][s0][w] <= '0;
-                    end else if (lru_bits[b0][s0][w] < old) begin
-                        lru_bits[b0][s0][w] <= lru_bits[b0][s0][w] + 1'b1;
+                    if (w == hit_way_0) begin
+                        lru_bits[bank_0][index_0][hit_way_0] <= '0;
+                    end else if (lru_bits[bank_0][index_0][w] < lru_bits[bank_0][index_0][hit_way_0] || lru_bits[bank_0][index_0][w] == lru_bits[bank_0][index_0][hit_way_0]) begin
+                        lru_bits[bank_0][index_0][w] <= lru_bits[bank_0][index_0][w] + 1'b1;
                     end
                 end
             end
             // cpu reauest 1
             if (cache_hit_1 && Dcache_req_1_accept) begin
-                int b1   = bank_1;
-                int s1   = index_1;
-                int w1   = hit_way_1;
-                logic [$clog2(CACHE_WAYS)-1:0] old1 = lru_bits[b1][s1][w1];
-
+                lru_bits[bank_1][index_1][hit_way_1] <= '0;
                 for (int w11 = 0; w11 < CACHE_WAYS; w11++) begin
-                    if (w11 == w1) begin
-                        lru_bits[b1][s1][w11] <= '0;
-                    end else if (lru_bits[b1][s1][w11] < old1) begin
-                        lru_bits[b1][s1][w11] <= lru_bits[b1][s1][w11] + 1'b1;
+                    if (w11 != hit_way_1 && (lru_bits[bank_1][index_1][w11] < lru_bits[bank_1][index_1][hit_way_1] || lru_bits[bank_1][index_1][w11] == lru_bits[bank_1][index_1][hit_way_1])) begin
+                        lru_bits[bank_1][index_1][w11] <= lru_bits[bank_1][index_1][w11] + 1'b1;
+                    end
+                end
+            end
+
+            //---------------when cache miss---------------//
+            if (send_miss_0) begin
+                lru_bits[bank_0][index_0][replace_way_0] <= '0;
+                for (int w00 = 0; w00 < CACHE_WAYS; w00++) begin
+                    if (w00 != replace_way_0 && (lru_bits[bank_0][index_0][w00] < lru_bits[bank_0][index_0][replace_way_0] || lru_bits[bank_0][index_0][w00] == lru_bits[bank_0][index_0][replace_way_0])) begin
+                        lru_bits[bank_0][index_0][w00] <= lru_bits[bank_0][index_0][w00] + 1'b1;
+                    end
+                end
+            end
+
+            if (send_miss_1) begin
+                lru_bits[bank_1][index_1][replace_way_1] <= '0;
+                for (int w11_m = 0; w11_m < CACHE_WAYS; w11_m++) begin
+                    if (w11_m != replace_way_1 && (lru_bits[bank_1][index_1][w11_m] < lru_bits[bank_1][index_1][replace_way_1] || lru_bits[bank_1][index_1][w11_m] == lru_bits[bank_1][index_1][replace_way_1])) begin
+                        lru_bits[bank_1][index_1][w11_m] <= lru_bits[bank_1][index_1][w11_m] + 1'b1;
                     end
                 end
             end
@@ -530,15 +567,16 @@ module dcache (
 
     // Find refill MSHR id (when data tag comes back from memory)
     //### Handle the case that transaction tag and data tag come back at the same cycle ###//
-    int refill_mshr_id;
-    logic refill_enable;
+
     always_comb begin : blockName
         refill_mshr_id =  0;
         refill_enable = 0;
+        transaction_data_tag_the_same_time = 0;
         if (mem2proc_data_tag != 0) begin
             if ((mem2proc_transaction_tag == mem2proc_data_tag)) begin
                 refill_mshr_id = pending_mshr_id;   
                 refill_enable = 1;
+                transaction_data_tag_the_same_time = 1;
             end else begin
                 for (int i = 0; i < MSHR_SIZE; i++) begin
                     if (mshr[i].valid && (mshr[i].mem_tag == mem2proc_data_tag)) begin
@@ -591,7 +629,8 @@ module dcache (
                 mshr[free_mshr_idx].size   <= (send_miss_0 ? Dcache_size_0    : Dcache_size_1);
                 mshr[free_mshr_idx].store_data <= (send_miss_0 ? Dcache_store_data_0    : Dcache_store_data_1);
                 mshr[free_mshr_idx].mem_tag <= '0;   
-                mshr[free_mshr_idx].Dcache_req_tag <= Dcache_req_tag; 
+                mshr[free_mshr_idx].rob_idx <= send_miss_0 ? Dcache_req_rob_idx_0    : Dcache_req_rob_idx_1; 
+                mshr[free_mshr_idx].port_id <= (send_miss_0 ? 0 : 1);
             end  
 
             // ---------- Get tag/result from mem ---------- 
@@ -602,31 +641,37 @@ module dcache (
                 pending_req_to_mem <= 0;
                 pending_mshr_id <= 0;
             end
-
+            
+            // UPDATE TAG/VALID/DIRTY => Read Miss, Write Hit, Write Miss
             //  Get Result from memory => update cache state
             if (mem2proc_data_tag != 0 && refill_enable) begin
                 // update cache tags and clear mshr entry
                 cache_tags [mshr[refill_mshr_id].bank][mshr[refill_mshr_id].index][mshr[refill_mshr_id].way]  <= mshr[refill_mshr_id].tag;
                 cache_valid[mshr[refill_mshr_id].bank][mshr[refill_mshr_id].index][mshr[refill_mshr_id].way]  <= 1'b1;
-                // Store only store in cache not memory so dirty bit = 1
+                // only store in cache not memory so dirty bit = 1
                 cache_dirty[mshr[refill_mshr_id].bank][mshr[refill_mshr_id].index][mshr[refill_mshr_id].way]  <= (mshr[refill_mshr_id].command == MEM_STORE);
                 mshr[refill_mshr_id].valid <= 1'b0; 
 
-                // ---------- Write Dirty Bit ---------- 
-                if (mshr[refill_mshr_id].command == MEM_STORE) cache_dirty[mshr[refill_mshr_id].bank][mshr[refill_mshr_id].index][mshr[refill_mshr_id].way] <= 1'b1;
+            end else begin
+                // ---------- Write hit logic ---------- (store cache hit 0/1 is req )
+                if (store_cache_hit_0) begin
+                    cache_dirty[bank_0][index_0][hit_way_0] <= 1'b1;
+                    cache_valid[bank_0][index_0][hit_way_0] <= 1'b1;
+                    cache_tags [bank_0][index_0][hit_way_0] <= tag_0;
+                end
+                if (store_cache_hit_1) begin
+                    cache_dirty[bank_1][index_1][hit_way_1] <= 1'b1;
+                    cache_valid[bank_1][index_1][hit_way_1] <= 1'b1;
+                    cache_tags [bank_1][index_1][hit_way_1] <= tag_1;
+                end                
             end
 
-            // ---------- Write Dirty Bit ---------- (store cache hit)
-            if (store_cache_hit_0) begin
-                cache_dirty[bank_0][index_0][hit_way_0] <= 1'b1;
-            end
-            if (store_cache_hit_1) begin
-                cache_dirty[bank_1][index_1][hit_way_1] <= 1'b1;
-            end
+
         end
     end
 
     //  Get Result from memory => update cache data with received data
+    MEM_BLOCK fill_data;
     always_comb begin 
         cache_write_en_refill_0 ='0;
         cache_write_en_refill_1 ='0;
@@ -634,12 +679,12 @@ module dcache (
         cache_write_addr_refill_1 = '0;
         cache_write_data_refill_0 = '0;
         cache_write_data_refill_1 = '0;
-        if (mem2proc_data_tag != 0 && mshr[refill_mshr_id].valid ) begin
-            MEM_BLOCK fill_data;
+        fill_data = '0;
+        if ((mem2proc_data_tag == mshr[refill_mshr_id].mem_tag || transaction_data_tag_the_same_time) && mshr[refill_mshr_id].valid ) begin
             fill_data = mem2proc_data;
 
             // If store, first store data in and fill back to cache; If load, just fill back to cache
-            if (mshr[refill_mshr_id].command == MEM_STORE) begin
+            if (mshr[refill_mshr_id].valid && mshr[refill_mshr_id].command == MEM_STORE) begin
                 unique case (mshr[refill_mshr_id].size) 
                     BYTE:    fill_data.byte_level[mshr[refill_mshr_id].offset] = mshr[refill_mshr_id].store_data.byte_level[0];
                     HALF:    fill_data.half_level[mshr[refill_mshr_id].offset[OFFSET_BITS-1:1]] =  mshr[refill_mshr_id].store_data.half_level[0];
@@ -647,16 +692,78 @@ module dcache (
                     DOUBLE:  fill_data.dbbl_level = mshr[refill_mshr_id].store_data.dbbl_level;
                 endcase
             end
-    
-            if (mshr[refill_mshr_id].bank == 1'b0) begin
+
+            if (mshr[refill_mshr_id].valid && mshr[refill_mshr_id].bank == 1'b0) begin
                 cache_write_addr_refill_0  = mshr[refill_mshr_id].index;
                 cache_write_data_refill_0  = fill_data;
                 cache_write_en_refill_0[mshr[refill_mshr_id].way] = 1'b1;
-            end else begin
+            end else if (mshr[refill_mshr_id].valid && mshr[refill_mshr_id].bank == 1'b1) begin
                 cache_write_addr_refill_1 = mshr[refill_mshr_id].index;
-                cache_write_data_refill_1  = fill_data;
+                cache_write_data_refill_1 = fill_data;
                 cache_write_en_refill_1[mshr[refill_mshr_id].way] = 1'b1;
             end
+        end
+    end
+
+    // ----------Write Back to the memory ------------------
+    // cycle k: cache miss-> send mem_load to mem (READ Target)
+    // ### it will always read 4 ways out at cycle k, so just choose the replace way and wb to mem 
+    // cycle k+1: wb replace cache line to mem => send mem_store to mem
+    
+    logic wb_mem_valid;
+    MEM_BLOCK wb_mem_data;
+    ADDR wb_mem_addr;
+    MEM_SIZE wb_mem_size;
+
+    // wb address ( the one that were replaced )
+    logic [TAG_BITS-1:0]   victim_tag;
+    logic [INDEX_BITS-1:0] victim_index;
+    logic [BANK_BITS-1:0]  victim_bank;
+    logic [$clog2(CACHE_WAYS)-1:0] victim_way;
+    always_comb begin
+        victim_tag   = '0;
+        victim_index = '0;
+        victim_bank  = '0;
+        victim_way   = '0;
+
+        if (send_new_mem_req) begin
+            if (miss_0) begin
+                victim_index = index_0;
+                victim_bank  = bank_0;
+                victim_way   = replace_way_0;
+                victim_tag   = cache_tags[bank_0][index_0][replace_way_0];
+            end else if (miss_1) begin
+                victim_index = index_1;
+                victim_bank  = bank_1;
+                victim_way   = replace_way_1;
+                victim_tag   = cache_tags[bank_1][index_1][replace_way_1];
+            end
+        end
+    end
+    
+    always_ff @(posedge clock or posedge reset) begin : write_back_to_memory
+        if (reset) begin
+            wb_mem_valid <= 1'b0;
+            wb_mem_data <= '0;
+            wb_mem_addr <= '0;
+            wb_mem_size <= DOUBLE;
+        end else if (send_new_mem_req) begin
+            wb_mem_valid <= 1'b0;
+            wb_mem_size <= DOUBLE;
+            if (miss_0) begin // cache_miss_0 and replace_way_0 here is req 0/1
+                wb_mem_valid <= 1'b1;
+                wb_mem_data <=  (bank_0) ? cache_data_read_1[replace_way_0] : cache_data_read_0[replace_way_0];
+            end else if (miss_1) begin // cache_miss_1
+                wb_mem_valid <= 1'b1;
+                wb_mem_data <=  (bank_1) ? cache_data_read_1[replace_way_1] : cache_data_read_0[replace_way_1];
+            end
+            wb_mem_addr <= {victim_tag, victim_index, victim_bank, {OFFSET_BITS{1'b0}}};
+            
+        end else begin
+            wb_mem_valid <= 1'b0;
+            wb_mem_data <= '0;
+            wb_mem_addr <= '0;
+            wb_mem_size <= DOUBLE;
         end
     end
 
@@ -691,53 +798,20 @@ module dcache (
                 mshr[i].valid &&
                 mshr[i].tag   == tag_0   &&
                 mshr[i].index == index_0 &&
-                mshr[i].bank  == bank_0) begin
+                mshr[i].bank  == bank_0 &&
+                mshr[i].rob_idx == Dcache_req_rob_idx_0) begin
                 mshr_hit_0 = 1'b1;
             end
             if (Dcache_command_1 != MEM_NONE && 
                 mshr[i].valid &&    
                 mshr[i].tag   == tag_1   &&
                 mshr[i].index == index_1 &&
-                mshr[i].bank  == bank_1) begin
+                mshr[i].bank  == bank_1 &&
+                mshr[i].rob_idx == Dcache_req_rob_idx_1) begin
                 mshr_hit_1 = 1'b1;
             end
         end
     end
-
-
- task automatic show_status_old(); 
- $display("-------------------------------------------------------------------");
- $display("Dcache_command_0 = %p Accept0=[%0b%0b%0b] valid0=%0d dat0=%h | Dcache_command_1 = %p accept1=%0d valid1=%0d dat1=%h",
-             Dcache_command_0, Dcache_req_0_accept,req_0_accept, mshr_hit_0, Dcache_valid_out_0, Dcache_data_out_0.dbbl_level, Dcache_command_1, Dcache_req_1_accept, Dcache_valid_out_1, Dcache_data_out_1.dbbl_level);
-  $display("req_to_bank=[%b%b%b%b]", req_0_to_bank_0,req_0_to_bank_1,req_1_to_bank_0,req_1_to_bank_1 );
-  
-  $write("way_hit_0= ");
-  for (int w = 0; w < CACHE_WAYS; w++) begin 
-    $write("%b", way_hit_0[w]);
-  end
-  $display(" ");
-  $write("way_hit_1= ");
-  for (int w = 0; w < CACHE_WAYS; w++) begin
-    $write("%b", way_hit_1[w]);
-  end
-
-  $display("cache_hit_0=%b, cache_hit_1=%b", cache_hit_0,cache_hit_1);
-
-  
-  $display(" ");
-  $display("send_new_mem_req=%b |free_mshr_idx=%0d |pending_mshr_id=%d | pending_req_to_mem=%b", send_new_mem_req,free_mshr_idx,pending_mshr_id,pending_req_to_mem);
-
-  for (int i = 0; i < MSHR_SIZE; i++) begin
-    if (mshr[i].valid) begin
-      $display("mashr[%0d] mem tag = %d", i, mshr[i].mem_tag);
-    end
-  end
-
-  $display("memory response: tag=%d | data=%d | data_tag =%d",mem2proc_transaction_tag,mem2proc_data,mem2proc_data_tag );
-   $display("Dcache_command_0 = %p Accept0=[%0b%0b%0b] valid0=%0d dat0=%h | Dcache_command_1 = %p accept1=%0d valid1=%0d dat1=%h",
-             Dcache_command_0, Dcache_req_0_accept,req_0_accept, mshr_hit_0, Dcache_valid_out_0, Dcache_data_out_0.dbbl_level, Dcache_command_1, Dcache_req_1_accept, Dcache_valid_out_1, Dcache_data_out_1.dbbl_level);
- $display("-------------------------------------------------------------------");
- endtask 
 
 task automatic show_status();
     $display("===================================================================");
@@ -747,9 +821,9 @@ task automatic show_status();
     // Request 0 Pipeline  (Req0 -> Bank -> Hit/Miss -> MSHR -> Mem)
     // =================================================================
     $display("== Request 0 ======================================================");
-    $display("[REQ0] cmd=%s size=%s addr=%h store_data=%h tag(LQ)=%0d",
+    $display("[REQ0] cmd=%s size=%s addr=%h store_data=%h",
              Dcache_command_0.name(), Dcache_size_0.name(),
-             Dcache_addr_0, Dcache_store_data_0.dbbl_level, Dcache_req_tag);
+             Dcache_addr_0, Dcache_store_data_0.dbbl_level);
     $display("[REQ0] bank=%0d index=%0d offset=%0d",
              bank_0, index_0, offset_0);
 
@@ -765,8 +839,8 @@ task automatic show_status();
              miss_0, mshr_hit_0);
 
     // data out / valid
-    $display("[REQ0] valid_out=%b  data_out=%h  load_tag=%0d",
-             Dcache_valid_out_0, Dcache_data_out_0.dbbl_level, Dcache_load_tag);
+    $display("[REQ0] valid_out=%b  data_out=%h",
+             Dcache_valid_out_0, Dcache_data_out_0.dbbl_level);
 
     // =================================================================
     // Request 1 Pipeline  (Req1 -> Bank -> Hit/Miss -> MSHR -> Mem)
@@ -805,12 +879,13 @@ task automatic show_status();
              cache_read_addr_0, cache_read_addr_1);
 
     // write path
-    $display("[WRITE] hit_en_0=%b  refill_en_0=%b  final_we_0=%b  waddr_0=%0d",
+    $display("refill_mshr_id=%0d , transaction_data_tag_the_same_time=%b", refill_mshr_id, transaction_data_tag_the_same_time);
+    $display("[WRITE] hit_en_0=%b  refill_en_0=%b  final_we_0=%b  waddr_0=%0d  data_0=%h data_hit_0=%h data_refill_0=%h",
              cache_write_en_hit_0, cache_write_en_refill_0,
-             cache_write_en_0, cache_write_addr_0);
-    $display("[WRITE] hit_en_1=%b  refill_en_1=%b  final_we_1=%b  waddr_1=%0d",
+             cache_write_en_0, cache_write_addr_0, cache_write_data_0, cache_write_data_hit_0, cache_write_data_refill_0);
+    $display("[WRITE] hit_en_1=%b  refill_en_1=%b  final_we_1=%b  waddr_1=%0d  data_1=%h data_hit_1=%h data_refill_1=%h",
              cache_write_en_hit_1, cache_write_en_refill_1,
-             cache_write_en_1, cache_write_addr_1);
+             cache_write_en_1, cache_write_addr_1, cache_write_data_1, cache_write_data_hit_1, cache_write_data_refill_1);
 
     // =================================================================
     // MSHR / Miss Handling
@@ -830,10 +905,10 @@ task automatic show_status();
                      mshr[i].valid, mshr[i].tag, mshr[i].index, mshr[i].bank,
                      mshr[i].way,
                      mshr[i].command.name(), mshr[i].size.name());
-            $display("           offset=%0d  mem_tag=%0d  LQ_tag=%0d  store_data=%h",
+            $display("           offset=%0d  mem_tag=%0d  LSQ_REQ_tag=%0d  store_data=%h",
                      mshr[i].offset,
                      mshr[i].mem_tag,
-                     mshr[i].Dcache_req_tag,
+                     mshr[i].rob_idx,
                      mshr[i].store_data.dbbl_level);
         end
 
@@ -845,20 +920,21 @@ task automatic show_status();
         for (int s = 0; s < SETS_PER_BANK; s++) begin
             // Summary line of valid/dirty bits for this set
             $write("[BANK%0d SET%0d] valid=", b, s);
-            for (int w = 0; w < CACHE_WAYS; w++) begin
+            for (int w = CACHE_WAYS-1; w >=0; w--) begin
                 $write("%b", cache_valid[b][s][w]);
             end
             $write(" dirty=");
-            for (int w = 0; w < CACHE_WAYS; w++) begin
+            for (int w = CACHE_WAYS-1; w >=0; w--) begin
                 $write("%b", cache_dirty[b][s][w]);
             end
             $display("");
 
             // Per-way detail: tag and LRU
-            for (int w = 0; w < CACHE_WAYS; w++) begin
+            for (int w = CACHE_WAYS-1; w >=0; w--) begin
                 $write("    way%0d: tag=%h  LRU=%0d", w,
                          cache_tags[b][s][w], lru_bits[b][s][w]);
             end
+            $display("");
 
         end
     end
@@ -879,7 +955,7 @@ task automatic show_status();
 endtask
 
 
-always_ff @(negedge clock) begin
+always_ff @(posedge clock) begin
     if (!reset) begin
         show_status();
     end

@@ -231,7 +231,7 @@ module dispatch_stage #(
                     dest_new_prf[i] = new_reg_i[i];
 
                     // To LSQ
-                    if (disp_packet_o[i].rd_mem || disp_packet_o[i].wr_mem) begin
+                    if (disp_packet_o[i].valid && (disp_packet_o[i].rd_mem || disp_packet_o[i].wr_mem)) begin
                       dispatch_valid[i] = 1;
                       dispatch_is_store[i] = disp_packet_o[i].wr_mem; // store = 1
                       dispatch_size[i] = WORD;

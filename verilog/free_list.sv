@@ -241,17 +241,17 @@ output logic [$clog2(PHYS_REGS+1)-1:0]                       free_count_o, // nu
     end 
     
 
-    always_ff @(negedge clock)begin 
-        $display("free_phys = %0d , free_valid = %d\n", free_phys_i , free_valid_i);
-        $display("next: head: %d , tail: %d, count: %d" , next_head, next_tail, next_count);
-        $display("head: %d , tail: %d, count: %d, full: %b" , head, tail, count, full_o);
-        for(int i =0 ; i< (PHYS_REGS-ARCH_REGS); i++)begin
-            $display("free_fifo[%d] = %0d ", i, free_fifo[i]);
-        end
-    end
+    // always_ff @(negedge clock)begin 
+    //     $display("free_phys = %0d , free_valid = %d\n", free_phys_i , free_valid_i);
+    //     $display("next: head: %d , tail: %d, count: %d" , next_head, next_tail, next_count);
+    //     $display("head: %d , tail: %d, count: %d, full: %b" , head, tail, count, full_o);
+    //     for(int i =0 ; i< (PHYS_REGS-ARCH_REGS); i++)begin
+    //         $display("free_fifo[%d] = %0d ", i, free_fifo[i]);
+    //     end
+    // end
     
-    always_ff @(posedge clock) begin 
-        $display("total_available = %0d", total_available);
-    end
+    // always_ff @(posedge clock) begin 
+    //     $display("total_available = %0d", total_available);
+    // end
 
 endmodule
