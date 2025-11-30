@@ -235,6 +235,7 @@ module lq #(
                     lq[tail].rob_idx <= enq_rob_idx;
                     lq[tail].data_valid <= 1'b0;
                     lq[tail].issued <= 1'b0;
+                    lq[tail].data <= '0;
                     lq[tail].disp_rd_new_prf <= disp_rd_new_prf_i;
                     tail <= next_ptr(tail);
                     // count <= count + 1'b1;
@@ -264,7 +265,7 @@ module lq #(
                     // end
                     lq[dc_load_tag].data       <= dc_load_data;
                     lq[dc_load_tag].data_valid <= 1'b1;
-
+                     $display("[sq_load from dcache!!]: dcache_load_data: %0h, dc_load_tag:%0d", dc_load_data, dc_load_tag);
                     // modify by zhengge in 11/25 TODO
                     wb_valid   <= 1'b1;
                     wb_rob_idx <= lq[dc_load_tag].rob_idx; // 注意：要確認 tag 對應的 rob_idx 正確
@@ -278,7 +279,7 @@ module lq #(
                 // If we queried SQ and it says "Hit!", take the data directly
                 else if(wb_from_fwd) begin
                     // 直接寫入剛剛發起查詢的那個 Index (query_idx)
-                    $display("sq_forwarding");
+                    $display("[sq_forwarding]: fwd_data: %0h", sq_forward_data);
                     lq[query_idx].data <= sq_forward_data;
                     lq[query_idx].data_valid <= 1'b1;
                     // 不需要 set issued, 因為資料已經拿到了
@@ -361,5 +362,62 @@ module lq #(
     assign snapshot_head_o = head;
     assign snapshot_tail_o = tail;
     assign snapshot_count_o = count;
+
+
+    // =================================================================
+  // Debug Task: Show Load Queue Status
+  // =================================================================
+  task automatic show_lq_status();
+    int i;
+    $display("\n===================================================================");
+    $display("[LQ DUMP] Time: %0t", $time);
+    
+    // 1. 顯示佇列基本狀態 (State)
+    $display("[LQ State] Head=%0d | Tail=%0d | Count=%0d | Full=%b | Empty=%b", 
+             head, tail, count, full, empty);
+
+    // 2. 顯示目前的控制邏輯判斷 (Combinational Logic Status)
+    // 這些訊號解釋了為什麼 LQ 現在發送請求，或是為什麼停住了
+    $display("[LQ Logic] --------------------------------------------------------");
+    if (found_unissued)
+        $display("  -> Candidate Found at Index: %0d", query_idx);
+    else
+        $display("  -> No Candidate Found (All done or empty)");
+
+    $display("  -> Stall by Unknown Older Store? : %b", stall_older_store_unknown);
+    $display("  -> SQ Forwarding Pending?        : %b", sq_fwd_pending);
+    $display("  -> Final DC Request Valid?       : %b", dc_req_valid);
+    $display("-------------------------------------------------------------------");
+
+    // 3. 顯示佇列內容 (Entry Content)
+    for (i = 0; i < LQ_SIZE; i++) begin
+      if (lq[i].valid) begin
+        // 使用 %s 或標記來指出誰是 Head, 誰是 Candidate
+        string tag;
+        if (i == head) tag = "(HEAD)";
+        else if (found_unissued && i == query_idx) tag = "(*CAND*)";
+        else tag = "";
+
+        $display("[LQ[%2d]] %-8s ROB#=%0d Addr=%h (AV=%b) | Data=%h (DV=%b) | Issued=%b | PRF=%0d",
+                 i,
+                 tag,
+                 lq[i].rob_idx,
+                 lq[i].addr,
+                 lq[i].addr_valid,      // Address Valid
+                 lq[i].data,
+                 lq[i].data_valid,      // Data Valid
+                 lq[i].issued,          // Issued to Cache
+                 lq[i].disp_rd_new_prf
+        );
+      end
+    end
+    $display("===================================================================\n");
+  endtask
+
+  always_ff @(posedge clock) begin
+    if (!reset) begin
+      show_lq_status();
+    end
+  end
 
 endmodule
