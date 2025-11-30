@@ -181,7 +181,7 @@ module sq #(
           sq[tail].addr <= '0; //### sychen have not get addr when dispatch
           sq[tail].addr_valid <= 1'b1;
           sq[tail].size <= enq_size;
-          sq[tail].data_valid <= 1'b1;
+          sq[tail].data_valid <= 1'b0;
           sq[tail].data <= '0; //### sychen have not get data when dispatch
           sq[tail].commited <= 1'b0;
           sq[tail].rob_idx <= enq_rob_idx;
