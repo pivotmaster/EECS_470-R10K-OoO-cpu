@@ -139,6 +139,8 @@ module lsq_top #(
 
     /////////////////
     sq_entry_t sq_internal_state [SQ_SIZE-1:0]; //TODO
+    logic [SQ_IDX_WIDTH-1 : 0] sq_view_head, sq_view_tail;//TODO
+    logic [$clog2(SQ_SIZE+1)-1:0] sq_view_count;//TODO
     ////////////////
     // SQ Request Signals
     logic       sq_req_valid;
@@ -209,12 +211,12 @@ module lsq_top #(
         .enq_addr(sq_data_addr), 
 
         // Forwarding Logic (Service LQ query)
-        .load_addr(fwd_query_addr),
-        .load_size(fwd_query_size),
-        .fwd_valid(fwd_valid),
-        .fwd_data(fwd_data),
-        .fwd_addr(fwd_res_addr),
-        .fwd_pending(fwd_pending),
+        // .load_addr(fwd_query_addr),
+        // .load_size(fwd_query_size),
+        // .fwd_valid(fwd_valid),
+        // .fwd_data(fwd_data),
+        // .fwd_addr(fwd_res_addr),
+        // .fwd_pending(fwd_pending),
 
         // Commit
         .commit_valid(commit_valid),
@@ -234,9 +236,9 @@ module lsq_top #(
         .snapshot_restore_valid_i(snapshot_restore_valid_i),
         .checkpoint_valid_o(sq_checkpoint_valid_o),
         .snapshot_data_o(sq_internal_state),
-        .snapshot_head_o(sq_snapshot_head_o),
-        .snapshot_tail_o(sq_snapshot_tail_o),
-        .snapshot_count_o(sq_snapshot_count_o),
+        .snapshot_head_o(sq_view_head),
+        .snapshot_tail_o(sq_view_tail),
+        .snapshot_count_o(sq_view_count),
         .snapshot_data_i(sq_snapshot_data_i),
         .snapshot_head_i(sq_snapshot_head_i),
         .snapshot_tail_i(sq_snapshot_tail_i),
@@ -266,12 +268,12 @@ module lsq_top #(
         .enq_addr(sq_data_addr), 
 
         // Forwarding Logic (Ask SQ)
-        .sq_forward_valid(fwd_valid),
-        .sq_forward_data(fwd_data),
-        .sq_forward_addr(fwd_res_addr),
-        .sq_fwd_pending(fwd_pending),
-        .sq_query_addr(fwd_query_addr),
-        .sq_query_size(fwd_query_size),
+        // .sq_forward_valid(fwd_valid),
+        // .sq_forward_data(fwd_data),
+        // .sq_forward_addr(fwd_res_addr),
+        // .sq_fwd_pending(fwd_pending),
+        // .sq_query_addr(fwd_query_addr),
+        // .sq_query_size(fwd_query_size),
 
         // Output to D-Cache (Internal wires)
         .dc_req_valid(lq_req_valid),
@@ -289,6 +291,9 @@ module lsq_top #(
         // Writeback / Commit
         .rob_head(rob_head),
         .sq_view_i(sq_internal_state),
+        .sq_view_head(sq_view_head),
+        .sq_view_tail(sq_view_tail),
+        .sq_view_count(sq_view_count),
         .rob_commit_valid(commit_valid),
         .rob_commit_valid_idx(commit_rob_idx),
         .wb_valid(wb_valid),
@@ -346,6 +351,9 @@ module lsq_top #(
     assign sq_req_accept       = Dcache_req_1_accept;
 
     assign sq_snapshot_data_o = sq_internal_state;
+    assign sq_snapshot_head_o = sq_view_head;
+    assign sq_snapshot_tail_o = sq_view_tail;
+    assign sq_snapshot_count_o = sq_view_count;
 
     // =====================================================
     // Debug Display Task

@@ -20,14 +20,14 @@
 { "cycle": 19, "CDB": [{"idx":0, "valid":1, "dest_arch":0, "phys_tag":37, "value":4104, "grant":1, "stall":0},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
 { "cycle": 20, "CDB": [{"idx":0, "valid":0},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
 { "cycle": 21, "CDB": [{"idx":0, "valid":0},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
-{ "cycle": 22, "CDB": [{"idx":0, "valid":1, "dest_arch":0, "phys_tag":38, "value":2, "grant":1, "stall":0},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
+{ "cycle": 22, "CDB": [{"idx":0, "valid":1, "dest_arch":0, "phys_tag":38, "value":2, "grant":1, "stall":0},{"idx":1, "valid":1, "dest_arch":0, "phys_tag":36, "value":10, "grant":1, "stall":0},{"idx":2, "valid":1, "dest_arch":0, "phys_tag":36, "value":10, "grant":1, "stall":0},{"idx":3, "valid":1, "dest_arch":0, "phys_tag":36, "value":10, "grant":1, "stall":0}]}
 { "cycle": 23, "CDB": [{"idx":0, "valid":0},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
-{ "cycle": 24, "CDB": [{"idx":0, "valid":1, "dest_arch":0, "phys_tag":36, "value":74755, "grant":1, "stall":0},{"idx":1, "valid":1, "dest_arch":0, "phys_tag":36, "value":74755, "grant":1, "stall":0},{"idx":2, "valid":1, "dest_arch":0, "phys_tag":36, "value":74755, "grant":1, "stall":0},{"idx":3, "valid":1, "dest_arch":0, "phys_tag":36, "value":74755, "grant":1, "stall":0}]}
-{ "cycle": 25, "CDB": [{"idx":0, "valid":1, "dest_arch":0, "phys_tag":39, "value":1, "grant":1, "stall":0},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
-{ "cycle": 26, "CDB": [{"idx":0, "valid":0},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
+{ "cycle": 24, "CDB": [{"idx":0, "valid":0},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
+{ "cycle": 25, "CDB": [{"idx":0, "valid":0},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
+{ "cycle": 26, "CDB": [{"idx":0, "valid":1, "dest_arch":0, "phys_tag":39, "value":1, "grant":1, "stall":0},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
 { "cycle": 27, "CDB": [{"idx":0, "valid":0},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
-{ "cycle": 28, "CDB": [{"idx":0, "valid":1, "dest_arch":0, "phys_tag":0, "value":1, "grant":1, "stall":0},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
-{ "cycle": 29, "CDB": [{"idx":0, "valid":0},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
+{ "cycle": 28, "CDB": [{"idx":0, "valid":0},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
+{ "cycle": 29, "CDB": [{"idx":0, "valid":1, "dest_arch":0, "phys_tag":0, "value":1, "grant":1, "stall":0},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
 { "cycle": 30, "CDB": [{"idx":0, "valid":0},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
 { "cycle": 31, "CDB": [{"idx":0, "valid":0},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
 { "cycle": 32, "CDB": [{"idx":0, "valid":0},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}

@@ -23,12 +23,12 @@ module lq #(
     input ADDR          enq_addr, // this is addr from FU
 
     // 2. SQ Forwarding (Query & Response)
-    input  logic       sq_forward_valid,
-    input  MEM_BLOCK   sq_forward_data,
-    input  ADDR        sq_forward_addr, // 其實如果是針對特定 query 回覆，addr 可以不用 check
-    input  logic       sq_fwd_pending,
-    output ADDR        sq_query_addr,
-    output MEM_SIZE    sq_query_size,
+    // input  logic       sq_forward_valid,
+    // input  MEM_BLOCK   sq_forward_data,
+    // input  ADDR        sq_forward_addr, // 其實如果是針對特定 query 回覆，addr 可以不用 check
+    // input  logic       sq_fwd_pending,
+    // output ADDR        sq_query_addr,
+    // output MEM_SIZE    sq_query_size,
 
     // 3. D-Cache Request
     output logic       dc_req_valid,
@@ -77,7 +77,9 @@ module lq #(
     input logic    [IDX_WIDTH-1 : 0] snapshot_head_i , snapshot_tail_i,
     input logic   [$clog2(LQ_SIZE)-1:0] snapshot_count_i,
 
-    input sq_entry_t sq_view_i [SQ_SIZE-1:0]
+    input sq_entry_t sq_view_i [SQ_SIZE-1:0],
+    input logic [IDX_WIDTH-1 : 0] sq_view_head, sq_view_tail,
+    input logic [$clog2(LQ_SIZE+1)-1:0] sq_view_count
 );
 
     // forwarding logic
@@ -132,7 +134,8 @@ module lq #(
     logic found_unissued;
     logic [IDX_WIDTH-1:0] query_idx; // 記住是誰在查詢
     ROB_IDX rob_idx_to_dcache;
-
+    ADDR sq_query_addr;
+    MEM_SIZE    sq_query_size;
     logic stall_older_store_unknown;
 
     //---------------find what to sent to DCACHE---------------//
@@ -165,6 +168,8 @@ module lq #(
                 break; // Found the oldest one
             end
         end
+
+
     end
 
     // =========================================================================
@@ -172,13 +177,18 @@ module lq #(
     // =========================================================================
 
     //---------------send to DCACHE---------------//
+
+    logic fwd_found,sq_forward_valid;
+    MEM_BLOCK fwd_data;
+    ADDR fwd_addr;
     always_comb begin
+        // fwd_found = 1'b0;
         dc_req_valid = 1'b0;
         dc_req_addr  = '0;
         dc_req_size  = '0;
         stall_older_store_unknown = 1'b0;
         
-        //---------------check if there is older store unknown---------------//
+        //---------------check if there is older store address unknown---------------//
         if (found_unissued) begin
             for (int k=0; k<SQ_SIZE; k++) begin
                 // 條件：SQ有效 + 地址未知 + 比目前的 Load 老
@@ -217,28 +227,96 @@ module lq #(
 
 
         // if (!stall_older_store_unknown ) => bypass
-        if (found_unissued && !stall_older_store_unknown&& !sq_fwd_pending && !sq_forward_valid) begin
-            if  (sq_forward_valid) begin
-                $display("sq_forward_valid = %0b" ,sq_forward_valid);
-                dc_req_valid = 1'b0;
-            end else begin
-            //### Here sent request to dcache 
-                dc_req_valid = 1'b1;
-                dc_req_addr  = sq_query_addr; // Same as lq[query_idx].addr
-                dc_req_size  = sq_query_size;
-                dc_req_tag   = query_idx;
-                dc_rob_idx = rob_idx_to_dcache;
-                $display("dc_req_valid: %0b , dc_req_addr: %0h ,dc_req_size: %0d, dc_req_tag:%0d " ,dc_req_valid,dc_req_addr,dc_req_size, dc_req_tag);
+        // if (found_unissued && !stall_older_store_unknown && !sq_fwd_pending && !sq_forward_valid) begin
+        //     if  (sq_forward_valid) begin
+        //         $display("sq_forward_valid = %0b" ,sq_forward_valid);
+        //         dc_req_valid = 1'b0;
+        //     end else begin
+        //     //### Here sent request to dcache 
+        //         dc_req_valid = 1'b1;
+        //         dc_req_addr  = sq_query_addr; // Same as lq[query_idx].addr
+        //         dc_req_size  = sq_query_size;
+        //         dc_req_tag   = query_idx;
+        //         dc_rob_idx = rob_idx_to_dcache;
+        //         $display("dc_req_valid: %0b , dc_req_addr: %0h ,dc_req_size: %0d, dc_req_tag:%0d " ,dc_req_valid,dc_req_addr,dc_req_size, dc_req_tag);
+        //     end
+        // end
+
+        if(found_unissued && !stall_older_store_unknown)begin
+            int k;
+            int i;
+            int start;
+            fwd_found = 1'b0;
+            // pending_found = 1'b0;
+            fwd_data = '0;
+            fwd_addr = '0;
+            sq_forward_valid = '0;
+            // $display("[DEBUG-ALWAYS STORE QUEUE] Count=%0d, Tail=%0d, Head=%0d", count, tail, head);
+            if(sq_view_count != 0)begin
+                int checked = 0;
+                // start at tail - 1 (most recent store) and go backwards up to count entries
+                start  = (sq_view_tail == 0) ? (SQ_SIZE - 1) : (sq_view_tail - 1);
+                // idx = tail - 1;
+                for(k = 0 ; k < SQ_SIZE ; k++)begin
+                    // int i = (idx - k) % SQ_SIZE;
+                    i = start - k;
+                    if(i<0)i = i + SQ_SIZE;
+                    $display("[DEBUG-FWD] Checking indx = %0d, sq[%0d] = %0d , k=%0d , start = %0d" , i , i , sq_view_i[i].valid , k , start);
+                    if(sq_view_i[i].valid)begin
+                        $display("[DEBUG-FWD]@Time %t Checking idx=%0d. SQ_Addr=%h, SQ_Size=%0d | Load_Addr=%h, Load_Size=%0d", 
+                                $time, i, sq_view_i[i].addr, sq_view_i[i].size, lq[query_idx].addr, lq[query_idx].addr);
+                        if(addr_overlap(sq_view_i[i].addr , sq_view_i[i].size , lq[query_idx].addr , lq[query_idx].size))begin
+                            $display("[RTL-SQ-FWD] Overlap at idx=%0d. DataValid=%b. Data=%h", i, sq_view_i[i].data_valid, sq_view_i[i].data);
+                            if(sq_view_i[i].data_valid)begin
+                                fwd_found = 1'b1;
+                                // pending_found = 1'b0;
+                                fwd_data = sq_view_i[i].data;
+                                fwd_addr = sq_view_i[i].addr;
+                                $display("[RTL-SQ-FWD]found = %0b ", fwd_found);
+                                sq_forward_valid = 1'b1;
+                                break;
+                            end else begin
+                            // $display("[DEBUG-ALWAYS] Loop idx=%0d has Valid=0! (This is wrong)", i);
+                            // pending_found = 1'b1;break;
+                            end
+                        end
+                    end
+                    checked++;
+                    if(checked >= sq_view_count)begin
+                        fwd_found = 1'b0;
+                        break;
+                    end
+                end
+                if(!fwd_found)begin
+                    dc_req_valid = 1'b1;
+                    dc_req_addr  = sq_query_addr; // Same as lq[query_idx].addr
+                    dc_req_size  = sq_query_size;
+                    dc_req_tag   = query_idx;
+                    dc_rob_idx = rob_idx_to_dcache;
+                    $display("dc_req_valid: %0b , dc_req_addr: %0h ,dc_req_size: %0d, dc_req_tag:%0d " ,dc_req_valid,dc_req_addr,dc_req_size, dc_req_tag);
+                end
             end
         end
+
+        // if(found_unissued && !stall_older_store_unknown && !fwd_found)begin
+        //     dc_req_valid = 1'b1;
+        //     dc_req_addr  = sq_query_addr; // Same as lq[query_idx].addr
+        //     dc_req_size  = sq_query_size;
+        //     dc_req_tag   = query_idx;
+        //     dc_rob_idx = rob_idx_to_dcache;
+        //     $display("dc_req_valid: %0b , dc_req_addr: %0h ,dc_req_size: %0d, dc_req_tag:%0d " ,dc_req_valid,dc_req_addr,dc_req_size, dc_req_tag);
+        // end
     end
+
+
 
     // =========================================================================
     // Sequential Logic: State Updates
     // =========================================================================
     logic wb_from_fwd, wb_from_cache;
     logic do_enq, do_commit;
-    assign wb_from_fwd   = found_unissued && sq_forward_valid;
+    // logic sq_forward_valid;
+    assign wb_from_fwd   = found_unissued && fwd_found;
     assign wb_from_cache = dc_load_valid && !wb_from_fwd;
 
 
@@ -246,7 +324,7 @@ module lq #(
     assign do_commit = !empty && lq[head].valid && rob_commit_valid && (rob_commit_valid_idx == lq[head].rob_idx);
     
     always_ff @(posedge clock) begin
-        $display("{%t} wb_from_fwd = %0b, wb_from_cache = %0b , found_unissued = %0b, sq_forward_valid = %0b, dc_load_valid = %0b", $time, wb_from_fwd, wb_from_cache, found_unissued, sq_forward_valid, dc_load_valid);
+        // $display("{%t} wb_from_fwd = %0b, wb_from_cache = %0b , found_unissued = %0b, sq_forward_valid = %0b, dc_load_valid = %0b", $time, wb_from_fwd, wb_from_cache, found_unissued, sq_forward_valid, dc_load_valid);
         if(reset) begin
             head <= '0;
             tail <= '0;
@@ -333,8 +411,8 @@ module lq #(
                 // If we queried SQ and it says "Hit!", take the data directly
                 else if(wb_from_fwd) begin
                     // 直接寫入剛剛發起查詢的那個 Index (query_idx)
-                    $display("[sq_forwarding]: fwd_data: %0h", sq_forward_data);
-                    lq[query_idx].data <= sq_forward_data;
+                    $display("[sq_forwarding]: fwd_data: %0h", fwd_data);
+                    lq[query_idx].data <= fwd_data;
                     lq[query_idx].data_valid <= 1'b1;
                     // 不需要 set issued, 因為資料已經拿到了
                     // Trigger Writeback immediately (Optional, or wait for next cycle logic)
@@ -342,10 +420,10 @@ module lq #(
                     // 或者在這裡直接觸發 wb_valid 也可以。
                     wb_valid   <= 1'b1;
                     wb_rob_idx <= lq[query_idx].rob_idx;
-                    wb_data    <= sq_forward_data.word_level[0]; //TODO: Only consider WORD Data now
+                    wb_data    <= fwd_data.word_level[0]; //TODO: Only consider WORD Data now
                     wb_disp_rd_new_prf_o <= lq[query_idx].disp_rd_new_prf;
                 end
-                $display("wb_valid=%b | wb_rob_idx=%d | wb_data=%h",wb_valid, wb_rob_idx, wb_data);
+                // $display("wb_valid=%b | wb_rob_idx=%d | wb_data=%h",wb_valid, wb_rob_idx, wb_data);
 
                 // ------------------------------------
                 // 3. Handling D-Cache Request Accepted
@@ -378,7 +456,7 @@ module lq #(
                 // ------------------------------------
                 // 6. Commit Logic (Free Entry)
                 // ------------------------------------
-                $display("[DEBUG-ALWAYS LOAD QUEUE] empty = %0b", empty);
+                // $display("[DEBUG-ALWAYS LOAD QUEUE] empty = %0b", empty);
                 if(!empty) begin
                      if(lq[head].valid && rob_commit_valid && (rob_commit_valid_idx == lq[head].rob_idx)) begin
                         // 只有在 Commit 的時候才真正釋放 Entry
@@ -400,6 +478,58 @@ module lq #(
             end // else snapshot
         end // else reset
     end
+
+    // // forwarding logic from store queue
+    // logic found, pending_found;
+    // MEM_BLOCK found_data;
+    // ADDR found_addr;
+    // always_comb begin
+    //     int k;
+    //     int i;
+    //     int start;
+    //     found = 1'b0;
+    //     pending_found = 1'b0;
+    //     found_data = '0;
+    //     found_addr = '0;
+    //     sq_forward_valid = '0;
+    //     // $display("[DEBUG-ALWAYS STORE QUEUE] Count=%0d, Tail=%0d, Head=%0d", count, tail, head);
+    //     if(sq_view_count != 0)begin
+    //         int checked = 0;
+    //         // start at tail - 1 (most recent store) and go backwards up to count entries
+    //         start  = (sq_view_tail == 0) ? (SQ_SIZE - 1) : (sq_view_tail - 1);
+    //         // idx = tail - 1;
+    //         for(k = 0 ; k < SQ_SIZE ; k++)begin
+    //             // int i = (idx - k) % SQ_SIZE;
+    //             i = start - k;
+    //             if(i<0)i = i + SQ_SIZE;
+    //             $display("[DEBUG-FWD] Checking indx = %0d, sq[%0d] = %0d , k=%0d , start = %0d" , i , i , sq[i].valid , k , start);
+    //             if(sq_view_i[i].valid)begin
+    //                 $display("[DEBUG-FWD]@Time %t Checking idx=%0d. SQ_Addr=%h, SQ_Size=%0d | Load_Addr=%h, Load_Size=%0d", 
+    //                         $time, i, sq[i].addr, sq[i].size, load_addr, load_size);
+    //                 if(addr_overlap(sq_view_i[i].addr , sq_view_i[i].size , load_addr , load_size))begin
+    //                     $display("[RTL-SQ-FWD] Overlap at idx=%0d. DataValid=%b. Data=%h", i, sq[i].data_valid, sq[i].data);
+    //                     if(sq_view_i[i].data_valid)begin
+    //                         found = 1'b1;
+    //                         pending_found = 1'b0;
+    //                         found_data = sq[i].data;
+    //                         found_addr = sq[i].addr;
+    //                         $display("[RTL-SQ-FWD]found = %0b ", found);
+    //                         sq_forward_valid = 1'b1;
+    //                         break;
+    //                     end else begin
+    //                     // $display("[DEBUG-ALWAYS] Loop idx=%0d has Valid=0! (This is wrong)", i);
+    //                     pending_found = 1'b1;break;
+    //                     end
+    //                 end
+    //             end
+    //             checked++;
+    //             if(checked >= count)break;
+    //         end
+    //     end
+    // end
+
+
+
     assign free_num_slot = LQ_SIZE - count;
     // Snapshot output connections
     generate 
@@ -441,7 +571,7 @@ module lq #(
         $display("  -> No Candidate Found (All done or empty)");
 
     $display("  -> Stall by Unknown Older Store? : %b", stall_older_store_unknown);
-    $display("  -> SQ Forwarding Pending?        : %b", sq_fwd_pending);
+    // $display("  -> SQ Forwarding Pending?        : %b", sq_fwd_pending);
     $display("  -> Final DC Request Valid?       : %b", dc_req_valid);
     $display("-------------------------------------------------------------------");
 

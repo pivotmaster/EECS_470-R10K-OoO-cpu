@@ -23,12 +23,12 @@ module sq #(
 
     // Forwarding query from LQ:
     // the LQ will present a load address/size; SQ responds combinationally
-    input  ADDR        load_addr,
-    input  MEM_SIZE    load_size,
-    output logic       fwd_valid,
-    output MEM_BLOCK   fwd_data,
-    output ADDR        fwd_addr,
-    output logic       fwd_pending,  // match exists but data not ready
+    // input  ADDR        load_addr,
+    // input  MEM_SIZE    load_size,
+    // output logic       fwd_valid,
+    // output MEM_BLOCK   fwd_data,
+    // output ADDR        fwd_addr,
+    // output logic       fwd_pending,  // match exists but data not ready
 
     // commit from 
     input  logic       commit_valid,  //todo: not used 
@@ -248,57 +248,57 @@ module sq #(
   
 
 
-  logic found, pending_found;
-  MEM_BLOCK found_data;
-  ADDR found_addr;
+  // logic found, pending_found;
+  // MEM_BLOCK found_data;
+  // ADDR found_addr;
 
-  always_comb begin
-    int k;
-    int i;
-    int start;
-    found = 1'b0;
-    pending_found = 1'b0;
-    found_data = '0;
-    found_addr = '0;
-    // $display("[DEBUG-ALWAYS STORE QUEUE] Count=%0d, Tail=%0d, Head=%0d", count, tail, head);
-    if(count != 0)begin
-      int checked = 0;
-      // start at tail - 1 (most recent store) and go backwards up to count entries
-      start  = (tail==0) ? (SQ_SIZE - 1) : (tail - 1);
-      // idx = tail - 1;
-      for(k = 0 ; k < SQ_SIZE ; k++)begin
-        // int i = (idx - k) % SQ_SIZE;
-        i = start - k;
-        if(i<0)i = i + SQ_SIZE;
-        $display("[DEBUG-FWD] Checking indx = %0d, sq[%0d] = %0d , k=%0d , start = %0d" , i , i , sq[i].valid , k , start);
-        if(sq[i].valid)begin
-          $display("[DEBUG-FWD]@Time %t Checking idx=%0d. SQ_Addr=%h, SQ_Size=%0d | Load_Addr=%h, Load_Size=%0d", 
-                   $time, i, sq[i].addr, sq[i].size, load_addr, load_size);
-          if(addr_overlap(sq[i].addr , sq[i].size , load_addr , load_size))begin
-            $display("[RTL-SQ-FWD] Overlap at idx=%0d. DataValid=%b. Data=%h", i, sq[i].data_valid, sq[i].data);
-            if(sq[i].data_valid)begin
-              found = 1'b1;
-              pending_found = 1'b0;
-              found_data = sq[i].data;
-              found_addr = sq[i].addr;
-              $display("[RTL-SQ-FWD]found = %0b ", found);
-              break;
-            end else begin
-              // $display("[DEBUG-ALWAYS] Loop idx=%0d has Valid=0! (This is wrong)", i);
-              pending_found = 1'b1;break;
-            end
-          end
-        end
-        checked++;
-        if(checked >= count)break;
-      end
-    end
-  end
+  // always_comb begin
+  //   int k;
+  //   int i;
+  //   int start;
+  //   found = 1'b0;
+  //   pending_found = 1'b0;
+  //   found_data = '0;
+  //   found_addr = '0;
+  //   // $display("[DEBUG-ALWAYS STORE QUEUE] Count=%0d, Tail=%0d, Head=%0d", count, tail, head);
+  //   if(count != 0)begin
+  //     int checked = 0;
+  //     // start at tail - 1 (most recent store) and go backwards up to count entries
+  //     start  = (tail==0) ? (SQ_SIZE - 1) : (tail - 1);
+  //     // idx = tail - 1;
+  //     for(k = 0 ; k < SQ_SIZE ; k++)begin
+  //       // int i = (idx - k) % SQ_SIZE;
+  //       i = start - k;
+  //       if(i<0)i = i + SQ_SIZE;
+  //       $display("[DEBUG-FWD] Checking indx = %0d, sq[%0d] = %0d , k=%0d , start = %0d" , i , i , sq[i].valid , k , start);
+  //       if(sq[i].valid)begin
+  //         $display("[DEBUG-FWD]@Time %t Checking idx=%0d. SQ_Addr=%h, SQ_Size=%0d | Load_Addr=%h, Load_Size=%0d", 
+  //                  $time, i, sq[i].addr, sq[i].size, load_addr, load_size);
+  //         if(addr_overlap(sq[i].addr , sq[i].size , load_addr , load_size))begin
+  //           $display("[RTL-SQ-FWD] Overlap at idx=%0d. DataValid=%b. Data=%h", i, sq[i].data_valid, sq[i].data);
+  //           if(sq[i].data_valid)begin
+  //             found = 1'b1;
+  //             pending_found = 1'b0;
+  //             found_data = sq[i].data;
+  //             found_addr = sq[i].addr;
+  //             $display("[RTL-SQ-FWD]found = %0b ", found);
+  //             break;
+  //           end else begin
+  //             // $display("[DEBUG-ALWAYS] Loop idx=%0d has Valid=0! (This is wrong)", i);
+  //             pending_found = 1'b1;break;
+  //           end
+  //         end
+  //       end
+  //       checked++;
+  //       if(checked >= count)break;
+  //     end
+  //   end
+  // end
 
-  assign fwd_valid = found;
-  assign fwd_data = found_data;
-  assign fwd_addr = found_addr;
-  assign fwd_pending = pending_found;
+  // assign fwd_valid = found;
+  // assign fwd_data = found_data;
+  // assign fwd_addr = found_addr;
+  // assign fwd_pending = pending_found;
 
   // ---------------------------------------------------------
   // Decide DC request for head (combinational)
@@ -381,8 +381,8 @@ module sq #(
     if (!reset) begin
       show_sq_status();
         if(sq[0].valid)begin
-          $display("aaaa [DEBUG-FWD]@Time %t Checking idx=%0d. SQ_Addr=%h, SQ_Size=%0d | Load_Addr=%h, Load_Size=%0d | overlap=%b", 
-                   $time, 0, sq[0].addr, sq[0].size, load_addr, load_size, addr_overlap(sq[0].addr , sq[0].size , load_addr , load_size));
+          // $display("aaaa [DEBUG-FWD]@Time %t Checking idx=%0d. SQ_Addr=%h, SQ_Size=%0d | Load_Addr=%h, Load_Size=%0d | overlap=%b", 
+          //          $time, 0, sq[0].addr, sq[0].size, load_addr, load_size, addr_overlap(sq[0].addr , sq[0].size , load_addr , load_size));
         end
     end
   end
