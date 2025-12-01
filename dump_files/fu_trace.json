@@ -9,51 +9,51 @@ FU TRACE DUMP TRIGGERED AT CYCLE 3
 FU TRACE DUMP TRIGGERED AT CYCLE 4
 { "cycle": 4, "FU": [{"idx":0, "valid":0},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
 FU TRACE DUMP TRIGGERED AT CYCLE 5
-{ "cycle": 5, "FU": [{"idx":0, "valid":1, "dest_tag":32, "rob_idx":0, "src1_val":0, "src2_val":96},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
+{ "cycle": 5, "FU": [{"idx":0, "valid":1, "dest_tag":32, "rob_idx":0, "src1_val":0, "src2_val":1},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
 FU TRACE DUMP TRIGGERED AT CYCLE 6
-{ "cycle": 6, "FU": [{"idx":0, "valid":1, "dest_tag":33, "rob_idx":1, "src1_val":0, "src2_val":305418240},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
+{ "cycle": 6, "FU": [{"idx":0, "valid":1, "dest_tag":33, "rob_idx":1, "src1_val":0, "src2_val":4096},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
 FU TRACE DUMP TRIGGERED AT CYCLE 7
 { "cycle": 7, "FU": [{"idx":0, "valid":0},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
 FU TRACE DUMP TRIGGERED AT CYCLE 8
 { "cycle": 8, "FU": [{"idx":0, "valid":0},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
 FU TRACE DUMP TRIGGERED AT CYCLE 9
-{ "cycle": 9, "FU": [{"idx":0, "valid":1, "dest_tag":34, "rob_idx":2, "src1_val":305418240, "src2_val":1656},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
+{ "cycle": 9, "FU": [{"idx":0, "valid":1, "dest_tag":34, "rob_idx":2, "src1_val":0, "src2_val":10},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
 FU TRACE DUMP TRIGGERED AT CYCLE 10
 { "cycle": 10, "FU": [{"idx":0, "valid":0},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
 FU TRACE DUMP TRIGGERED AT CYCLE 11
 { "cycle": 11, "FU": [{"idx":0, "valid":0},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
 FU TRACE DUMP TRIGGERED AT CYCLE 12
-{ "cycle": 12, "FU": [{"idx":0, "valid":0},{"idx":1, "valid":0},{"idx":2, "valid":1, "dest_tag":0, "rob_idx":3, "src1_val":96, "src2_val":305419896},{"idx":3, "valid":0}]}
+{ "cycle": 12, "FU": [{"idx":0, "valid":0},{"idx":1, "valid":1, "dest_tag":35, "rob_idx":3, "src1_val":1, "src2_val":10},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
 FU TRACE DUMP TRIGGERED AT CYCLE 13
-{ "cycle": 13, "FU": [{"idx":0, "valid":1, "dest_tag":35, "rob_idx":4, "src1_val":0, "src2_val":0},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
+{ "cycle": 13, "FU": [{"idx":0, "valid":0},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
 FU TRACE DUMP TRIGGERED AT CYCLE 14
-{ "cycle": 14, "FU": [{"idx":0, "valid":1, "dest_tag":36, "rob_idx":5, "src1_val":0, "src2_val":0},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
+{ "cycle": 14, "FU": [{"idx":0, "valid":0},{"idx":1, "valid":0},{"idx":2, "valid":1, "dest_tag":36, "rob_idx":5, "src1_val":4096, "src2_val":0},{"idx":3, "valid":0}]}
 FU TRACE DUMP TRIGGERED AT CYCLE 15
 { "cycle": 15, "FU": [{"idx":0, "valid":0},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
 FU TRACE DUMP TRIGGERED AT CYCLE 16
 { "cycle": 16, "FU": [{"idx":0, "valid":0},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
 FU TRACE DUMP TRIGGERED AT CYCLE 17
-{ "cycle": 17, "FU": [{"idx":0, "valid":1, "dest_tag":37, "rob_idx":6, "src1_val":0, "src2_val":0},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
+{ "cycle": 17, "FU": [{"idx":0, "valid":0},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
 FU TRACE DUMP TRIGGERED AT CYCLE 18
-{ "cycle": 18, "FU": [{"idx":0, "valid":0},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
+{ "cycle": 18, "FU": [{"idx":0, "valid":1, "dest_tag":37, "rob_idx":7, "src1_val":4096, "src2_val":8},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
 FU TRACE DUMP TRIGGERED AT CYCLE 19
-{ "cycle": 19, "FU": [{"idx":0, "valid":0},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
+{ "cycle": 19, "FU": [{"idx":0, "valid":0},{"idx":1, "valid":0},{"idx":2, "valid":1, "dest_tag":0, "rob_idx":4, "src1_val":4096, "src2_val":10},{"idx":3, "valid":0}]}
 FU TRACE DUMP TRIGGERED AT CYCLE 20
 { "cycle": 20, "FU": [{"idx":0, "valid":0},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
 FU TRACE DUMP TRIGGERED AT CYCLE 21
-{ "cycle": 21, "FU": [{"idx":0, "valid":0},{"idx":1, "valid":0},{"idx":2, "valid":1, "dest_tag":38, "rob_idx":7, "src1_val":96, "src2_val":0},{"idx":3, "valid":0}]}
+{ "cycle": 21, "FU": [{"idx":0, "valid":1, "dest_tag":38, "rob_idx":8, "src1_val":1, "src2_val":1},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
 FU TRACE DUMP TRIGGERED AT CYCLE 22
-{ "cycle": 22, "FU": [{"idx":0, "valid":1, "dest_tag":0, "rob_idx":8, "src1_val":0, "src2_val":0},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
+{ "cycle": 22, "FU": [{"idx":0, "valid":0},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
 FU TRACE DUMP TRIGGERED AT CYCLE 23
 { "cycle": 23, "FU": [{"idx":0, "valid":0},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
 FU TRACE DUMP TRIGGERED AT CYCLE 24
-{ "cycle": 24, "FU": [{"idx":0, "valid":0},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
+{ "cycle": 24, "FU": [{"idx":0, "valid":1, "dest_tag":39, "rob_idx":9, "src1_val":2, "src2_val":16},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
 FU TRACE DUMP TRIGGERED AT CYCLE 25
-{ "cycle": 25, "FU": [{"idx":0, "valid":1, "dest_tag":39, "rob_idx":9, "src1_val":0, "src2_val":96},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
+{ "cycle": 25, "FU": [{"idx":0, "valid":0},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
 FU TRACE DUMP TRIGGERED AT CYCLE 26
-{ "cycle": 26, "FU": [{"idx":0, "valid":1, "dest_tag":40, "rob_idx":10, "src1_val":0, "src2_val":305418240},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
+{ "cycle": 26, "FU": [{"idx":0, "valid":0},{"idx":1, "valid":0},{"idx":2, "valid":1, "dest_tag":0, "rob_idx":6, "src1_val":4096, "src2_val":74755},{"idx":3, "valid":0}]}
 FU TRACE DUMP TRIGGERED AT CYCLE 27
-{ "cycle": 27, "FU": [{"idx":0, "valid":0},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
+{ "cycle": 27, "FU": [{"idx":0, "valid":1, "dest_tag":0, "rob_idx":10, "src1_val":0, "src2_val":1},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
 FU TRACE DUMP TRIGGERED AT CYCLE 28
 { "cycle": 28, "FU": [{"idx":0, "valid":0},{"idx":1, "valid":0},{"idx":2, "valid":0},{"idx":3, "valid":0}]}
 FU TRACE DUMP TRIGGERED AT CYCLE 29

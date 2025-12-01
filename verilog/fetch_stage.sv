@@ -170,8 +170,11 @@ module stage_if #(
 
     always_ff @(posedge clock) begin
         if (!reset) begin
-            $display("PC_next=%h | Icache_valid=%b Icache_data = %h| if_packet_o_valid=%b", PC_next, Icache_valid,Icache_data, if_packet_o[0].valid );
+            $display("[%t] PC_reg = %h | PC_next=%h | Icache_valid=%b Icache_data = %h| if_packet_o_valid=%b", $time, PC_reg,PC_next, Icache_valid,Icache_data, if_packet_o[0].valid );
         end
     end
-
+    initial begin
+        $dumpfile("fetch_stage.vcd");
+        $dumpvars(0, stage_if);
+    end
 endmodule

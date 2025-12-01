@@ -165,12 +165,17 @@ module lsq_top #(
         end else if (dispatch_valid) begin
             pre_dispatch_rob <= dispatch_rob_idx;
         end
-        $display("dispatch_is_store=%b, dispatch_valid=%b, new_dispatch=%b, dispatch_rob_idx=%d, pre_dispatch_rob=%d", dispatch_is_store, dispatch_valid, new_dispatch, dispatch_rob_idx, pre_dispatch_rob);
+        // $display("dispatch_is_store=%b, dispatch_valid=%b, new_dispatch=%b, dispatch_rob_idx=%d, pre_dispatch_rob=%d", dispatch_is_store, dispatch_valid, new_dispatch, dispatch_rob_idx, pre_dispatch_rob);
+        $display("sq_data_valid=%b | sq_data_rob_idx=%d | sq_data_addr=%h",sq_data_valid, sq_data_rob_idx, sq_data_addr);
     end
 
     // =====================================================
     // Dispatch Steering Logic (分流)
     // =====================================================
+    // todo: (bug) if two port both sent load data back, will discard port 1 data 
+    ROB_IDX lq_data_rob_idx; // data rob idx from dcache to lq
+    assign lq_data_rob_idx =(Dcache_valid_out_0) ? Dcache_data_rob_idx_0 : Dcache_data_rob_idx_1;
+
     assign sq_enq_valid = (new_dispatch &&  dispatch_is_store);
     assign lq_enq_valid = (new_dispatch && !dispatch_is_store);
 
@@ -195,6 +200,8 @@ module lsq_top #(
         .enq_rob_idx(dispatch_rob_idx),
         .full(sq_full),
 
+        .rob_head(rob_head),
+        
         // Data Update
         .data_valid(sq_data_valid),
         .data(sq_data),
@@ -252,10 +259,10 @@ module lsq_top #(
         .enq_rob_idx(dispatch_rob_idx),
         .full(lq_full),
 
-        // Data Update
-        .data_valid(sq_data_valid),
+        // Data Update (*from FU)
+        .addr_valid(sq_data_valid),
         .data(sq_data), //not use for load
-        .data_rob_idx(sq_data_rob_idx),
+        .addr_rob_idx(sq_data_rob_idx), 
         .enq_addr(sq_data_addr), 
 
         // Forwarding Logic (Ask SQ)
@@ -276,7 +283,8 @@ module lsq_top #(
         // Input from D-Cache
         .dc_load_data(Dcache_data_out_0),   // 連接 Port 0 回傳
         .dc_load_valid(Dcache_valid_out_0), // 連接 Port 0 Valid
-        .dc_load_tag(Dcache_data_tag_0), //TODO
+        .dc_load_tag(Dcache_data_tag_0), //todo: not used
+        .dc_rob_idx_i(lq_data_rob_idx), 
 
         // Writeback / Commit
         .rob_head(rob_head),

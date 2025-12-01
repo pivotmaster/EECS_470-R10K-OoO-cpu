@@ -141,5 +141,8 @@ module icache (
             end
         end
     end
-
+    initial begin
+        $dumpfile("icache_tb_idcache.vcd");
+        $dumpvars(0, icache);
+    end
 endmodule // icache

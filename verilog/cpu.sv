@@ -116,7 +116,7 @@ module cpu #(
     logic [`DISPATCH_WIDTH-1:0] disp_rob_space;
     logic [`DISPATCH_WIDTH-1:0] disp_rob_valid;      
     logic [`DISPATCH_WIDTH-1:0] dispatch_is_store;  
-    logic [`DISPATCH_WIDTH-1:0] dispatch_size;  
+    MEM_SIZE [`DISPATCH_WIDTH-1:0] dispatch_size;  
 
     logic [`DISPATCH_WIDTH-1:0] disp_rob_rd_wen;
     logic [`DISPATCH_WIDTH-1:0][$clog2(`ARCH_REGS)-1:0] disp_rd_arch;
@@ -444,8 +444,10 @@ module cpu #(
 
     // This state controls the stall signal that artificially forces IF
     // to stall until the previous instruction has completed.
-    // For project 3, start by assigning if_valid to always be 1
-
+    // For project 3, start by assigning if_valid to always be 1`
+    logic stall_dcache;
+    assign stall_dcache = (Dmem_command != MEM_NONE) && (Imem_command != MEM_NONE);
+    
     logic if_valid, if_flush,correct_predict;
     logic pred_valid_i, pred_taken_i;
     logic [$clog2(`FETCH_WIDTH)-1:0] pred_lane_i;   // which instruction is branch    
@@ -495,7 +497,7 @@ module cpu #(
         end
     end
     // assign if_valid = 1'b1;
-    assign if_valid = !stall && !branch_stall;
+    assign if_valid = !stall && !branch_stall && !stall_dcache;
     //###
     logic [16:0] cycle;
     always @(posedge clock) begin
@@ -1544,12 +1546,6 @@ always_ff @(posedge clock) begin : checkpoint_LSQ
         end
     end
 
-// always_ff @(posedge clock) begin
-//     if (!reset) begin
-//         $display("from fu : fu_ls_addr_o = %h", fu_ls_addr_o);
-//     end
-// end
-
     //////////////////////////////////////////////////
     //                                              //
     //               D-CACHE                        //
@@ -1745,10 +1741,14 @@ dcache dcache_0 (
 always_ff @(posedge clock) begin
     if (!reset) begin
         integer i;
-        $display("Imem_command = %d", Imem_command);
+        if (stall_dcache) begin
+            $display("[%t]stall_dcache = %b", $time, stall_dcache);
+        end
+        $display("[%t]proc2mem_command = %s, Imem_command = %s, Dmem_command = %s", $time, proc2mem_command.name, Imem_command.name, Dmem_command.name);
         for (i = 0; i < `N; i++) begin
             if(committed_insts[i].valid) begin
-            $display("Commit[%0d]: valid=%b halt=%b illegal=%b reg=%0d data=%h NPC=%h",
+            $display("[%t]Commit[%0d]: valid=%b halt=%b illegal=%b reg=%0d data=%h NPC=%h",
+                     $time,
                      i,
                      committed_insts[i].valid,
                      committed_insts[i].halt,
