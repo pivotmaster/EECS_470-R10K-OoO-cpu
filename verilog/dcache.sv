@@ -12,8 +12,9 @@ module dcache (
 
     output logic       Dcache_req_0_accept, // if bank conflict (two request go to the same bank), it might be 0 and need to be resent at the next cycle
     output MEM_BLOCK   Dcache_data_out_0,
-    output logic       Dcache_valid_out_0,
+    output logic       Dcache_valid_out_0,  //data valid (load)
     output ROB_IDX     Dcache_data_rob_idx_0,
+    output logic       Dcache_store_valid_0, // store valid
     
     input  ADDR        Dcache_addr_1,      // Request 1
     input  MEM_COMMAND Dcache_command_1,
@@ -23,8 +24,9 @@ module dcache (
 
     output logic       Dcache_req_1_accept,  // if bank conflict (two request go to the same bank), it might be 0
     output MEM_BLOCK   Dcache_data_out_1,
-    output logic       Dcache_valid_out_1,
+    output logic       Dcache_valid_out_1,  //data valid (load)
     output ROB_IDX     Dcache_data_rob_idx_1,
+    output logic       Dcache_store_valid_1, // store valid
     
     // Memory interface (non-blocking)
     output MEM_COMMAND Dcache2mem_command,
@@ -417,7 +419,7 @@ module dcache (
     assign miss_1       = req_1_accept && !cache_hit_1;
     assign send_miss_0  = miss_0;
     assign send_miss_1  = !miss_0 && miss_1;  // request_0 go first
-    assign has_req_to_mem = send_miss_0 || send_miss_1;
+    assign has_req_to_mem = (send_miss_0 || send_miss_1);
 
     assign Dcache_req_1_accept = req_1_accept && !(miss_0 && miss_1) && !mshr_hit_1 && (cache_hit_1 || mshr_found); // if request 0 and 1 both miss, give up request 1
     assign Dcache_req_0_accept = req_0_accept && !mshr_hit_0 && (cache_hit_0 || mshr_found); // has free bank && not already in mshr && mshr not full
@@ -563,7 +565,7 @@ module dcache (
         end
     end
 
-    assign send_new_mem_req = has_req_to_mem && mshr_found;
+    assign send_new_mem_req = (has_req_to_mem && mshr_found && !mshr_hit_0 && !mshr_hit_1);
 
     // Find refill MSHR id (when data tag comes back from memory)
     //### Handle the case that transaction tag and data tag come back at the same cycle ###//
@@ -671,6 +673,7 @@ module dcache (
     end
 
     //  Get Result from memory => update cache data with received data
+    //  wb to cache line 
     MEM_BLOCK fill_data;
     always_comb begin 
         cache_write_en_refill_0 ='0;
@@ -680,6 +683,7 @@ module dcache (
         cache_write_data_refill_0 = '0;
         cache_write_data_refill_1 = '0;
         fill_data = '0;
+
         if ((mem2proc_data_tag == mshr[refill_mshr_id].mem_tag || transaction_data_tag_the_same_time) && mshr[refill_mshr_id].valid ) begin
             fill_data = mem2proc_data;
 
@@ -702,6 +706,24 @@ module dcache (
                 cache_write_data_refill_1 = fill_data;
                 cache_write_en_refill_1[mshr[refill_mshr_id].way] = 1'b1;
             end
+        end
+    end
+
+    always_comb begin
+        if (store_cache_hit_0)  begin
+            Dcache_store_valid_0 = 1'b1;
+        end else if ((mem2proc_data_tag == mshr[refill_mshr_id].mem_tag || transaction_data_tag_the_same_time) && mshr[refill_mshr_id].valid && mshr[refill_mshr_id].command == MEM_STORE && mshr[refill_mshr_id].port_id == 1'b0) begin
+            Dcache_store_valid_0 = 1'b1;
+        end else begin
+            Dcache_store_valid_0 = 1'b0;
+        end
+
+        if (store_cache_hit_1)  begin
+            Dcache_store_valid_1 = 1'b1;
+        end else if ((mem2proc_data_tag == mshr[refill_mshr_id].mem_tag || transaction_data_tag_the_same_time) && mshr[refill_mshr_id].valid && mshr[refill_mshr_id].command == MEM_STORE && mshr[refill_mshr_id].port_id == 1'b1) begin
+            Dcache_store_valid_1 = 1'b1;
+        end else begin
+            Dcache_store_valid_1 = 1'b0;
         end
     end
 
@@ -821,16 +843,16 @@ task automatic show_status();
     // Request 0 Pipeline  (Req0 -> Bank -> Hit/Miss -> MSHR -> Mem)
     // =================================================================
     $display("== Request 0 ======================================================");
-    $display("[REQ0] cmd=%s size=%s addr=%h store_data=%h",
+    $display("[REQ0] cmd=%s size=%s addr=%h store_data=%h | req_rob_idx=%0d data_rob_idx=%0d",
              Dcache_command_0.name(), Dcache_size_0.name(),
-             Dcache_addr_0, Dcache_store_data_0.dbbl_level);
+             Dcache_addr_0, Dcache_store_data_0.dbbl_level, Dcache_req_rob_idx_0, Dcache_data_rob_idx_0);
     $display("[REQ0] bank=%0d index=%0d offset=%0d",
              bank_0, index_0, offset_0);
 
     // bank routing / accept
-    $display("[REQ0] to_bank0=%b to_bank1=%b  req_0_accept=%b  Dcache_req_0_accept=%b",
+    $display("[REQ0] to_bank0=%b to_bank1=%b  req_0_accept=%b  Dcache_req_0_accept=%b Dcache_store_valid_0=%b",
              req_0_to_bank_0, req_0_to_bank_1,
-             req_0_accept, Dcache_req_0_accept);
+             req_0_accept, Dcache_req_0_accept, Dcache_store_valid_0);
 
     // hit / miss / mshr
     $display("[REQ0] way_hit=%b  hit_way=%0d  cache_hit=%b  load_hit=%b  store_hit=%b",
@@ -846,15 +868,15 @@ task automatic show_status();
     // Request 1 Pipeline  (Req1 -> Bank -> Hit/Miss -> MSHR -> Mem)
     // =================================================================
     $display("== Request 1 ======================================================");
-    $display("[REQ1] cmd=%s size=%s addr=%h store_data=%h",
+    $display("[REQ1] cmd=%s size=%s addr=%h store_data=%h | req_rob_idx=%0d data_rob_idx=%0d",
              Dcache_command_1.name(), Dcache_size_1.name(),
-             Dcache_addr_1, Dcache_store_data_1.dbbl_level);
+             Dcache_addr_1, Dcache_store_data_1.dbbl_level, Dcache_req_rob_idx_1, Dcache_data_rob_idx_1);
     $display("[REQ1] bank=%0d index=%0d offset=%0d",
              bank_1, index_1, offset_1);
 
-    $display("[REQ1] to_bank0=%b to_bank1=%b  req_1_accept=%b  Dcache_req_1_accept=%b",
+    $display("[REQ1] to_bank0=%b to_bank1=%b  req_1_accept=%b  Dcache_req_1_accept=%b Dcache_store_valid_1=%b",
              req_1_to_bank_0, req_1_to_bank_1,
-             req_1_accept, Dcache_req_1_accept);
+             req_1_accept, Dcache_req_1_accept, Dcache_store_valid_1);
 
     $display("[REQ1] way_hit=%b  hit_way=%0d  cache_hit=%b  load_hit=%b  store_hit=%b",
              way_hit_1, hit_way_1, cache_hit_1, load_cache_hit_1, store_cache_hit_1);
@@ -962,3 +984,4 @@ always_ff @(posedge clock) begin
 end
 
 endmodule
+

@@ -14,6 +14,8 @@ module sq #(
     input  ROB_IDX     enq_rob_idx,
     output logic       full,
 
+    input ROB_IDX     rob_head,
+
     // later store data arrives
     input  logic       data_valid,
     input  MEM_BLOCK   data,
@@ -28,9 +30,9 @@ module sq #(
     output ADDR        fwd_addr,
     output logic       fwd_pending,  // match exists but data not ready
 
-    // commit from ROB
-    input  logic       commit_valid,
-    input  ROB_IDX     commit_rob_idx,
+    // commit from 
+    input  logic       commit_valid,  //todo: not used 
+    input  ROB_IDX     commit_rob_idx,  //todo: not used 
 
     // send store to dcache
     output logic       dc_req_valid,
@@ -179,7 +181,7 @@ module sq #(
           // $display("[RTL-SQ] Enqueue at tail=%0d, ROB=%0d, Addr=%h", tail, enq_rob_idx, enq_addr);
           sq[tail].valid <= 1'b1;
           sq[tail].addr <= '0; //### sychen have not get addr when dispatch
-          sq[tail].addr_valid <= 1'b1;
+          sq[tail].addr_valid <= 1'b0;
           sq[tail].size <= enq_size;
           sq[tail].data_valid <= 1'b0;
           sq[tail].data <= '0; //### sychen have not get data when dispatch
@@ -202,6 +204,7 @@ module sq #(
               sq[i].data <= data;
               sq[i].data_valid <= 1'b1;
               sq[i].addr <= enq_addr;
+              sq[i].addr_valid <= 1'b1;
               break;
             end 
           end
@@ -219,12 +222,10 @@ module sq #(
         // end
 
         //commit from ROB: mark matching store as commited (so it can be sent when head)
-        if(commit_valid)begin
-
           for(int i = 0 ; i < SQ_SIZE ; i++)begin
         // $display(" i = %d , commit_valid=%d |sq[i].valid=%d|sq[i].data_valid =%d|sq[i].rob_idx=%d|commit_rob_idx=%d",i, commit_valid,sq[i].valid,sq[i].data_valid,sq[i].rob_idx,commit_rob_idx); 
-
-            if(sq[i].valid && (sq[i].rob_idx == commit_rob_idx))begin
+          
+            if(sq[i].valid && (sq[i].rob_idx == rob_head))begin
               sq[i].commited <= 1'b1;
               // dc_store_data <= sq[i].data;
               break;
@@ -232,7 +233,7 @@ module sq #(
           end
         end 
       
-
+ 
         // if head is ready to send to dcache (committed && data_valid) and we get accept -> pop
         if(dc_req_valid && dc_req_accept)begin
           sq[head].valid <= 1'b0;
@@ -244,7 +245,7 @@ module sq #(
         end
       end
     end
-  end
+  
 
 
   logic found, pending_found;
@@ -269,18 +270,18 @@ module sq #(
         // int i = (idx - k) % SQ_SIZE;
         i = start - k;
         if(i<0)i = i + SQ_SIZE;
-        // $display("[DEBUG-FWD] Checking indx = %0d, sq[%0d] = %0d , k=%0d , start = %0d" , i , i , sq[i].valid , k , start);
+        $display("[DEBUG-FWD] Checking indx = %0d, sq[%0d] = %0d , k=%0d , start = %0d" , i , i , sq[i].valid , k , start);
         if(sq[i].valid)begin
-          // $display("[DEBUG-FWD] Checking idx=%0d. SQ_Addr=%h, SQ_Size=%0d | Load_Addr=%h, Load_Size=%0d", 
-          //          i, sq[i].addr, sq[i].size, load_addr, load_size);
+          $display("[DEBUG-FWD]@Time %t Checking idx=%0d. SQ_Addr=%h, SQ_Size=%0d | Load_Addr=%h, Load_Size=%0d", 
+                   $time, i, sq[i].addr, sq[i].size, load_addr, load_size);
           if(addr_overlap(sq[i].addr , sq[i].size , load_addr , load_size))begin
-            // $display("[RTL-SQ-FWD] Overlap at idx=%0d. DataValid=%b. Data=%h", i, sq[i].data_valid, sq[i].data);
+            $display("[RTL-SQ-FWD] Overlap at idx=%0d. DataValid=%b. Data=%h", i, sq[i].data_valid, sq[i].data);
             if(sq[i].data_valid)begin
               found = 1'b1;
               pending_found = 1'b0;
               found_data = sq[i].data;
               found_addr = sq[i].addr;
-              // $display("[RTL-SQ-FWD]found = %0b , ")
+              $display("[RTL-SQ-FWD]found = %0b ", found);
               break;
             end else begin
               // $display("[DEBUG-ALWAYS] Loop idx=%0d has Valid=0! (This is wrong)", i);
@@ -379,7 +380,12 @@ module sq #(
   always_ff @(posedge clock) begin
     if (!reset) begin
       show_sq_status();
+        if(sq[0].valid)begin
+          $display("aaaa [DEBUG-FWD]@Time %t Checking idx=%0d. SQ_Addr=%h, SQ_Size=%0d | Load_Addr=%h, Load_Size=%0d | overlap=%b", 
+                   $time, 0, sq[0].addr, sq[0].size, load_addr, load_size, addr_overlap(sq[0].addr , sq[0].size , load_addr , load_size));
+        end
     end
   end
 
 endmodule
+
