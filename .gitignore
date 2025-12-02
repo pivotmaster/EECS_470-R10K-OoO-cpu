@@ -57,3 +57,4 @@ novas*
 output/
 !correct_out/*
 *.vcd
+*.vcd
