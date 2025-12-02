@@ -255,14 +255,14 @@ module map_table#(
         end
     endgenerate
 
-    // always_ff @(posedge clock) begin
-    //     if (!reset) begin
-    //         $display("MAP_TABLE: snapshot_restore_i=%b | is_branch_i=%b valid =%b ",snapshot_restore_valid_i,is_branch_i,checkpoint_valid_o);
-    //         for (int i = 0 ; i < ARCH_REGS ; i++)begin
-    //             $display("table_reg[%0d] value = %d (%d)| checkpoint[%0d] value = %d (%d)| snapshot_data_i[%0d] value = %d (%d)", i, table_reg[i].phys,table_reg[i].valid, i, snapshot_data_o[i].phys,snapshot_data_o[i].valid, i, snapshot_data_i[i].phys,snapshot_data_i[i].valid);
-    //         end
-    //     end
-    // end
+    always_ff @(posedge clock) begin
+        if (!reset) begin
+            $display("MAP_TABLE: snapshot_restore_i=%b | is_branch_i=%b valid =%b ",snapshot_restore_valid_i,is_branch_i,checkpoint_valid_o);
+            for (int i = 0 ; i < ARCH_REGS ; i++)begin
+                $display("table_reg[%0d] value = %d (%d)| checkpoint[%0d] value = %d (%d)| snapshot_data_i[%0d] value = %d (%d)", i, table_reg[i].phys,table_reg[i].valid, i, snapshot_data_o[i].phys,snapshot_data_o[i].valid, i, snapshot_data_i[i].phys,snapshot_data_i[i].valid);
+            end
+        end
+    end
     // =======================================================
     // Snapshot output: provide current mapping (for ROB/CPU to save)
     // Drive it continuously from table_reg; CPU will latch on checkpoint_valid_o

@@ -18,7 +18,7 @@ module sq #(
 
     // later store data arrives
     input  logic       data_valid,
-    input  MEM_BLOCK   data,
+    input  DATA        data,
     input  ROB_IDX     data_rob_idx,
 
     // Forwarding query from LQ:
@@ -61,7 +61,10 @@ module sq #(
     output logic   [$clog2(SQ_SIZE+1)-1:0] snapshot_count_o,
     input sq_entry_t                 snapshot_data_i[SQ_SIZE-1:0],
     input logic    [IDX_WIDTH-1 : 0] snapshot_head_i , snapshot_tail_i,
-    input logic   [$clog2(SQ_SIZE+1)-1:0] snapshot_count_i
+    input logic   [$clog2(SQ_SIZE+1)-1:0] snapshot_count_i,
+
+    output ROB_IDX rob_store_ready_idx,
+    output logic   rob_store_ready_valid
 
 );
   // typedef struct packed {
@@ -227,9 +230,15 @@ module sq #(
           
             if(sq[i].valid && (sq[i].rob_idx == rob_head))begin
               sq[i].commited <= 1'b1;
+              rob_store_ready_idx <= sq[i].rob_idx;
+              rob_store_ready_valid <= 1'b1;
               // dc_store_data <= sq[i].data;
               break;
+            end else begin
+              rob_store_ready_idx <= '0;
+              rob_store_ready_valid <= 1'b0;
             end
+
           end
         end 
       
@@ -317,12 +326,12 @@ module sq #(
       // if (sq[head].valid  && sq[head].data_valid) begin
       if (sq[head].valid &&sq[head].commited && sq[head].data_valid) begin
         $display("sent data to dcache!!");
-        $display("dc_req_addr=%h, dc_req_size=%t, dc_store_data=%h", dc_req_addr, dc_req_size, dc_store_data);
         dc_req_req = 1'b1;
         dc_req_addr = sq[head].addr;
         dc_req_size = sq[head].size;
         dc_store_data = sq[head].data;
         dc_rob_idx = sq[head].rob_idx;
+        $display("dc_req_addr=%h, dc_req_size=%t, dc_store_data=%h", dc_req_addr, dc_req_size, dc_store_data);
       end
     end
   end

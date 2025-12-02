@@ -285,7 +285,10 @@ module rob #(
 
     // ROB -> LSQ
     output ROB_IDX      [COMMIT_WIDTH-1:0]   retire_rob_idx_o, 
-    output ROB_IDX       rob_head_o 
+    output ROB_IDX       rob_head_o,
+
+    input ROB_IDX rob_store_ready_idx,
+    input logic   rob_store_ready_valid
 );
 
     
@@ -350,8 +353,8 @@ module rob #(
     logic [COMMIT_WIDTH-1:0] wb_valid;
     COMMIT_PACKET [`N-1:0] wb_packet;
 
-    always_comb begin
-        wb_valid = retire_en;
+    always_ff @(posedge clock) begin
+        wb_valid <= retire_en;
     end
 
     always_comb begin 
@@ -393,12 +396,14 @@ module rob #(
     // ===== Commit Ready Check =====
     always_comb begin
         retire_en = '0;
-        for (int i = 0; i < COMMIT_WIDTH; i++) begin
-            // if (!empty && rob_table[(head + i) % ROB_DEPTH].valid && rob_table[(head + i) % ROB_DEPTH].ready && ((i == 0) || retire_en[i-1])) begin ### ?not sure the valid part
-            if (rob_table[(head + i) % ROB_DEPTH].valid && rob_table[(head + i) % ROB_DEPTH].ready) begin
-                retire_en[i] = 1'b1;
-            end else begin
-                break;
+        if(!mispredict_i)begin
+             for (int i = 0; i < COMMIT_WIDTH; i++) begin
+                // if (!empty && rob_table[(head + i) % ROB_DEPTH].valid && rob_table[(head + i) % ROB_DEPTH].ready && ((i == 0) || retire_en[i-1])) begin ### ?not sure the valid part
+                if (rob_table[(head + i) % ROB_DEPTH].valid && rob_table[(head + i) % ROB_DEPTH].ready) begin
+                    retire_en[i] = 1'b1;
+                end else begin
+                    break;
+                end
             end
         end
     end
@@ -470,121 +475,126 @@ module rob #(
         //################## (sychenn 11/6) ######################
         end else begin  
             if (mispredict_i) begin
-                // Flush to tail
-                if (mispredict_i) begin
-                    for (int j = 0; j < ROB_DEPTH; j++) begin
-                        if (flushed_mask[j])
-                            rob_table[j].valid <= 1'b0;
+                    // Flush to tail
+                    if (mispredict_i) begin
+                        for (int j = 0; j < ROB_DEPTH; j++) begin
+                            if (flushed_mask[j]) begin
+                                rob_table[j].valid <= 1'b0;
+                                rob_table[j].ready <= 1'b0;
+                            end
+                        end
                     end
-                end
-                // update tail and count
-                tail  <= (mispredict_rob_idx_i+1) % ROB_DEPTH;
-                count <= count - flush_count;
-                
-
-                // stop commit
-                for (int i = 0; i < COMMIT_WIDTH; i++) begin
-                    commit_valid_o[i]   <= 1'b0;
-                    commit_old_prf_o[i] <= '0;
-                end
-
-        //################## (sychenn 11/6) ######################
-        end else begin
-            flush_o <= 1'b0; // default
-
-            // ==== Dispatch (allocate new entries) ====
-            for (int i = 0; i < DISPATCH_WIDTH; i++) begin
-                if (disp_alloc_o[i]) begin
-                    rob_table[disp_rob_idx_o[i]].valid     <= 1'b1;
-                    rob_table[disp_rob_idx_o[i]].ready     <= '0; 
-                    rob_table[disp_rob_idx_o[i]].rd_wen    <= disp_rd_wen_i[i];
-                    rob_table[disp_rob_idx_o[i]].rd_arch   <= disp_rd_arch_i[i];
-                    rob_table[disp_rob_idx_o[i]].new_prf   <= disp_rd_new_prf_i[i];
-                    rob_table[disp_rob_idx_o[i]].old_prf   <= disp_rd_old_prf_i[i];
-                    rob_table[disp_rob_idx_o[i]].exception <= 1'b0;
-                    rob_table[disp_rob_idx_o[i]].mispred   <= 1'b0;
-
-                    //###11/7 SYCHENN ###//
-                    rob_table[disp_rob_idx_o[i]].NPC   <= disp_packet_i[i].NPC;
-                    rob_table[disp_rob_idx_o[i]].PC    <= disp_packet_i[i].PC;
-                    rob_table[disp_rob_idx_o[i]].inst  <= disp_packet_i[i].inst;
-
-                    rob_table[disp_rob_idx_o[i]].halt  <= disp_packet_i[i].halt;
-                end
-            end
-
-            // ==== Commit (retire ready entries) ====
-            // TODO: Also FLush out the midpredicted instructions (previous code let it commit as well)
-            for (int i = 0; i < COMMIT_WIDTH; i++) begin
-                // TODO: add (!flush_condition) to let insturctions after mispred/exception in the same cycle: 
-                // goes to else block and let valid <=0
-                if (retire_en[i]) begin 
-                    // Flush if mispred or exception
-                    //TODO: Here's why it clear all rob at cycle 118
-                    // if (flush_condition[i]) begin
-                    //     //flush_condition would be 1 at the same cycle
-                    //     flush_o              <= 1'b1;
-                    //     flush_upto_rob_idx_o <= head;
-                    //     head   <= '0;//###
-                    //     tail   <= '0;//###
-                    //     count  <= '0;
-                    //     commit_valid_o[i] <= 1'b0; //TODO: I guess this also needed??
-                    //     for (int j = 0; j < ROB_DEPTH; j++) begin
-                    //         rob_table[j].valid <= 1'b0;
-                    //     end
-
-                    // end else begin
-                    // cleaar the rob entry
-
-                    // retire rob idx
-                    retire_rob_idx_o <= head + i;
-
-                    rob_table[head + i].valid <= 1'b0;
-                    // Output commit data
-                    commit_valid_o[i]   <= 1'b1;
-                    commit_rd_wen_o[i]  <= rob_table[head + i].rd_wen;
-                    commit_rd_arch_o[i] <= rob_table[head + i].rd_arch;
-                    commit_new_prf_o[i] <= rob_table[head + i].new_prf;
-                    commit_old_prf_o[i] <= rob_table[head + i].old_prf;
-                    // wb file
-                    if(rob_table[head].valid) begin
-                        wb_packet[i].data <= rob_table[head + i].value;
-                        wb_packet[i].reg_idx <= rob_table[head + i].rd_arch;
-                        wb_packet[i].halt <= rob_table[head + i].halt;
-                        wb_packet[i].illegal <=0;
-                        wb_packet[i].valid <=1;
-                        wb_packet[i].NPC <= rob_table[head + i].NPC;
-                    end else begin
-                        wb_packet[i].valid <=0;
-                    end
-                    // $display("npc1=%h | npc2=%h",rob_table[head + i].NPC, disp_packet_i[0].NPC);
-
-                end else begin
-                    commit_valid_o[i] <= 1'b0;
-                end
-
-                //TODO: This part overwrite the head <= '0 when flush all ROB entry (when retired mispredict instruction)
-                // ==== Update count and head/tail ====
-                head <= head + $countones(retire_en);
-                count <= count + $countones(disp_alloc_o) - $countones(retire_en);
-                tail  <= next_tail;
-            end
-        end    
-            // ==== Writeback ====
-
-
-        if (!reset) begin
-            for (int i = 0; i < WB_WIDTH; i++) begin
-                if (wb_valid_i[i]) begin  
-                    rob_table[wb_rob_idx_i[i]].ready     <= 1'b1;
-                    rob_table[wb_rob_idx_i[i]].exception <= wb_exception_i[i];
-                    rob_table[wb_rob_idx_i[i]].mispred   <= wb_mispred_i[i];
-                    rob_table[wb_rob_idx_i[i]].value   <= fu_value_wb_i[i]; //### sychenn 11/7 ###/
+                    // update tail and count
+                    tail  <= (mispredict_rob_idx_i+1) % ROB_DEPTH;
+                    count <= count - flush_count;
                     
+
+                    // stop commit
+                    for (int i = 0; i < COMMIT_WIDTH; i++) begin
+                        commit_valid_o[i]   <= 1'b0;
+                        commit_old_prf_o[i] <= '0;
+                    end
+
+            //################## (sychenn 11/6) ######################
+            end else begin
+                flush_o <= 1'b0; // default
+
+                // ==== Dispatch (allocate new entries) ====
+                for (int i = 0; i < DISPATCH_WIDTH; i++) begin
+                    if (disp_alloc_o[i]) begin
+                        rob_table[disp_rob_idx_o[i]].valid     <= 1'b1;
+                        rob_table[disp_rob_idx_o[i]].ready     <= '0; 
+                        rob_table[disp_rob_idx_o[i]].rd_wen    <= disp_rd_wen_i[i];
+                        rob_table[disp_rob_idx_o[i]].rd_arch   <= disp_rd_arch_i[i];
+                        rob_table[disp_rob_idx_o[i]].new_prf   <= disp_rd_new_prf_i[i];
+                        rob_table[disp_rob_idx_o[i]].old_prf   <= disp_rd_old_prf_i[i];
+                        rob_table[disp_rob_idx_o[i]].exception <= 1'b0;
+                        rob_table[disp_rob_idx_o[i]].mispred   <= 1'b0;
+
+                        //###11/7 SYCHENN ###//
+                        rob_table[disp_rob_idx_o[i]].NPC   <= disp_packet_i[i].NPC;
+                        rob_table[disp_rob_idx_o[i]].PC    <= disp_packet_i[i].PC;
+                        rob_table[disp_rob_idx_o[i]].inst  <= disp_packet_i[i].inst;
+
+                        rob_table[disp_rob_idx_o[i]].halt  <= disp_packet_i[i].halt;
+                    end
+                end
+
+                // ==== Commit (retire ready entries) ====
+                // TODO: Also FLush out the midpredicted instructions (previous code let it commit as well)
+                for (int i = 0; i < COMMIT_WIDTH; i++) begin
+                    // TODO: add (!flush_condition) to let insturctions after mispred/exception in the same cycle: 
+                    // goes to else block and let valid <=0
+                    if (retire_en[i]) begin 
+                        // Flush if mispred or exception
+                        //TODO: Here's why it clear all rob at cycle 118
+                        // if (flush_condition[i]) begin
+                        //     //flush_condition would be 1 at the same cycle
+                        //     flush_o              <= 1'b1;
+                        //     flush_upto_rob_idx_o <= head;
+                        //     head   <= '0;//###
+                        //     tail   <= '0;//###
+                        //     count  <= '0;
+                        //     commit_valid_o[i] <= 1'b0; //TODO: I guess this also needed??
+                        //     for (int j = 0; j < ROB_DEPTH; j++) begin
+                        //         rob_table[j].valid <= 1'b0;
+                        //     end
+
+                        // end else begin
+                        // cleaar the rob entry
+
+                        // retire rob idx
+                        retire_rob_idx_o <= head + i;
+
+                        rob_table[head + i].valid <= 1'b0;
+                        // Output commit data
+                        commit_valid_o[i]   <= 1'b1;
+                        commit_rd_wen_o[i]  <= rob_table[head + i].rd_wen;
+                        commit_rd_arch_o[i] <= rob_table[head + i].rd_arch;
+                        commit_new_prf_o[i] <= rob_table[head + i].new_prf;
+                        commit_old_prf_o[i] <= rob_table[head + i].old_prf;
+                        // wb file
+                        if(rob_table[head].valid) begin
+                            wb_packet[i].data <= rob_table[head + i].value;
+                            wb_packet[i].reg_idx <= rob_table[head + i].rd_arch;
+                            wb_packet[i].halt <= rob_table[head + i].halt;
+                            wb_packet[i].illegal <=0;
+                            wb_packet[i].valid <=1;
+                            wb_packet[i].NPC <= rob_table[head + i].NPC;
+                        end else begin
+                            wb_packet[i].valid <=0;
+                        end
+                        // $display("npc1=%h | npc2=%h",rob_table[head + i].NPC, disp_packet_i[0].NPC);
+
+                    end else begin
+                        commit_valid_o[i] <= 1'b0;
+                    end
+
+                    //TODO: This part overwrite the head <= '0 when flush all ROB entry (when retired mispredict instruction)
+                    // ==== Update count and head/tail ====
+                    head <= head + $countones(retire_en);
+                    count <= count + $countones(disp_alloc_o) - $countones(retire_en);
+                    tail  <= next_tail;
+                end
+            end    
+                // ==== Writeback ====
+
+
+            if (!reset) begin
+                for (int i = 0; i < WB_WIDTH; i++) begin
+                    if (wb_valid_i[i] && rob_table[wb_rob_idx_i[i]].valid) begin  
+                        $display("bug value= %d | rob=%d",fu_value_wb_i[i],wb_rob_idx_i[i] );
+                        rob_table[wb_rob_idx_i[i]].ready     <= 1'b1;
+                        rob_table[wb_rob_idx_i[i]].exception <= wb_exception_i[i];
+                        rob_table[wb_rob_idx_i[i]].mispred   <= wb_mispred_i[i];
+                        rob_table[wb_rob_idx_i[i]].value   <= fu_value_wb_i[i]; //### sychenn 11/7 ###/
+                    end
+                end
+                if(rob_store_ready_valid) begin
+                    rob_table[rob_store_ready_idx].ready <= 1'b1;
                 end
             end
         end
-    end
     end
 
 

@@ -216,17 +216,17 @@ module cpu #(
 
     logic       [`LQ_IDX_WIDTH-1:0]lq_snapshot_head_i;
     logic       [`LQ_IDX_WIDTH-1:0]lq_snapshot_tail_i;
-    logic       [`LQ_IDX_WIDTH-1:0]lq_snapshot_count_i;
+    logic       [`LQ_IDX_WIDTH:0]lq_snapshot_count_i;
     logic       [`SQ_IDX_WIDTH-1:0]sq_snapshot_head_i;
     logic       [`SQ_IDX_WIDTH-1:0]sq_snapshot_tail_i;
-    logic       [`SQ_IDX_WIDTH-1:0]sq_snapshot_count_i;
+    logic       [`SQ_IDX_WIDTH:0]sq_snapshot_count_i;
 
     logic       [`LQ_IDX_WIDTH-1:0]lq_snapshot_head_o;
     logic       [`LQ_IDX_WIDTH-1:0]lq_snapshot_tail_o;
-    logic       [`LQ_IDX_WIDTH-1:0]lq_snapshot_count_o;
+    logic       [`LQ_IDX_WIDTH:0]lq_snapshot_count_o;
     logic       [`SQ_IDX_WIDTH-1:0]sq_snapshot_head_o;
     logic       [`SQ_IDX_WIDTH-1:0]sq_snapshot_tail_o;
-    logic       [`SQ_IDX_WIDTH-1:0]sq_snapshot_count_o;
+    logic       [`SQ_IDX_WIDTH:0]sq_snapshot_count_o;
 
     logic       [`LQ_IDX_WIDTH-1:0]lq_snapshot_head_reg;
     logic       [`LQ_IDX_WIDTH-1:0]lq_snapshot_tail_reg;
@@ -241,7 +241,10 @@ module cpu #(
     
     logic [$clog2(`LQ_SIZE+1)-1:0] lq_count;
     logic [$clog2(`SQ_SIZE+1)-1:0] st_count;
-    logic [`DISPATCH_WIDTH-1:0] disp_rob_valid_lsq;    
+    logic [`DISPATCH_WIDTH-1:0] disp_rob_valid_lsq;   
+
+    ROB_IDX rob_store_ready_idx;
+    logic   rob_store_ready_valid; 
 
 // D-Cache
     ADDR Dcache_addr_0;
@@ -446,7 +449,8 @@ module cpu #(
     // to stall until the previous instruction has completed.
     // For project 3, start by assigning if_valid to always be 1`
     logic stall_dcache;
-    assign stall_dcache = (Dmem_command != MEM_NONE) && (Imem_command != MEM_NONE);
+    assign stall_dcache = 0;
+    // assign stall_dcache = (Dmem_command != MEM_NONE) && (Imem_command != MEM_NONE);
     
     logic if_valid, if_flush,correct_predict;
     logic pred_valid_i, pred_taken_i;
@@ -486,6 +490,7 @@ module cpu #(
         if(!reset) begin
             $display("|is_branch=%b | has_branch_in_pipline=%b | branch_stall=%b | branch_resolve=%b", |is_branch, has_branch_in_pipline, branch_stall, branch_resolve);
             $display("branch_stall_reg=%b |branch_stall_next=%b",branch_stall_reg,branch_stall_next);
+            $display("stall_disp=%b",stall_dispatch);
         end
     end
 
@@ -560,6 +565,8 @@ module cpu #(
     //                  I-cache                     //
     //                                              //
     //////////////////////////////////////////////////
+    MEM_TAG mem2proc_data_tag_icache;
+
     icache icache_0(
         .clock (clock),
         .reset (reset),
@@ -568,7 +575,7 @@ module cpu #(
         // From memory
         .Imem2proc_transaction_tag(mem2proc_transaction_tag_icache), 
         .Imem2proc_data(mem2proc_data),
-        .Imem2proc_data_tag(mem2proc_data_tag),
+        .Imem2proc_data_tag(mem2proc_data_tag_icache),
 
         // From fetch stage (the insturction address)
         .proc2Icache_addr(proc2Icache_addr),
@@ -739,7 +746,7 @@ module cpu #(
         .disp_rd_new_prf_o(disp_rd_new_prf),
         .disp_rd_old_prf_o(disp_rd_old_prf),
 
-        .stall_dispatch(stall_dispatch),
+        .branch_stall(branch_stall),
 
         .disp_packet_o(disp_packet),
         .stall(stall),
@@ -819,7 +826,10 @@ module cpu #(
 
         //to lsq
         .retire_rob_idx_o(retire_rob_idx),
-        .rob_head_o(rob_head)
+        .rob_head_o(rob_head),
+
+        .rob_store_ready_idx(rob_store_ready_idx),
+        .rob_store_ready_valid(rob_store_ready_valid)
     );
 
     //////////////////////////////////////////////////
@@ -1412,8 +1422,8 @@ lsq_top #(
     .reset                   (reset),
 
     // Dispatch Stage (ok)
-    .dispatch_valid          (disp_rob_valid_lsq), 
-    .dispatch_is_store       (dispatch_is_store),
+    .dispatch_valid          (disp_rob_valid_lsq[0]), 
+    .dispatch_is_store       (dispatch_is_store[0]),
     .dispatch_size           (dispatch_size),
     .dispatch_rob_idx        (disp_rob_idx_o), 
     .disp_rd_new_prf_i  (disp_rd_new_prf),
@@ -1495,7 +1505,10 @@ lsq_top #(
     .lq_snapshot_data_i      (lq_snapshot_data_i),
     .lq_snapshot_head_i      (lq_snapshot_head_i),
     .lq_snapshot_tail_i      (lq_snapshot_tail_i),
-    .lq_snapshot_count_i     (lq_snapshot_count_i)
+    .lq_snapshot_count_i     (lq_snapshot_count_i),
+
+    .rob_store_ready_idx(rob_store_ready_idx),
+    .rob_store_ready_valid(rob_store_ready_valid)
 );
 
 
@@ -1706,7 +1719,7 @@ dcache dcache_0 (
         .free_reg_o(free_phys),
         .retire_cnt_o(retire_cnt)
     );
-
+assign mem2proc_data_tag_icache = (Dmem_command == MEM_LOAD) ? '0 : mem2proc_data_tag;
 //     // New address if:
 //     // 1) Previous instruction wasn't a load
 //     // 2) Load address changed
