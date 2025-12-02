@@ -52,8 +52,8 @@
 `define CDB_SZ `N
 `define INST_W 16
 `define ADDR_WIDTH 32
-`define PHYS_REGS 64
-`define ARCH_REGS 32
+`define PHYS_REGS 1024
+`define ARCH_REGS 512
 `define XLEN 32
 `define OPCODE_N 7
 

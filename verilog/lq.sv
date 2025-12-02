@@ -18,7 +18,7 @@ module lq #(
 
     //###sychenn : addr arrived from fu 
     input  logic       addr_valid,//todo: used as addr valid signal
-    input  MEM_BLOCK   data,  //todo: unused (data should not come from FU)
+    input  DATA        data,  //todo: unused (data should not come from FU)
     input  ROB_IDX     addr_rob_idx, //todo: this is addr rob_idx
     input ADDR          enq_addr, // this is addr from FU
 
@@ -72,10 +72,10 @@ module lq #(
     output logic                     checkpoint_valid_o,
     output lq_entry_t                snapshot_data_o[LQ_SIZE-1:0],
     output logic   [IDX_WIDTH-1 : 0] snapshot_head_o , snapshot_tail_o,
-    output logic   [$clog2(LQ_SIZE)-1:0] snapshot_count_o,
+    output logic   [$clog2(LQ_SIZE+1)-1:0] snapshot_count_o,
     input lq_entry_t                 snapshot_data_i[LQ_SIZE-1:0],
     input logic    [IDX_WIDTH-1 : 0] snapshot_head_i , snapshot_tail_i,
-    input logic   [$clog2(LQ_SIZE)-1:0] snapshot_count_i,
+    input logic   [$clog2(LQ_SIZE+1)-1:0] snapshot_count_i,
 
     input sq_entry_t sq_view_i [SQ_SIZE-1:0],
     input logic [IDX_WIDTH-1 : 0] sq_view_head, sq_view_tail,
@@ -246,6 +246,7 @@ module lq #(
             int k;
             int i;
             int start;
+            int checked;
             fwd_found = 1'b0;
             // pending_found = 1'b0;
             fwd_data = '0;
@@ -253,15 +254,16 @@ module lq #(
             sq_forward_valid = '0;
             // $display("[DEBUG-ALWAYS STORE QUEUE] Count=%0d, Tail=%0d, Head=%0d", count, tail, head);
             if(sq_view_count != 0)begin
-                int checked = 0;
+                checked = 0;
                 // start at tail - 1 (most recent store) and go backwards up to count entries
                 start  = (sq_view_tail == 0) ? (SQ_SIZE - 1) : (sq_view_tail - 1);
+                $display("[DEBUG-FWD] @Time : %t , sq_view_count: %d" , $time, sq_view_count);
                 // idx = tail - 1;
                 for(k = 0 ; k < SQ_SIZE ; k++)begin
                     // int i = (idx - k) % SQ_SIZE;
                     i = start - k;
                     if(i<0)i = i + SQ_SIZE;
-                    $display("[DEBUG-FWD] Checking indx = %0d, sq[%0d] = %0d , k=%0d , start = %0d" , i , i , sq_view_i[i].valid , k , start);
+                    $display("[DEBUG-FWD] checked: %d ,Checking indx = %0d, sq[%0d] = %0d , k=%0d , start = %0d" ,checked, i , i , sq_view_i[i].valid , k , start);
                     if(sq_view_i[i].valid)begin
                         $display("[DEBUG-FWD]@Time %t Checking idx=%0d. SQ_Addr=%h, SQ_Size=%0d | Load_Addr=%h, Load_Size=%0d", 
                                 $time, i, sq_view_i[i].addr, sq_view_i[i].size, lq[query_idx].addr, lq[query_idx].addr);
@@ -287,14 +289,17 @@ module lq #(
                         break;
                     end
                 end
-                if(!fwd_found)begin
-                    dc_req_valid = 1'b1;
-                    dc_req_addr  = sq_query_addr; // Same as lq[query_idx].addr
-                    dc_req_size  = sq_query_size;
-                    dc_req_tag   = query_idx;
-                    dc_rob_idx = rob_idx_to_dcache;
-                    $display("dc_req_valid: %0b , dc_req_addr: %0h ,dc_req_size: %0d, dc_req_tag:%0d " ,dc_req_valid,dc_req_addr,dc_req_size, dc_req_tag);
-                end
+            end else begin
+                fwd_found = 1'b0;
+            end
+
+            if(!fwd_found)begin
+                dc_req_valid = 1'b1;
+                dc_req_addr  = sq_query_addr; // Same as lq[query_idx].addr
+                dc_req_size  = sq_query_size;
+                dc_req_tag   = query_idx;
+                dc_rob_idx = rob_idx_to_dcache;
+                $display("[LQ] dc_req_valid: %0b , dc_req_addr: %0h ,dc_req_size: %0d, dc_req_tag:%0d " ,dc_req_valid,dc_req_addr,dc_req_size, dc_req_tag);
             end
         end
 

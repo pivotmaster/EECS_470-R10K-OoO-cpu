@@ -25,7 +25,7 @@ module lsq_top #(
     // 2. Execution Stage (Store Data 來自 ALU/RegFile)
     // =====================================================
     input  logic       sq_data_valid,  // resp_o.valid
-    input  MEM_BLOCK   sq_data, //resp_o.sw_data
+    input  DATA        sq_data, //resp_o.sw_data
     input  ROB_IDX     sq_data_rob_idx, // resp_o.rob_idx
     input  ADDR        sq_data_addr,  //resp_o.value 
 
@@ -108,7 +108,11 @@ module lsq_top #(
     // Dispatch ->lsq
     input logic [DISPATCH_WIDTH-1:0][$clog2(`PHYS_REGS)-1:0]disp_rd_new_prf_i,
     // lsq -> complete stage
-    output logic [$clog2(`PHYS_REGS)-1:0] wb_disp_rd_new_prf_o
+    output logic [$clog2(`PHYS_REGS)-1:0] wb_disp_rd_new_prf_o,
+
+    ///////
+    output ROB_IDX rob_store_ready_idx,
+    output logic   rob_store_ready_valid
 );
 
     // =====================================================
@@ -177,7 +181,7 @@ module lsq_top #(
     // todo: (bug) if two port both sent load data back, will discard port 1 data 
     ROB_IDX lq_data_rob_idx; // data rob idx from dcache to lq
     assign lq_data_rob_idx =(Dcache_valid_out_0) ? Dcache_data_rob_idx_0 : Dcache_data_rob_idx_1;
-
+    logic  [LQ_IDX_WIDTH-1:0]Dcache_data_tag_0;
     assign sq_enq_valid = (new_dispatch &&  dispatch_is_store);
     assign lq_enq_valid = (new_dispatch && !dispatch_is_store);
 
@@ -244,7 +248,10 @@ module lsq_top #(
         .snapshot_tail_i(sq_snapshot_tail_i),
         .snapshot_count_i(sq_snapshot_count_i),
 
-        .free_num_slot(sq_free_num_slot)
+        .free_num_slot(sq_free_num_slot),
+
+        .rob_store_ready_idx(rob_store_ready_idx),
+        .rob_store_ready_valid(rob_store_ready_valid)
     );
 
     // 2. Load Queue Instance

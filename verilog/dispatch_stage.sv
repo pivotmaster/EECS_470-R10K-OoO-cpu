@@ -95,7 +95,7 @@ module dispatch_stage #(
     //output  logic                          btb_update_valid_o,
     //output  logic      [ADDR_WIDTH-1:0]    btb_update_pc_o,
     //output  logic      [ADDR_WIDTH-1:0]    btb_update_target_o,
-    input stall_dispatch, // from cpu 
+    input branch_stall, // from cpu 
     //packet
     output DISP_PACKET [DISPATCH_WIDTH-1:0] disp_packet_o,
     output logic stall,
@@ -191,7 +191,7 @@ module dispatch_stage #(
         src2_arch_o = '0;
         dest_arch_o = '0;
 
-        if (!stall_dispatch) begin
+        if (!branch_stall && !stall) begin
           for (int i = 0; i < DISPATCH_WIDTH; i++) begin
               if (if_packet_i[i].valid) begin //### Account for icache miss (valid = 0)
                 // Dispatch -> Map Table
@@ -248,9 +248,9 @@ module dispatch_stage #(
           end
         end else begin
           for (int i = 0; i < DISPATCH_WIDTH; i++) begin
-            src1_arch_o[i]     = src1_arch_o[i];
-            src2_arch_o[i]     = src2_arch_o[i];
-            dest_arch_o[i]     = dest_arch_o[i];
+            src1_arch_o[i]     = '0;
+            src2_arch_o[i]     = '0;
+            dest_arch_o[i]     = '0;
             rename_valid_o[i]  = 0;   
             alloc_req_o[i]     = 0;  
 
@@ -268,10 +268,10 @@ module dispatch_stage #(
             rs_packets_o[i].src2_ready  = 0;
             rs_packets_o[i].disp_packet = '0;
 
-            disp_rd_arch_o[i]     = disp_rd_arch_o[i];
-            disp_rd_old_prf_o[i]  = disp_rd_old_prf_o[i];
-            disp_rd_new_prf_o[i]  = disp_rd_new_prf_o[i];
-            dest_new_prf[i]       = dest_new_prf[i];
+            disp_rd_arch_o[i]     = '0;
+            disp_rd_old_prf_o[i]  = '0;
+            disp_rd_new_prf_o[i]  = '0;
+            dest_new_prf[i]       = '0;
           end
         end
 
