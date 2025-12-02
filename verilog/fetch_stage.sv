@@ -28,7 +28,9 @@ module stage_if #(
     // =========================================================
     //input  logic                           pred_valid_i,     
     //input  logic [$clog2(FETCH_WIDTH)-1:0] pred_lane_i,      // which instruction is branch
-    input  logic                           pred_taken_i,     
+    input  logic                           pred_taken_i,   
+    input logic [`FETCH_WIDTH-1:0] gshare_pred_taken_i,
+    input logic [`FETCH_WIDTH-1:0] bi_pred_taken_i,  
     input  ADDR          pred_target_i,    // predicted target PC Addr
     input  logic [`FETCH_WIDTH-1:0] [`HISTORY_BITS-1:0] history_i,
 
@@ -157,11 +159,14 @@ module stage_if #(
             end
 
             // Packet output
-            assign if_packet_o[k].PC    = this_pc;
-            assign if_packet_o[k].NPC   = this_pc + 32'd4;
+            assign if_packet_o[k].PC = this_pc;
+            assign if_packet_o[k].NPC = this_pc + 32'd4;
+            assign if_packet_o[k].PRED_PC = pred_target_i;
             assign if_packet_o[k].inst  = this_valid ? this_inst : `NOP;
             assign if_packet_o[k].valid = this_valid;
             assign if_packet_o[k].pred = pred_taken_i;
+            assign if_packet_o[k].gshare_pred = gshare_pred_taken_i[k];
+            assign if_packet_o[k].bi_pred = bi_pred_taken_i[k];
             assign if_packet_o[k].bp_history = history_i[k];
         end
     endgenerate

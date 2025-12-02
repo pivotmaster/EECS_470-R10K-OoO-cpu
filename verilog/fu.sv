@@ -239,16 +239,16 @@ module branch_fu #(
           endcase
     end
   end
-
+  //logic pc_correct;
+  //assign pc_correct = (req_i.disp_packet.PRED_PC == resp_local_o.value);
   // assign ready_o = 1'b1;
-
   always_comb begin
     resp_o.valid     = req_i.valid;
-    resp_o.value     = resp_local_o.value; // alu value
+    resp_o.value     = resp_local_o.value; // alu value //target_pc
     resp_o.dest_prf  = req_i.dest_tag;
     resp_o.rob_idx   = req_i.rob_idx;
     resp_o.exception = 1'b1; // TODO: is branch
-    resp_o.mispred   = (take == req_i.disp_packet.pred) ? 1'b0: 1'b1;
+    resp_o.mispred   = ((take == req_i.disp_packet.pred) && (req_i.disp_packet.PRED_PC == resp_local_o.value)) ? 1'b0: 1'b1;
     resp_o.taken     = take;
     resp_o.is_lw     = 1'b0;
     resp_o.is_sw     = 1'b0;
@@ -294,13 +294,17 @@ module fu #(
     output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0]                    fu_mispred_o,
     output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0]                    fu_taken_o,
     output ADDR [BR_COUNT-1:0] br_pc_o,
-    output logic [BR_COUNT-1:0] [`HISTORY_BITS-1:0] br_history_o
+    output logic [BR_COUNT-1:0] [`HISTORY_BITS-1:0] br_history_o,
+    output logic [BR_COUNT-1:0] gshare_pred_o,
+    output logic [BR_COUNT-1:0] bi_pred_o
 );
 
   always_comb begin
     for (int i = 0; i < BR_COUNT; i++) begin
       br_pc_o = br_req[i].disp_packet.PC;
       br_history_o = br_req[i].disp_packet.bp_history;
+      gshare_pred_o = br_req[i].disp_packet.gshare_pred;
+      bi_pred_o = br_req[i].disp_packet.bi_pred;
     end
   end
 

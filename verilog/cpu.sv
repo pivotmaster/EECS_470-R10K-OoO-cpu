@@ -251,6 +251,8 @@ module cpu #(
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_taken;
     ADDR [`BR_COUNT-1:0] br_pc;
     logic [`BR_COUNT-1:0] [`HISTORY_BITS-1:0] br_history;
+    logic [`BR_COUNT-1:0] gshare_pred;
+    logic [`BR_COUNT-1:0] bi_pred;
 
 //EX_C_REG
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_valid_reg;
@@ -262,6 +264,8 @@ module cpu #(
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_taken_reg;
     ADDR [`BR_COUNT-1:0] br_pc_reg;
     logic [`BR_COUNT-1:0] [`HISTORY_BITS-1:0] br_history_reg;
+    logic [`BR_COUNT-1:0] gshare_pred_reg;
+    logic [`BR_COUNT-1:0]  bi_pred_reg;
 
 
 // Complete-stage
@@ -504,6 +508,8 @@ module cpu #(
     //                  IF-Stage                    //
     //                                              //
     //////////////////////////////////////////////////
+    logic [`FETCH_WIDTH-1:0] bi_pred_taken;
+    logic [`FETCH_WIDTH-1:0] gshare_pred_taken;
 
 
     stage_if #(
@@ -523,7 +529,9 @@ module cpu #(
         // .pred_valid_i(pred_valid_i),     
         // .pred_lane_i(pred_lane_i),     
 
-        .pred_taken_i(pred_taken),     
+        .pred_taken_i(pred_taken),    
+        .gshare_pred_taken_i(gshare_pred_taken),
+        .bi_pred_taken_i(bi_pred_taken),
         .pred_target_i(pred_pc),    
         .history_i(if_history),
 
@@ -583,10 +591,14 @@ module cpu #(
         .ex_branch_pc_i(br_pc_reg),
         .ex_target_pc_i(correct_pc_target),
         .ex_history_i(br_history_reg),
+        .ex_gshare_pred_i(gshare_pred_reg),
+        .ex_bi_pred_i(bi_pred_reg),
         .mispredict_i(if_flush),
 
         .next_pc_o(pred_pc),
         .take_branch(pred_taken),
+        .gshare_pred_taken(gshare_pred_taken),
+        .bi_pred_taken(bi_pred_taken),
         .history_o(if_history)
     );
 
@@ -606,7 +618,10 @@ module cpu #(
                 if_id_reg[i].valid <= `FALSE; //close this valid
                 if_id_reg[i].NPC   <= 0;
                 if_id_reg[i].PC    <= 0;
+                if_id_reg[i].PRED_PC <= 0;
                 if_id_reg[i].pred <= 0;
+                if_id_reg[i].gshare_pred <= 0;
+                if_id_reg[i].bi_pred <= 0;
                 if_id_reg[i].bp_history <= 0;
             end
         end else if (if_id_enable) begin
@@ -614,7 +629,10 @@ module cpu #(
                 if_id_reg[i].inst <= if_packet[i].inst;
                 if_id_reg[i].NPC <= if_packet[i].NPC;
                 if_id_reg[i].PC <= if_packet[i].PC;
+                if_id_reg[i].PRED_PC <= if_packet[i].PRED_PC;
                 if_id_reg[i].pred <= if_packet[i].pred;
+                if_id_reg[i].gshare_pred <= if_packet[i].gshare_pred;
+                if_id_reg[i].bi_pred <= if_packet[i].bi_pred;
                 if_id_reg[i].bp_history <= if_packet[i].bp_history;
                 if(if_packet[i].inst == 0 || !(if_packet[i].valid)) begin
                     if_id_reg[i].valid <= `FALSE;
@@ -1283,7 +1301,9 @@ module cpu #(
         .fu_mispred_o(fu_mispred),
         .fu_taken_o(fu_taken),
         .br_pc_o(br_pc),
-        .br_history_o(br_history)
+        .br_history_o(br_history),
+        .gshare_pred_o(gshare_pred),
+        .bi_pred_o(bi_pred)
     );
 
     // always_ff @(negedge clock) begin
@@ -1311,6 +1331,8 @@ module cpu #(
             fu_taken_reg <= '0;
             br_pc_reg <= '0;
             br_history_reg <= '0;
+            gshare_pred_reg <= '0;
+            bi_pred_reg <= '0;
         end else begin
             fu_valid_reg <= fu_valid;
             fu_value_reg <= fu_value;
@@ -1321,6 +1343,8 @@ module cpu #(
             fu_taken_reg <= fu_taken;
             br_pc_reg <= br_pc;
             br_history_reg <= br_history;
+            gshare_pred_reg <= gshare_pred;
+            bi_pred_reg <= bi_pred;
 
 
             for(int i=0;i<`DISPATCH_WIDTH;i++) begin

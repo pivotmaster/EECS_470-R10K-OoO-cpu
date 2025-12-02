@@ -48,7 +48,7 @@
 `define CDB_SZ `N
 `define INST_W 16
 `define ADDR_WIDTH 32
-`define PHYS_REGS 64
+`define PHYS_REGS 64    //>= ROB+ARG
 `define ARCH_REGS 32
 `define XLEN 32
 `define OPCODE_N 7
@@ -65,8 +65,9 @@
 
 
 //GSHARE parameters
-`define GSHARE_SIZE 4
+`define GSHARE_SIZE 128
 `define HISTORY_BITS $clog2(`GSHARE_SIZE)
+
 
 // number of mult stages (2, 4) (you likely don't need 8)
 
@@ -343,11 +344,14 @@ typedef enum logic [2:0] {
  * Data exchanged from the IF to the ID stage
  */
 typedef struct packed {
-    INST  inst;
-    ADDR  PC;
-    ADDR  NPC; // PC + 4
+    INST inst;
+    ADDR PC;
+    ADDR NPC; // PC + 4
+    ADDR PRED_PC;
     logic valid;
     logic pred;
+    logic gshare_pred;
+    logic bi_pred;
     logic [`HISTORY_BITS-1:0] bp_history;
 } IF_ID_PACKET;
 
@@ -441,6 +445,7 @@ typedef struct packed {
     INST inst; //INST.i.imm
     ADDR PC;
     ADDR NPC; // PC + 4
+    ADDR PRED_PC;
 
     //DATA rs1_value; // reg A value
     //DATA rs2_value; // reg B value
@@ -462,6 +467,8 @@ typedef struct packed {
 
     logic    valid;
     logic    pred;
+    logic   gshare_pred;
+    logic   bi_pred;
     logic [`HISTORY_BITS-1:0] bp_history;
 } DISP_PACKET;
 
@@ -475,7 +482,7 @@ typedef struct packed {
     logic [$clog2(`PHYS_REGS)-1:0]  src2_tag;  // source reg 2
     logic                          src1_ready; // is value of source reg 1 ready?
     logic                          src2_ready; // is value of source reg 2 ready?
-    
+    logic                           br_tag;
     DISP_PACKET                   disp_packet; //decoder_o 
 } rs_entry_t;
 

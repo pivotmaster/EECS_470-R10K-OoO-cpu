@@ -220,7 +220,9 @@ CPU_FILES = verilog/mult.sv \
 		   verilog/BP/gshare.sv \
 		   verilog/BP/ras.sv \
 		   verilog/psel_gen.sv \
-		   verilog/BP/pre_decode.sv
+		   verilog/BP/pre_decode.sv \
+		   verilog/BP/bimodal.sv \
+		   verilog/BP/predictor_selector.sv
 
 
 

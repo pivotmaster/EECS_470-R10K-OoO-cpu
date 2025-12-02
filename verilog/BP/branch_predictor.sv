@@ -16,11 +16,15 @@ module branch_predictor (
     input ADDR [`FETCH_WIDTH-1:0] ex_branch_pc_i,
     input ADDR [`FETCH_WIDTH-1:0] ex_target_pc_i,
     input logic [`FETCH_WIDTH-1:0] [`HISTORY_BITS-1:0] ex_history_i, 
+    input logic [`FETCH_WIDTH-1:0]  ex_gshare_pred_i,
+    input logic [`FETCH_WIDTH-1:0] ex_bi_pred_i,
     input logic [`FETCH_WIDTH-1:0] mispredict_i,
 
     // output
     output ADDR [`FETCH_WIDTH-1:0] next_pc_o,
     output logic take_branch, //predicted taken
+    output logic [`FETCH_WIDTH-1:0] gshare_pred_taken, //gshare
+    output logic [`FETCH_WIDTH-1:0] bi_pred_taken, //2-bit predictor output
     output logic [`FETCH_WIDTH-1:0] [`HISTORY_BITS-1:0] history_o //predicted history
 );
     //predecode signals
@@ -37,8 +41,27 @@ module branch_predictor (
     ADDR [`FETCH_WIDTH-1:0] pred_pc;
 
     //Gshare signals
-    logic [`FETCH_WIDTH-1:0] pred_taken;
+    //logic [`FETCH_WIDTH-1:0] gshare_pred_taken;
     logic [`FETCH_WIDTH-1:0] branch_req;
+    logic [`FETCH_WIDTH-1:0] gshare_mispred;
+
+    //Bimodol signals
+    //logic [`FETCH_WIDTH-1:0] bi_pred_taken;
+
+    //
+    logic [`FETCH_WIDTH-1:0] gshare_correct, bimodal_correct;
+    logic [`FETCH_WIDTH-1:0] pred_taken;
+    logic pred_mux; // 1 -> gshare, 0 -> 2-bit
+
+    always_comb begin
+        for (int i = 0; i < `FETCH_WIDTH; i++) begin
+            gshare_correct[i] = (ex_gshare_pred_i[i] == ex_branch_taken_i[i]) ? 1'b1 : 1'b0;
+            gshare_mispred[i] = !gshare_correct[i];
+            bimodal_correct[i] = (ex_bi_pred_i[i] == ex_branch_taken_i[i]) ? 1'b1 : 1'b0;
+        end
+    end
+
+    assign pred_taken = pred_mux ? gshare_pred_taken : bi_pred_taken;
 
     always_comb begin
         for (int i = 0; i < `FETCH_WIDTH; i++) begin
@@ -135,10 +158,31 @@ module branch_predictor (
         .ex_branch_taken_i(ex_branch_taken_i),
         .ex_branch_pc_i(ex_branch_pc_i),
         .ex_history_i(ex_history_i),
-        .mispredict_i(mispredict_i),
+        .mispredict_i(gshare_mispred),
 
-        .predict_o(pred_taken),
+        .predict_o(gshare_pred_taken),
         .history_o(history_o)
+    );
+
+    bimodal bimodal_0(
+        .clock(clock),
+        .reset(reset),
+        .if_pc_i(if_pc_i),
+        .ex_branch_pc_i(ex_branch_pc_i),
+        .enable(ex_is_branch_i),
+        .taken(ex_branch_taken_i),
+        .prediction(bi_pred_taken)
+    );
+
+    predictor_selector predictor_selector_0(
+        .clock(clock), 
+        .reset(reset),
+        .if_pc_i(if_pc_i),
+        .ex_branch_pc_i(ex_branch_pc_i),
+        .enable(ex_is_branch_i),
+        .p1_correct(gshare_correct), 
+        .p2_correct(bimodal_correct),
+        .use_p1(pred_mux)
     );
 
     ras ras_0 (
