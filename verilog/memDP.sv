@@ -114,14 +114,14 @@ end
     endgenerate
 `endif
 
-`ifndef SYNTHESIS
-always_ff @(negedge clock) begin
-    if (!reset) begin
-        for (int a = 0; a < DEPTH; a++) begin
-            $display("[memDP %m] memData[%0d] = %h", a, memData[a]);
-        end
-    end
-end
-`endif
+// `ifndef SYNTHESIS
+// always_ff @(negedge clock) begin
+//     if (!reset) begin
+//         for (int a = 0; a < DEPTH; a++) begin
+//             $display("[memDP %m] memData[%0d] = %h", a, memData[a]);
+//         end
+//     end
+// end
+// `endif
 
 endmodule

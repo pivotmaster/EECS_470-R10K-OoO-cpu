@@ -318,8 +318,8 @@ module RS #(
             cycle_count <= 0;
         end else begin
             cycle_count <= cycle_count + 1;
-            dump_rs_state(cycle_count);
-            show_rs_output();   
+            // dump_rs_state(cycle_count);
+            // show_rs_output();   
         end
     end
 

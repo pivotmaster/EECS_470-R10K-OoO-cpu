@@ -125,6 +125,8 @@ module cpu #(
 
 
 // Free list
+    logic [`DISPATCH_WIDTH-1:0][$clog2(`PHYS_REGS)-1:0] flush2free_list_new_prf;
+    logic [`DISPATCH_WIDTH-1:0] flush2free_list_valid;
     logic [`DISPATCH_WIDTH-1:0][$clog2(`PHYS_REGS)-1:0] alloc_phys; // allocated PRF numbers
     logic [`DISPATCH_WIDTH-1:0] alloc_valid; // whether each alloc succeed
     logic free_full;      // true if no free regs left
@@ -819,6 +821,8 @@ module cpu #(
         .mispredict_i(if_flush),
         .mispredict_rob_idx_i(wb_rob_idx[`FU_NUM - `FU_BRANCH]),
          //### TODO: for debug only (sychenn 11/6) ###//
+        .flush2free_list_new_prf_o(flush2free_list_new_prf),
+        .flush2free_list_valid_o(flush2free_list_valid),
         .flush_i(flush_rob_debug),
         .flush_free_regs_valid(flush_free_regs_valid),
         .flush_free_regs(flush_free_regs),
@@ -970,9 +974,11 @@ module cpu #(
         //### TODO: for debug only (sychenn 11/6) ###//
         .flush_i(flush_rob_debug),
         .flush_free_regs_valid(flush_free_regs_valid),
-        .flush_free_regs(flush_free_regs)
+        .flush_free_regs(flush_free_regs),
 
-
+        //rob
+        .flush2free_list_new_prf_i(flush2free_list_new_prf),
+        .flush2free_list_valid_i(flush2free_list_valid)
     );
 
     //////////////////////////////////////////////////

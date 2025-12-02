@@ -399,7 +399,7 @@ module lsq_top #(
     always_ff @(posedge clock) begin
         if (!reset) begin
             // Uncomment the line below to enable continuous debugging
-            show_lsq_status();
+            //show_lsq_status();
             
             // Or add specific conditions to trigger the display, for example:
             // if (dispatch_valid || commit_valid || wb_valid || Dcache_valid_out_0 || Dcache_valid_out_1) begin

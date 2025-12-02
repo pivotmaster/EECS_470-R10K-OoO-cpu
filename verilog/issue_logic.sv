@@ -300,7 +300,7 @@ endtask
       
       //show_issue_packets(cycle_count);
       //test_issue_selector(cycle_count);
-      show_issue_output();
+      //show_issue_output();
       
     
   end

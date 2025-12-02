@@ -257,24 +257,24 @@ module lq #(
                 checked = 0;
                 // start at tail - 1 (most recent store) and go backwards up to count entries
                 start  = (sq_view_tail == 0) ? (SQ_SIZE - 1) : (sq_view_tail - 1);
-                $display("[DEBUG-FWD] @Time : %t , sq_view_count: %d" , $time, sq_view_count);
+                // $display("[DEBUG-FWD] @Time : %t , sq_view_count: %d" , $time, sq_view_count);
                 // idx = tail - 1;
                 for(k = 0 ; k < SQ_SIZE ; k++)begin
                     // int i = (idx - k) % SQ_SIZE;
                     i = start - k;
                     if(i<0)i = i + SQ_SIZE;
-                    $display("[DEBUG-FWD] checked: %d ,Checking indx = %0d, sq[%0d] = %0d , k=%0d , start = %0d" ,checked, i , i , sq_view_i[i].valid , k , start);
+                    // $display("[DEBUG-FWD] checked: %d ,Checking indx = %0d, sq[%0d] = %0d , k=%0d , start = %0d" ,checked, i , i , sq_view_i[i].valid , k , start);
                     if(sq_view_i[i].valid)begin
-                        $display("[DEBUG-FWD]@Time %t Checking idx=%0d. SQ_Addr=%h, SQ_Size=%0d | Load_Addr=%h, Load_Size=%0d", 
-                                $time, i, sq_view_i[i].addr, sq_view_i[i].size, lq[query_idx].addr, lq[query_idx].addr);
+                        // $display("[DEBUG-FWD]@Time %t Checking idx=%0d. SQ_Addr=%h, SQ_Size=%0d | Load_Addr=%h, Load_Size=%0d", 
+                                // $time, i, sq_view_i[i].addr, sq_view_i[i].size, lq[query_idx].addr, lq[query_idx].addr);
                         if(addr_overlap(sq_view_i[i].addr , sq_view_i[i].size , lq[query_idx].addr , lq[query_idx].size))begin
-                            $display("[RTL-SQ-FWD] Overlap at idx=%0d. DataValid=%b. Data=%h", i, sq_view_i[i].data_valid, sq_view_i[i].data);
+                            // $display("[RTL-SQ-FWD] Overlap at idx=%0d. DataValid=%b. Data=%h", i, sq_view_i[i].data_valid, sq_view_i[i].data);
                             if(sq_view_i[i].data_valid)begin
                                 fwd_found = 1'b1;
                                 // pending_found = 1'b0;
                                 fwd_data = sq_view_i[i].data;
                                 fwd_addr = sq_view_i[i].addr;
-                                $display("[RTL-SQ-FWD]found = %0b ", fwd_found);
+                                // $display("[RTL-SQ-FWD]found = %0b ", fwd_found);
                                 sq_forward_valid = 1'b1;
                                 break;
                             end else begin
@@ -299,7 +299,7 @@ module lq #(
                 dc_req_size  = sq_query_size;
                 dc_req_tag   = query_idx;
                 dc_rob_idx = rob_idx_to_dcache;
-                $display("[LQ] dc_req_valid: %0b , dc_req_addr: %0h ,dc_req_size: %0d, dc_req_tag:%0d " ,dc_req_valid,dc_req_addr,dc_req_size, dc_req_tag);
+                // $display("[LQ] dc_req_valid: %0b , dc_req_addr: %0h ,dc_req_size: %0d, dc_req_tag:%0d " ,dc_req_valid,dc_req_addr,dc_req_size, dc_req_tag);
             end
         end
 
@@ -383,7 +383,7 @@ module lq #(
                 //### sychenn
                 // store addr arrived from fu (match by rob_idx)
                 if (addr_valid)begin 
-                    $display("addr_valid=%b | addr_rob_idx=%d | enq_addr=%h",addr_valid, addr_rob_idx, enq_addr);
+                    // $display("addr_valid=%b | addr_rob_idx=%d | enq_addr=%h",addr_valid, addr_rob_idx, enq_addr);
                     for(int i = 0 ; i < LQ_SIZE ; i++)begin // simple linear search
                         if(lq[i].valid && (lq[i].rob_idx == addr_rob_idx))begin
                             // $display("aaaaa addr_rob_idx: %0d", addr_rob_idx);
@@ -404,7 +404,7 @@ module lq #(
                             wb_data    <= dc_load_data.word_level[0];
                             wb_valid   <= 1'b1;
                             wb_disp_rd_new_prf_o <= lq[j].disp_rd_new_prf;
-                            $display("wb_data=%h|%h",dc_load_data.word_level, dc_load_data.word_level[0]);
+                            // $display("wb_data=%h|%h",dc_load_data.word_level, dc_load_data.word_level[0]);
                             break;
                         end
                     end
@@ -416,7 +416,7 @@ module lq #(
                 // If we queried SQ and it says "Hit!", take the data directly
                 else if(wb_from_fwd) begin
                     // 直接寫入剛剛發起查詢的那個 Index (query_idx)
-                    $display("[sq_forwarding]: fwd_data: %0h", fwd_data);
+                    // $display("[sq_forwarding]: fwd_data: %0h", fwd_data);
                     lq[query_idx].data <= fwd_data;
                     lq[query_idx].data_valid <= 1'b1;
                     // 不需要 set issued, 因為資料已經拿到了
@@ -471,7 +471,7 @@ module lq #(
                         // count <= count - 1'b1;
                         
                         // 在 Commit 時送出 Writeback (配合你的 Testbench 預期)
-                        $display("[DEBUG-ALWAYS LOAD QUEUE] lq[head].valid = %0b", lq[head].valid);
+                        // $display("[DEBUG-ALWAYS LOAD QUEUE] lq[head].valid = %0b", lq[head].valid);
                         // if (lq[head].data_valid) begin
                         //     wb_valid <= 1'b1;
                         //     //  wb_rob_idx <= lq[head].rob_idx;
@@ -607,7 +607,7 @@ module lq #(
 
   always_ff @(posedge clock) begin
     if (!reset) begin
-      show_lq_status();
+    //   show_lq_status();
     end
   end
     // initial begin

@@ -277,6 +277,8 @@ module rob #(
 
     //### TODO: for debug only (sychenn 11/6) ###
     //  to free list
+    output logic [DISPATCH_WIDTH-1:0][$clog2(PHYS_REGS)-1:0] flush2free_list_new_prf_o,
+    output logic [DISPATCH_WIDTH-1:0] flush2free_list_valid_o,
     output logic flush_i,
     output logic [ROB_DEPTH-1:0] flush_free_regs_valid,
     output logic [(PHYS_REGS)-1:0] flush_free_regs,
@@ -475,29 +477,37 @@ module rob #(
         //################## (sychenn 11/6) ######################
         end else begin  
             if (mispredict_i) begin
-                    // Flush to tail
-                    if (mispredict_i) begin
-                        for (int j = 0; j < ROB_DEPTH; j++) begin
-                            if (flushed_mask[j]) begin
-                                rob_table[j].valid <= 1'b0;
-                                rob_table[j].ready <= 1'b0;
-                            end
+                // Flush to tail
+                if (mispredict_i) begin
+                    for (int j = 0; j < ROB_DEPTH; j++) begin
+                        if (flushed_mask[j]) begin
+                            rob_table[j].valid <= 1'b0;
+                            rob_table[j].ready <= 1'b0;
                         end
                     end
-                    // update tail and count
-                    tail  <= (mispredict_rob_idx_i+1) % ROB_DEPTH;
-                    count <= count - flush_count;
-                    
+                end
+                // update tail and count
+                tail  <= (mispredict_rob_idx_i+1) % ROB_DEPTH;
+                count <= count - flush_count;
+                
 
-                    // stop commit
-                    for (int i = 0; i < COMMIT_WIDTH; i++) begin
-                        commit_valid_o[i]   <= 1'b0;
-                        commit_old_prf_o[i] <= '0;
-                    end
+                // stop commit
+                for (int i = 0; i < COMMIT_WIDTH; i++) begin
+                    commit_valid_o[i]   <= 1'b0;
+                    commit_old_prf_o[i] <= '0;
+                end
+                for (int i = 0; i < DISPATCH_WIDTH; i++) begin
+                    flush2free_list_valid_o[i] <= disp_rd_wen_i[i];
+                    flush2free_list_new_prf_o[i] <= disp_rd_new_prf_i[i];
+                end
 
             //################## (sychenn 11/6) ######################
             end else begin
                 flush_o <= 1'b0; // default
+                for (int i = 0; i < DISPATCH_WIDTH; i++) begin
+                    flush2free_list_valid_o[i] <= '0;
+                    flush2free_list_new_prf_o[i] <= '0;
+                end
 
                 // ==== Dispatch (allocate new entries) ====
                 for (int i = 0; i < DISPATCH_WIDTH; i++) begin

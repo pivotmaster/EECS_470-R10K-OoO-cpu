@@ -388,7 +388,7 @@ module sq #(
 
   always_ff @(posedge clock) begin
     if (!reset) begin
-      show_sq_status();
+      //show_sq_status();
         if(sq[0].valid)begin
           // $display("aaaa [DEBUG-FWD]@Time %t Checking idx=%0d. SQ_Addr=%h, SQ_Size=%0d | Load_Addr=%h, Load_Size=%0d | overlap=%b", 
           //          $time, 0, sq[0].addr, sq[0].size, load_addr, load_size, addr_overlap(sq[0].addr , sq[0].size , load_addr , load_size));
