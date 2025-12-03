@@ -120,7 +120,7 @@ logic [DISPATCH_WIDTH-1:0] disp_rd_wen_o;
     always_comb begin
         for (int i = 0; i < DISPATCH_WIDTH; i++) begin
           //### TODO: Fetch width need to be smaller then dispatch width ###//
-            is_branch_o[i] = if_packet_i[i] && (rs_packets_o[i].fu_type == FU_BRANCH);
+            is_branch_o[i] = if_packet_i[i].valid && (disp_packet_o[i].fu_type == FU_BRANCH);
         end
     end
 
@@ -200,6 +200,11 @@ logic [DISPATCH_WIDTH-1:0] disp_rd_wen_o;
         src2_arch_o = '0;
         dest_arch_o = '0;
 
+        dispatch_valid = '0;
+        dispatch_is_store = '0;
+        dispatch_size = '0;
+        disp_rob_idx_o = '0;
+
         if (!branch_stall && !stall) begin
           for (int i = 0; i < DISPATCH_WIDTH; i++) begin
               if (if_packet_i[i].valid) begin //### Account for icache miss (valid = 0)
@@ -255,35 +260,7 @@ logic [DISPATCH_WIDTH-1:0] disp_rd_wen_o;
                 end 
               end
           end
-        end else begin
-          for (int i = 0; i < DISPATCH_WIDTH; i++) begin
-            src1_arch_o[i]     = '0;
-            src2_arch_o[i]     = '0;
-            dest_arch_o[i]     = '0;
-            rename_valid_o[i]  = 0;   
-            alloc_req_o[i]     = 0;  
-
-            disp_rs_valid_o[i] = 0;
-            disp_rob_valid_o[i] = 0;
-
-            rs_packets_o[i].valid       = 0;
-            rs_packets_o[i].fu_type     = 2'b00;
-            rs_packets_o[i].rob_idx     = '0;
-            rs_packets_o[i].dest_arch_reg = '0;
-            rs_packets_o[i].dest_tag    = '0;
-            rs_packets_o[i].src1_tag    = '0;
-            rs_packets_o[i].src2_tag    = '0;
-            rs_packets_o[i].src1_ready  = 0;
-            rs_packets_o[i].src2_ready  = 0;
-            rs_packets_o[i].disp_packet = '0;
-
-            disp_rd_arch_o[i]     = '0;
-            disp_rd_old_prf_o[i]  = '0;
-            disp_rd_new_prf_o[i]  = '0;
-            dest_new_prf[i]       = '0;
-          end
-        end
-
+        end 
       end
 
 /*
