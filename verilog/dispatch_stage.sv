@@ -120,7 +120,7 @@ logic [DISPATCH_WIDTH-1:0] disp_rd_wen_o;
     always_comb begin
         for (int i = 0; i < DISPATCH_WIDTH; i++) begin
           //### TODO: Fetch width need to be smaller then dispatch width ###//
-            is_branch_o[i] = if_packet_i[i].valid && (disp_packet_o[i].fu_type == FU_BRANCH);
+            is_branch_o[i] = disp_packet_o[i].valid && (disp_packet_o[i].cond_branch || disp_packet_o[i].uncond_branch);
         end
     end
 
@@ -230,9 +230,9 @@ logic [DISPATCH_WIDTH-1:0] disp_rd_wen_o;
                     rs_packets_o[i].dest_tag = new_reg_i[i];//from free list
 
                     rs_packets_o[i].src1_tag = src1_phys_i[i];  // physical tag for rs1
-                    rs_packets_o[i].src2_tag = src2_phys_i[i];  // physical tag for rs2
+                    rs_packets_o[i].src2_tag = (disp_packet_o[i].opb_select == 3'h0) ? src2_phys_i[i] : '0;  // physical tag for rs2
                     rs_packets_o[i].src1_ready = src1_ready_i[i]; // whether rs1 is ready (+)
-                    rs_packets_o[i].src2_ready = src2_ready_i[i];
+                    rs_packets_o[i].src2_ready = (disp_packet_o[i].opb_select == 3'h0) ? src2_ready_i[i] : 1; // If is IMM ALWAYS READY
                     rs_packets_o[i].disp_packet = disp_packet_o[i];
 
                     // To ROB

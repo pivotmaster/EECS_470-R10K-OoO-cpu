@@ -167,7 +167,7 @@ module map_table#(
             if (snapshot_restore_valid_i) begin
                 for(int i =0 ; i < ARCH_REGS ; i++)begin
                     table_reg[i].phys <= snapshot_data_i[i].phys;
-                    // table_reg[i].valid <= snapshot_data_i[i].valid;
+                    table_reg[i].valid <= snapshot_data_i[i].valid;
                 end
             end else begin
                 for(int i =0 ; i < DISPATCH_WIDTH ; i++)begin
