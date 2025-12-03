@@ -241,7 +241,7 @@ module lsq_top #(
         .checkpoint_valid_o(sq_checkpoint_valid_o),
         .snapshot_data_o(sq_internal_state),
         .snapshot_head_o(sq_view_head),
-        .snapshot_tail_o(sq_view_tail),
+        .snapshot_tail_o(sq_view_tail), // this is tail for snapshot
         .snapshot_count_o(sq_view_count),
         .snapshot_data_i(sq_snapshot_data_i),
         .snapshot_head_i(sq_snapshot_head_i),

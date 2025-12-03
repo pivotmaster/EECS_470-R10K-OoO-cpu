@@ -63,6 +63,11 @@ loop:	addi	x5,	x5,	1 #88	58
     srli	x14,	x2,	16 #140	8c
     addi	x1,	x1,	16 #144	90
     bne	x6,	x0,	loop #148	94
+    addi	x4,	x5,	16 #144	90
+    addi	x5,	x1,	16 #144	90
+    addi	x6,	x5,	16 #144	90
+    mul	x3,	x13,	x3 #120	78
+    mul	x4,	x13,	x3 #120	78
     wfi
     wfi
     wfi

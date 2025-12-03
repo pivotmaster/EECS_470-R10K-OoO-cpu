@@ -251,7 +251,7 @@ B32:	slli	x21,	x2,	0 #
 
     wfi
     wfi
-B33:	slli	x21,	x2,	1 #
+B33:	slli	x21,	x2,	1 # 
     or	x30,	x21,	x30 #
     beq	x2,	x0,	bad #
     j   B2

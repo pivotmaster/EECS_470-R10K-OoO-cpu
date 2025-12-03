@@ -205,7 +205,7 @@ module cpu #(
     map_entry_t      snapshot_data_i [`ARCH_REGS-1:0];
     map_entry_t       snapshot_data_o [`ARCH_REGS-1:0] ;
     map_entry_t       snapshot_reg [`ARCH_REGS-1:0];
-    logic checkpoint_valid;//### 11/10 sychenn ###//
+    logic snapshot_valid;//### 11/10 sychenn ###//
     logic has_snapshot; // guard restore until a snapshot is captured
 
 // lsq
@@ -898,53 +898,60 @@ module cpu #(
         .disp_arch_i(dest_arch),
         .disp_new_phys_i(dest_new_prf),
         .disp_old_phys_o(disp_old_phys),
-        //###
 
-        .wb_valid_i(cdb_valid_mp),//
-        .wb_phys_i(cdb_phy_tag_mp),//
+        .wb_valid_i(cdb_valid_mp),
+        .wb_phys_i(cdb_phy_tag_mp),
 
         .is_branch_i(is_branch),
-        .flush_i('0),
         .snapshot_restore_valid_i(snapshot_restore_i),
         .snapshot_data_i(snapshot_data_i),
 
         .snapshot_data_o(snapshot_data_o),
-        .checkpoint_valid_o(checkpoint_valid)
+        .snapshot_valid_o(snapshot_valid)
     );
 
 
  //### 11/10 sychenn ###// (for map table restore)
+ // valid bit here means ready
     always_ff @(posedge clock) begin : checkpoint
         if (reset) begin
-            for(int i =0 ; i <`ARCH_REGS ; i++)begin
-                snapshot_data_i[i].phys <= '0;
-                snapshot_data_i[i].valid <= '0;
-            end
-            snapshot_restore_i <= 1'b0;
             has_snapshot       <= 1'b0;
         end else begin
-            // $display("snapshot_reg:");
-            // for(int i =0 ; i < `ARCH_REGS ; i++)begin
-            //     $display("snapshot_reg[%0d] = %d (%d)",i,snapshot_reg[i].phys,snapshot_reg[i].valid);
-            // end
             if (if_flush && has_snapshot) begin
-                for(int i =0 ; i <`ARCH_REGS ; i++)begin
-                    snapshot_data_i[i].phys <= snapshot_reg[i].phys;
-                    snapshot_data_i[i].valid <= snapshot_reg[i].valid;
-                end
-                snapshot_restore_i <= 1'b1;
-                has_snapshot       <= 1'b0; // consume snapshot
-            end else if (checkpoint_valid) begin
+                has_snapshot       <= 1'b0; 
+            end else if (snapshot_valid) begin
                 for(int i =0 ; i < `ARCH_REGS ; i++)begin
                     snapshot_reg[i].phys <= snapshot_data_o[i].phys;
                     snapshot_reg[i].valid <= snapshot_data_o[i].valid;
                 end
                 has_snapshot <= 1'b1;
-            end else begin
-                snapshot_restore_i <= 1'b0;
+            end else if (has_snapshot) begin
+                for(int i =0 ; i < `ARCH_REGS ; i++)begin
+                    // wb ready for the same phy reg in snapshot
+                    if (snapshot_reg[i].phys == snapshot_data_o[i].phys) begin
+                        snapshot_reg[i].valid <= snapshot_data_o[i].valid;
+                    end
+                end           
             end
         end
     end
+
+    always_comb begin
+        if (if_flush && has_snapshot) begin
+            for(int i =0 ; i <`ARCH_REGS ; i++)begin
+                snapshot_data_i[i].phys = snapshot_reg[i].phys;
+                snapshot_data_i[i].valid = snapshot_reg[i].valid;
+                snapshot_restore_i = 1'b1;
+            end
+        end else begin
+            for(int i =0 ; i <`ARCH_REGS ; i++)begin
+                snapshot_data_i[i].phys = '0;
+                snapshot_data_i[i].valid = '0;
+                snapshot_restore_i = 1'b0;
+            end
+        end
+    end
+
     //////////////////////////////////////////////////
     //                                              //
     //                 free list                    //
@@ -1489,7 +1496,7 @@ lsq_top #(
     // 6. Snapshot / Recovery Interface
     // =====================================================
     .is_branch_i             (is_branch_i),
-    .snapshot_restore_valid_i(snapshot_restore_valid_i),
+    .snapshot_restore_valid_i(snapshot_restore_i),
 
     // SQ Snapshot
     .sq_checkpoint_valid_o   (sq_checkpoint_valid_o),
@@ -1517,53 +1524,24 @@ lsq_top #(
     .rob_store_ready_valid(rob_store_ready_valid)
 );
 
-
-always_ff @(posedge clock) begin : checkpoint_LSQ
+    always_ff @(posedge clock) begin 
         if (reset) begin
-            for(int i =0 ; i <`LQ_SIZE ; i++)begin
-                sq_snapshot_data_i[i] <= '0;
-                lq_snapshot_data_i[i] <= '0;
-            end
-            sq_snapshot_count_i <= '0;
-            sq_snapshot_head_i <= '0;
-            sq_snapshot_tail_i <= '0;
-            lq_snapshot_count_i <= '0;
-            lq_snapshot_head_i <= '0;
-            lq_snapshot_tail_i <= '0;
+            sq_snapshot_tail_reg       <= '0;
         end else begin
-            // $display("snapshot_reg:");
-            // for(int i =0 ; i < `ARCH_REGS ; i++)begin
-            //     $display("snapshot_reg[%0d] = %d (%d)",i,snapshot_reg[i].phys,snapshot_reg[i].valid);
-            // end
-            if (if_flush && has_snapshot) begin
-                for(int i =0 ; i <`LQ_SIZE ; i++)begin
-                    lq_snapshot_data_i[i] <= lq_snapshot_reg[i];
-                    sq_snapshot_data_i[i] <= sq_snapshot_reg[i];
-                    // lq_snapshot_data_i[i].valid <= snapshot_reg[i].valid;
-                end
-                sq_snapshot_count_i <=  sq_snapshot_count_reg;
-                sq_snapshot_head_i <= sq_snapshot_head_reg;
-                sq_snapshot_tail_i <= sq_snapshot_tail_reg;
-                lq_snapshot_count_i <=  lq_snapshot_count_reg;
-                lq_snapshot_head_i <= lq_snapshot_head_reg;
-                lq_snapshot_tail_i <= lq_snapshot_tail_reg;
-            end else if (checkpoint_valid) begin
-                for(int i =0 ; i < `LQ_SIZE ; i++)begin
-                    lq_snapshot_reg[i] <= lq_snapshot_data_o[i];
-                    sq_snapshot_reg[i] <= sq_snapshot_data_o[i];
-                end
-                sq_snapshot_count_reg <= sq_snapshot_count_i;
-                sq_snapshot_head_reg <= sq_snapshot_head_i;
-                sq_snapshot_tail_reg <= sq_snapshot_tail_i;
-                lq_snapshot_count_reg <= lq_snapshot_count_i;
-                lq_snapshot_head_reg <= lq_snapshot_head_i;
-                lq_snapshot_tail_reg <= lq_snapshot_tail_i;
-                // has_snapshot <= 1'b1;
-            end else begin
-                // snapshot_restore_i <= 1'b0;
-            end
+            if (snapshot_valid) begin
+                sq_snapshot_tail_reg <= sq_snapshot_tail_o;
+            end          
         end
     end
+
+    always_comb begin
+        if (if_flush && has_snapshot) begin
+            sq_snapshot_tail_i = sq_snapshot_tail_reg;
+        end else begin
+            sq_snapshot_tail_i = '0;
+        end
+    end
+
 
     //////////////////////////////////////////////////
     //                                              //

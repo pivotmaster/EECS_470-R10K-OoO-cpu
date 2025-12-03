@@ -31,4 +31,30 @@ loop:	mul	x3,	x6,	x31
     addi	x6,	x6,	0x1 #
     slti	x5,	x6,	16 #
     bne	x5,	x0,	loop #
+
+    sw x3, 0(x2)  # 2c
+    lw x4, 0(x2)
+    sw x4, 0x200(x2)
     wfi
+    
+/*
+  #4280 branch 
+  #5030 get data
+  #5030 flush
+  #5480 sent req
+
+  Store Queue Status @ time 4280
+[SQ] head=1 tail=2 count=1 full=0
+
+
+
+
+
+
+
+
+
+
+
+
+*/

@@ -55,7 +55,7 @@ module sq #(
     input logic [DISPATCH_WIDTH-1:0] is_branch_i,
     // input logic                      flush_i,
     input logic                      snapshot_restore_valid_i, //valid bit
-    output logic                     checkpoint_valid_o,
+    output logic                     checkpoint_valid_o, //### used
     output sq_entry_t                snapshot_data_o[SQ_SIZE-1:0],
     output logic   [IDX_WIDTH-1 : 0] snapshot_head_o , snapshot_tail_o,
     output logic   [$clog2(SQ_SIZE+1)-1:0] snapshot_count_o,
@@ -115,12 +115,11 @@ module sq #(
   endfunction
 
     //### 11/10 sychenn ###//
-    logic checkpoint_valid_next;
     always_comb begin 
-        checkpoint_valid_next = 1'b0;
+        checkpoint_valid_o = 1'b0;
         for(int i =0 ; i < DISPATCH_WIDTH ; i++)begin
             if(is_branch_i[i])begin
-                checkpoint_valid_next = 1'b1;
+                checkpoint_valid_o = 1'b1;
                 break;
             end
         end        
@@ -141,7 +140,6 @@ module sq #(
       head <= '0;
       tail <= '0;
       count <= '0;
-      checkpoint_valid_o <= 1'b0;
       for(int i = 0 ; i < SQ_SIZE ; i++)begin
         sq[i].valid <= '0;
         sq[i].addr <= '0;
@@ -163,20 +161,13 @@ module sq #(
           count <= count - 1'b1;
       // else if (do_enq && do_deq) count <= count; // 不變
 
-      checkpoint_valid_o <= checkpoint_valid_next;
       if (snapshot_restore_valid_i) begin
-        head <= snapshot_head_i;
         tail <= snapshot_tail_i;
-        count <= snapshot_count_i;
-        for(int i =0 ; i < SQ_SIZE ; i++)begin
-          sq[i].valid <= snapshot_data_i[i].valid;
-          sq[i].addr <= snapshot_data_i[i].addr;
-          sq[i].addr_valid <= snapshot_data_i[i].addr_valid;
-          sq[i].size <= snapshot_data_i[i].size;
-          sq[i].rob_idx <= snapshot_data_i[i].rob_idx;
-          sq[i].data_valid <= snapshot_data_i[i].data_valid;
-          sq[i].data <= snapshot_data_i[i].data;
-          sq[i].commited <= snapshot_data_i[i].commited;
+        if (head == snapshot_tail_i) begin
+          sq[head].valid <= 1'b0;
+          sq[head].data_valid <= 1'b0;
+          sq[head].commited <= 1'b0;
+          sq[head].addr_valid <= 1'b0;
         end
       end
       else begin
@@ -325,7 +316,7 @@ module sq #(
     if (count != 0) begin
       // if (sq[head].valid  && sq[head].data_valid) begin
       if (sq[head].valid &&sq[head].commited && sq[head].data_valid) begin
-        $display("sent data to dcache!!");
+        $display("sent data to dcache!! %t", $time);
         dc_req_req = 1'b1;
         dc_req_addr = sq[head].addr;
         dc_req_size = sq[head].size;
@@ -388,7 +379,7 @@ module sq #(
 
   always_ff @(posedge clock) begin
     if (!reset) begin
-      //show_sq_status();
+      show_sq_status();
         if(sq[0].valid)begin
           // $display("aaaa [DEBUG-FWD]@Time %t Checking idx=%0d. SQ_Addr=%h, SQ_Size=%0d | Load_Addr=%h, Load_Size=%0d | overlap=%b", 
           //          $time, 0, sq[0].addr, sq[0].size, load_addr, load_size, addr_overlap(sq[0].addr , sq[0].size , load_addr , load_size));
