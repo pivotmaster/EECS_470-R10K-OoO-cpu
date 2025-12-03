@@ -230,11 +230,15 @@ module cpu #(
 
     logic       [`LQ_IDX_WIDTH-1:0]lq_snapshot_head_reg;
     logic       [`LQ_IDX_WIDTH-1:0]lq_snapshot_tail_reg;
-    logic       [`LQ_IDX_WIDTH-1:0]lq_snapshot_count_reg;
+    logic       [`LQ_IDX_WIDTH:0]lq_snapshot_count_reg;
     logic       [`SQ_IDX_WIDTH-1:0]sq_snapshot_head_reg;
     logic       [`SQ_IDX_WIDTH-1:0]sq_snapshot_tail_reg;
-    logic       [`SQ_IDX_WIDTH-1:0]sq_snapshot_count_reg;
+    logic       [`SQ_IDX_WIDTH:0]sq_snapshot_count_reg;
 
+    logic                       sq_checkpoint_valid_o;
+    logic                       lq_checkpoint_valid_o;
+
+    
     sq_entry_t  sq_snapshot_data_i [`SQ_SIZE-1:0];
     sq_entry_t  sq_snapshot_data_o [`SQ_SIZE-1:0];
     sq_entry_t  sq_snapshot_reg [`SQ_SIZE-1:0];
@@ -532,7 +536,7 @@ module cpu #(
             cycle_count <= 0;
         end else begin
             if (if_flush) begin
-                $display("cycle[%d]| if_flush=%b | wb_valid=%b | wb_mispred=%b | wb_rob_idx=%d | correct_pc_target_o=%h", cycle_count, if_flush, wb_valid, wb_mispred, wb_rob_idx[`FU_NUM - `FU_BRANCH], fu_value_reg[`FU_NUM - `FU_BRANCH]);
+                // $display("cycle[%d]| if_flush=%b | wb_valid=%b | wb_mispred=%b | wb_rob_idx=%d | correct_pc_target_o=%h", cycle_count, if_flush, wb_valid, wb_mispred, wb_rob_idx[`FU_NUM - `FU_BRANCH], fu_value_reg[`FU_NUM - `FU_BRANCH]);
             end else begin
             cycle_count <= cycle_count + 1;
             end
@@ -912,35 +916,37 @@ module cpu #(
  //### 11/10 sychenn ###// (for map table restore)
     always_ff @(posedge clock) begin : checkpoint
         if (reset) begin
-            for(int i =0 ; i <`ARCH_REGS ; i++)begin
-                snapshot_data_i[i].phys <= '0;
-                snapshot_data_i[i].valid <= '0;
+            for(int i =0 ; i < `ARCH_REGS ; i++)begin
+                snapshot_reg[i].phys <= '0;
+                snapshot_reg[i].valid <= '0;
             end
-            snapshot_restore_i <= 1'b0;
             has_snapshot       <= 1'b0;
-        end else begin
-            // $display("snapshot_reg:");
-            // for(int i =0 ; i < `ARCH_REGS ; i++)begin
-            //     $display("snapshot_reg[%0d] = %d (%d)",i,snapshot_reg[i].phys,snapshot_reg[i].valid);
-            // end
-            if (if_flush && has_snapshot) begin
-                for(int i =0 ; i <`ARCH_REGS ; i++)begin
-                    snapshot_data_i[i].phys <= snapshot_reg[i].phys;
-                    snapshot_data_i[i].valid <= snapshot_reg[i].valid;
-                end
-                snapshot_restore_i <= 1'b1;
-                has_snapshot       <= 1'b0; // consume snapshot
-            end else if (checkpoint_valid) begin
+        end 
+        else begin
+            has_snapshot       <= 1'b0; // consume snapshot
+            if (checkpoint_valid) begin
                 for(int i =0 ; i < `ARCH_REGS ; i++)begin
                     snapshot_reg[i].phys <= snapshot_data_o[i].phys;
                     snapshot_reg[i].valid <= snapshot_data_o[i].valid;
                 end
                 has_snapshot <= 1'b1;
-            end else begin
-                snapshot_restore_i <= 1'b0;
+            end 
+        end
+    end
+
+    always_comb begin
+        for(int i = 0 ; i < `ARCH_REGS ; i++)begin
+            snapshot_data_i[i] = '0;
+        end
+        if (if_flush && has_snapshot) begin
+            for(int i =0 ; i <`ARCH_REGS ; i++)begin
+                snapshot_data_i[i].phys = snapshot_reg[i].phys;
+                snapshot_data_i[i].valid = snapshot_reg[i].valid;
+                snapshot_restore_i = 1'b1;
             end
         end
     end
+
     //////////////////////////////////////////////////
     //                                              //
     //                 free list                    //
@@ -1482,8 +1488,8 @@ lsq_top #(
     // =====================================================
     // 6. Snapshot / Recovery Interface
     // =====================================================
-    .is_branch_i             (is_branch_i),
-    .snapshot_restore_valid_i(snapshot_restore_valid_i),
+    .is_branch_i             (is_branch),
+    .snapshot_restore_valid_i(snapshot_restore_i),
 
     // SQ Snapshot
     .sq_checkpoint_valid_o   (sq_checkpoint_valid_o),
@@ -1512,46 +1518,97 @@ lsq_top #(
 );
 
 
+always_comb begin
+    for(int i =0 ; i < `LQ_SIZE ; i++)begin
+        sq_snapshot_data_i[i] = '0;
+        lq_snapshot_data_i[i] = '0;
+    end
+    sq_snapshot_count_i = '0;
+    sq_snapshot_head_i = '0;
+    sq_snapshot_tail_i = '0;
+    lq_snapshot_count_i = '0;
+    lq_snapshot_head_i = '0;
+    lq_snapshot_tail_i = '0;
+
+    if(if_flush && has_snapshot)begin
+        for(int i =0 ; i <`LQ_SIZE ; i++)begin
+            lq_snapshot_data_i[i] = lq_snapshot_reg[i];
+            sq_snapshot_data_i[i] = sq_snapshot_reg[i];
+            // $display("[LSQ snapshot input@ %0t] LQ[%0d] : valid=%b addr=%h size=%0d rob_idx=%0d data_valid=%b commited=%b data=%h"
+            //         ,$time,i, lq_snapshot_reg[i].valid, lq_snapshot_reg[i].addr, lq_snapshot_reg[i].size, lq_snapshot_reg[i].rob_idx, lq_snapshot_reg[i].data_valid,lq_snapshot_reg[i].issued, lq_snapshot_reg[i].data);
+            // $display("[LSQ snapshot input@ %0t] SQ[%0d] : valid=%0b addr=%0h size=%0d rob_idx=%0d data_valid=%0b commited=%0b data=%0h"
+            //         ,$time,i, sq_snapshot_reg[i].valid, sq_snapshot_reg[i].addr, sq_snapshot_reg[i].size, sq_snapshot_reg[i].rob_idx, sq_snapshot_reg[i].data_valid, sq_snapshot_reg[i].commited, sq_snapshot_reg[i].data);
+            // lq_snapshot_data_i[i].valid <= snapshot_reg[i].valid;
+        end
+        sq_snapshot_count_i =  sq_snapshot_count_reg;
+        // sq_snapshot_head_i = sq_snapshot_head_reg;
+        sq_snapshot_tail_i = sq_snapshot_tail_reg;
+        lq_snapshot_count_i =  lq_snapshot_count_reg;
+        // lq_snapshot_head_i = lq_snapshot_head_reg;
+        lq_snapshot_tail_i = lq_snapshot_tail_reg;
+
+    end
+end
+
+
 always_ff @(posedge clock) begin : checkpoint_LSQ
         if (reset) begin
             for(int i =0 ; i <`LQ_SIZE ; i++)begin
-                sq_snapshot_data_i[i] <= '0;
-                lq_snapshot_data_i[i] <= '0;
+                sq_snapshot_reg[i] <= '0;
+                lq_snapshot_reg[i] <= '0;
             end
-            sq_snapshot_count_i <= '0;
-            sq_snapshot_head_i <= '0;
-            sq_snapshot_tail_i <= '0;
-            lq_snapshot_count_i <= '0;
-            lq_snapshot_head_i <= '0;
-            lq_snapshot_tail_i <= '0;
+            sq_snapshot_count_reg <= '0;
+            sq_snapshot_head_reg <= '0;
+            sq_snapshot_tail_reg <= '0;
+            lq_snapshot_count_reg <= '0;
+            lq_snapshot_head_reg <= '0;
+            lq_snapshot_tail_reg <= '0;
         end else begin
             // $display("snapshot_reg:");
             // for(int i =0 ; i < `ARCH_REGS ; i++)begin
             //     $display("snapshot_reg[%0d] = %d (%d)",i,snapshot_reg[i].phys,snapshot_reg[i].valid);
             // end
             if (if_flush && has_snapshot) begin
-                for(int i =0 ; i <`LQ_SIZE ; i++)begin
-                    lq_snapshot_data_i[i] <= lq_snapshot_reg[i];
-                    sq_snapshot_data_i[i] <= sq_snapshot_reg[i];
-                    // lq_snapshot_data_i[i].valid <= snapshot_reg[i].valid;
-                end
-                sq_snapshot_count_i <=  sq_snapshot_count_reg;
-                sq_snapshot_head_i <= sq_snapshot_head_reg;
-                sq_snapshot_tail_i <= sq_snapshot_tail_reg;
-                lq_snapshot_count_i <=  lq_snapshot_count_reg;
-                lq_snapshot_head_i <= lq_snapshot_head_reg;
-                lq_snapshot_tail_i <= lq_snapshot_tail_reg;
+                // $display("[LSQ] has_snapshot occured!");
+                // for(int i =0 ; i <`LQ_SIZE ; i++)begin
+                //     lq_snapshot_data_i[i] <= lq_snapshot_reg[i];
+                //     sq_snapshot_data_i[i] <= sq_snapshot_reg[i];
+                //     $display("[LSQ snapshot input@ %0t] LQ[%0d] : valid=%b addr=%h size=%0d rob_idx=%0d data_valid=%b commited=%b data=%h"
+                //             ,$time,i, lq_snapshot_reg[i].valid, lq_snapshot_reg[i].addr, lq_snapshot_reg[i].size, lq_snapshot_reg[i].rob_idx, lq_snapshot_reg[i].data_valid,lq_snapshot_reg[i].issued, lq_snapshot_reg[i].data);
+                //     $display("[LSQ snapshot input@ %0t] SQ[%0d] : valid=%0b addr=%0h size=%0d rob_idx=%0d data_valid=%0b commited=%0b data=%0h"
+                //             ,$time,i, sq_snapshot_reg[i].valid, sq_snapshot_reg[i].addr, sq_snapshot_reg[i].size, sq_snapshot_reg[i].rob_idx, sq_snapshot_reg[i].data_valid, sq_snapshot_reg[i].commited, sq_snapshot_reg[i].data);
+                //     // lq_snapshot_data_i[i].valid <= snapshot_reg[i].valid;
+                // end
+                // sq_snapshot_count_i <=  sq_snapshot_count_reg;
+                // sq_snapshot_head_i <= sq_snapshot_head_reg;
+                // sq_snapshot_tail_i <= sq_snapshot_tail_reg;
+                // lq_snapshot_count_i <=  lq_snapshot_count_reg;
+                // lq_snapshot_head_i <= lq_snapshot_head_reg;
+                // lq_snapshot_tail_i <= lq_snapshot_tail_reg;
             end else if (checkpoint_valid) begin
+                $display("checkpoint valid!!");
                 for(int i =0 ; i < `LQ_SIZE ; i++)begin
                     lq_snapshot_reg[i] <= lq_snapshot_data_o[i];
                     sq_snapshot_reg[i] <= sq_snapshot_data_o[i];
+                    if(lq_snapshot_data_o[i].valid)begin
+                        $display("[LSQ snapshot @ %0t] LQ[%0d] : valid=%b addr=%h size=%0d rob_idx=%0d data_valid=%b commited=%b data=%h"
+                        ,$time,i, lq_snapshot_data_o[i].valid, lq_snapshot_data_o[i].addr, lq_snapshot_data_o[i].size, lq_snapshot_data_o[i].rob_idx, lq_snapshot_data_o[i].data_valid, lq_snapshot_data_o[i].issued,lq_snapshot_data_o[i].data);
+                    end
+                    if(sq_snapshot_data_o[i].valid)begin
+                        $display("[LSQ snapshot @ %0t] SQ[%0d] : valid=%b addr=%h size=%0d rob_idx=%0d data_valid=%b commited=%b data=%h"
+                        ,$time,i, sq_snapshot_data_o[i].valid, sq_snapshot_data_o[i].addr, sq_snapshot_data_o[i].size, sq_snapshot_data_o[i].rob_idx, sq_snapshot_data_o[i].data_valid, sq_snapshot_data_o[i].commited,sq_snapshot_data_o[i].data);
+                    end
                 end
-                sq_snapshot_count_reg <= sq_snapshot_count_i;
-                sq_snapshot_head_reg <= sq_snapshot_head_i;
-                sq_snapshot_tail_reg <= sq_snapshot_tail_i;
-                lq_snapshot_count_reg <= lq_snapshot_count_i;
-                lq_snapshot_head_reg <= lq_snapshot_head_i;
-                lq_snapshot_tail_reg <= lq_snapshot_tail_i;
+                sq_snapshot_count_reg <= sq_snapshot_count_o;
+                sq_snapshot_head_reg <= sq_snapshot_head_o;
+                sq_snapshot_tail_reg <= sq_snapshot_tail_o;
+                lq_snapshot_count_reg <= lq_snapshot_count_o;
+                lq_snapshot_head_reg <= lq_snapshot_head_o;
+                lq_snapshot_tail_reg <= lq_snapshot_tail_o;
+
+                $display("[LSQ snapshot @ %0t] [LQ] head : %0d , tail : %0d , count = %0d" , $time , lq_snapshot_head_o , lq_snapshot_tail_o, lq_snapshot_count_o);
+                $display("[LSQ snapshot @ %0t] [SQ] head : %0d , tail : %0d , count = %0d" , $time , sq_snapshot_head_o , sq_snapshot_tail_o, sq_snapshot_count_o);
+
                 // has_snapshot <= 1'b1;
             end else begin
                 // snapshot_restore_i <= 1'b0;

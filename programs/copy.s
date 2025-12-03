@@ -20,15 +20,21 @@
     }
 */
     data = 0x1000
-    li	x6, 1
+    li	x6, 0
     li	x2, data
     li  x31, 0x0a
 loop:	mul	x3,	x6,	x31
     sw	x3, 0(x2)
     lw	x4, 0(x2)
     sw	x4, 0x100(x2)
-    addi	x7,	x2,	0x8 # 1c
+    addi	x2,	x2,	0x8 # 1c
     addi	x6,	x6,	0x1 # 20
     slti	x5,	x6,	16 # 24
-    lw	x8, 0(x2)
+    bne x5, x0, loop
+  
+   ## test lsq
+    sw  x3, 0(x2)
+    sw	x4, 0(x2)
+    sw	x4, 0x200(x2)
+    ## test lsq
     wfi

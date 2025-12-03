@@ -120,12 +120,11 @@ module map_table#(
     map_entry_t table_reg [ARCH_REGS-1:0];
 
     //### 11/10 sychenn ###//
-    logic checkpoint_valid_next;
     always_comb begin 
-        checkpoint_valid_next = 1'b0;
+        checkpoint_valid_o = 1'b0;
         for(int i =0 ; i < DISPATCH_WIDTH ; i++)begin
             if(is_branch_i[i])begin
-                checkpoint_valid_next = 1'b1;
+                checkpoint_valid_o = 1'b1;
                 break;
             end
         end        
@@ -159,14 +158,11 @@ module map_table#(
                 table_reg[i].phys <= i;
                 table_reg[i].valid <= 1'b1;
             end
-
-            checkpoint_valid_o <= 1'b0;
         end else begin
             // ===================================================
             //    Dispatch rename (speculative): for each dispatch slot,
             //    install new mapping and mark value as NOT ready (valid=0).
             // ===================================================
-            checkpoint_valid_o <= checkpoint_valid_next;
             if (snapshot_restore_valid_i) begin
                 for(int i =0 ; i < ARCH_REGS ; i++)begin
                     table_reg[i].phys <= snapshot_data_i[i].phys;

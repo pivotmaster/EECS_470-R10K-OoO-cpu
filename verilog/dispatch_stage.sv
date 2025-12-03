@@ -112,6 +112,10 @@ module dispatch_stage #(
     input   logic    [$clog2(`LQ_SIZE+1)-1:0]   st_count          
 
 );
+
+logic [DISPATCH_WIDTH-1:0] disp_has_dest;
+logic [DISPATCH_WIDTH-1:0] disp_rd_wen_o;
+
     //### 11/10 sychenn ###// (for map table restore)
     always_comb begin
         for (int i = 0; i < DISPATCH_WIDTH; i++) begin
@@ -138,10 +142,6 @@ module dispatch_stage #(
       end
     end
 
-
-
-    assign disp_rob_rd_wen_o = disp_rs_rd_wen_o;
-
     //pass packet
     always_comb begin
         for (int i=0; i< DISPATCH_WIDTH; i++)begin
@@ -149,7 +149,7 @@ module dispatch_stage #(
             disp_packet_o[i].PC = if_packet_i[i].PC;
             disp_packet_o[i].NPC = if_packet_i[i].NPC;
             disp_packet_o[i].valid = if_packet_i[i].valid;
-            disp_packet_o[i].dest_reg_idx = (disp_rs_rd_wen_o[i]) ? if_packet_i[i].inst.r.rd : `ZERO_REG;
+            disp_packet_o[i].dest_reg_idx = (disp_has_dest[i]) ? if_packet_i[i].inst.r.rd : `ZERO_REG;
         end
     end
 
@@ -161,7 +161,7 @@ module dispatch_stage #(
 
             .opa_select    (disp_packet_o[i].opa_select),
             .opb_select    (disp_packet_o[i].opb_select),
-            .has_dest      (disp_rs_rd_wen_o[i]),
+            .has_dest      (disp_has_dest[i]),
             .alu_func      (disp_packet_o[i].alu_func),
             .mult          (disp_packet_o[i].mult),
             .rd_mem        (disp_packet_o[i].rd_mem),
@@ -174,6 +174,15 @@ module dispatch_stage #(
             .fu_type       (disp_packet_o[i].fu_type)
         );
     end
+
+    always_comb begin
+      for (int i=0; i < DISPATCH_WIDTH; i++) begin
+        disp_rd_wen_o[i] = (disp_has_dest[i]) && (if_packet_i[i].inst.r.rd != '0);
+      end
+    end
+
+    assign disp_rob_rd_wen_o = disp_rd_wen_o;
+    assign disp_rs_rd_wen_o = disp_rd_wen_o;
 
 
     //TODO exist latch
@@ -198,8 +207,8 @@ module dispatch_stage #(
                 src1_arch_o[i] = if_packet_i[i].inst.r.rs1;
                 src2_arch_o[i]= if_packet_i[i].inst.r.rs2;
                 dest_arch_o[i] = disp_packet_o[i].dest_reg_idx;  // from decoder
-                rename_valid_o[i] = if_packet_i[i].valid & disp_rs_rd_wen_o[i] & (i < disp_n); // only if instruction is valid
-                alloc_req_o[i] = if_packet_i[i].valid & disp_rs_rd_wen_o[i] & (i < disp_n);
+                rename_valid_o[i] = if_packet_i[i].valid & disp_rd_wen_o[i] & (i < disp_n); // only if instruction is valid
+                alloc_req_o[i] = if_packet_i[i].valid & disp_rd_wen_o[i] & (i < disp_n);
 
                 // To RS
                 if(i < disp_n) begin
@@ -327,5 +336,3 @@ module dispatch_stage #(
 `endif
 
 endmodule
-
-

@@ -78,9 +78,9 @@ module sq #(
   // } sq_entry_t; // marked by ROB commited
 
   sq_entry_t sq[SQ_SIZE];
-  logic [IDX_WIDTH-1 : 0]head,tail;
-  logic [$clog2(SQ_SIZE+1)-1:0] count;
-
+  logic [IDX_WIDTH-1 : 0]head,next_head,tail, next_tail;
+  logic [$clog2(SQ_SIZE+1)-1:0] count, next_count;
+  int N_alloc , N_free;
 
   // -----------------------------------------
     // Circular increment function 
@@ -115,12 +115,12 @@ module sq #(
   endfunction
 
     //### 11/10 sychenn ###//
-    logic checkpoint_valid_next;
+    // logic checkpoint_valid_next;
     always_comb begin 
-        checkpoint_valid_next = 1'b0;
+        checkpoint_valid_o = 1'b0;
         for(int i =0 ; i < DISPATCH_WIDTH ; i++)begin
             if(is_branch_i[i])begin
-                checkpoint_valid_next = 1'b1;
+                checkpoint_valid_o = 1'b1;
                 break;
             end
         end        
@@ -134,6 +134,27 @@ module sq #(
     // assign dc_req_cmd   = MEM_STORE;
     // assign dc_req_data  = sq[head].data;
 
+  // always_comb begin
+  //   N_alloc = 0;
+  //   N_free = 0;
+  //   next_head = head;
+  //   next_tail = tail;
+  //   next_count = count;
+
+  //   // if(enq_valid && !full && !(dc_req_valid && dc_req_accept)) N_alloc++;
+  //   // if(dc_req_valid && dc_req_accept && !(enq_valid && !full)) N_free++;
+
+  //   if(dc_req_valid && dc_req_accept) next_head++;
+  //   if(next_head > SQ_SIZE - 1) next_head = next_head - SQ_SIZE;
+
+  //   if(!full && enq_valid ) next_tail++;
+  //   else if(snapshot_restore_valid_i)next_tail = snapshot_tail_i;
+  //   if(next_tail > SQ_SIZE - 1) next_tail = next_tail - SQ_SIZE;
+
+  //   if(next_tail >= next_head) next_count = next_tail - next_count;
+  //   else next_count = next_tail - next_count + SQ_SIZE;
+  // end
+
 
   always_ff @(posedge clock)begin
     logic do_enq, do_deq;
@@ -141,7 +162,7 @@ module sq #(
       head <= '0;
       tail <= '0;
       count <= '0;
-      checkpoint_valid_o <= 1'b0;
+      // checkpoint_valid_o <= 1'b0;
       for(int i = 0 ; i < SQ_SIZE ; i++)begin
         sq[i].valid <= '0;
         sq[i].addr <= '0;
@@ -156,28 +177,40 @@ module sq #(
       do_enq = enq_valid && !full;
       do_deq = dc_req_valid && dc_req_accept;
 
+      // count <= next_count;
+      // head <= next_head;
+      // tail <= next_tail;
+
+
       // 1. 處理 Count (優先級邏輯)
       if (do_enq && !do_deq)      
           count <= count + 1'b1;
       else if (!do_enq && do_deq) 
           count <= count - 1'b1;
-      // else if (do_enq && do_deq) count <= count; // 不變
+      else if (do_enq && do_deq) count <= count; // 不變
 
-      checkpoint_valid_o <= checkpoint_valid_next;
+      // checkpoint_valid_o <= checkpoint_valid_next;
       if (snapshot_restore_valid_i) begin
-        head <= snapshot_head_i;
+        $display("[SQ mispredict snapshot restore!!]");
+        // head <= snapshot_head_i;
         tail <= snapshot_tail_i;
-        count <= snapshot_count_i;
-        for(int i =0 ; i < SQ_SIZE ; i++)begin
-          sq[i].valid <= snapshot_data_i[i].valid;
-          sq[i].addr <= snapshot_data_i[i].addr;
-          sq[i].addr_valid <= snapshot_data_i[i].addr_valid;
-          sq[i].size <= snapshot_data_i[i].size;
-          sq[i].rob_idx <= snapshot_data_i[i].rob_idx;
-          sq[i].data_valid <= snapshot_data_i[i].data_valid;
-          sq[i].data <= snapshot_data_i[i].data;
-          sq[i].commited <= snapshot_data_i[i].commited;
+        // count <= snapshot_count_i;
+        if(snapshot_tail_i >= head)begin
+          count <= snapshot_tail_i - head;
+        end else begin
+          count <= snapshot_tail_i - head + SQ_SIZE;
         end
+        // count <= sna
+        // for(int i =0 ; i < SQ_SIZE ; i++)begin
+        //   sq[i].valid <= snapshot_data_i[i].valid;
+        //   sq[i].addr <= snapshot_data_i[i].addr;
+        //   sq[i].addr_valid <= snapshot_data_i[i].addr_valid;
+        //   sq[i].size <= snapshot_data_i[i].size;
+        //   sq[i].rob_idx <= snapshot_data_i[i].rob_idx;
+        //   sq[i].data_valid <= snapshot_data_i[i].data_valid;
+        //   sq[i].data <= snapshot_data_i[i].data;
+        //   sq[i].commited <= snapshot_data_i[i].commited;
+        // end
       end
       else begin
         if (enq_valid && !full)begin

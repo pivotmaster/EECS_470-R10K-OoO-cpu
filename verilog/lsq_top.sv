@@ -143,8 +143,9 @@ module lsq_top #(
 
     /////////////////
     sq_entry_t sq_internal_state [SQ_SIZE-1:0]; //TODO
-    logic [SQ_IDX_WIDTH-1 : 0] sq_view_head, sq_view_tail;//TODO
-    logic [$clog2(SQ_SIZE+1)-1:0] sq_view_count;//TODO
+    sq_entry_t sq_view_i [SQ_SIZE-1:0];
+    logic [SQ_IDX_WIDTH-1 : 0] sq_view_head, sq_view_tail , sq_internal_head, sq_internal_tail;//TODO
+    logic [$clog2(SQ_SIZE+1)-1:0] sq_view_count, sq_internal_count;//TODO
     ////////////////
     // SQ Request Signals
     logic       sq_req_valid;
@@ -239,10 +240,15 @@ module lsq_top #(
         .is_branch_i(is_branch_i),
         .snapshot_restore_valid_i(snapshot_restore_valid_i),
         .checkpoint_valid_o(sq_checkpoint_valid_o),
+        ///////////////////////////////////////////////////////
         .snapshot_data_o(sq_internal_state),
-        .snapshot_head_o(sq_view_head),
-        .snapshot_tail_o(sq_view_tail),
-        .snapshot_count_o(sq_view_count),
+        // .snapshot_head_o(sq_view_head),
+        // .snapshot_tail_o(sq_view_tail),
+        // .snapshot_count_o(sq_view_count),
+        .snapshot_head_o(sq_internal_head),
+        .snapshot_tail_o(sq_internal_tail),
+        .snapshot_count_o(sq_internal_count),
+        ////////////////////////////////////////////////////////
         .snapshot_data_i(sq_snapshot_data_i),
         .snapshot_head_i(sq_snapshot_head_i),
         .snapshot_tail_i(sq_snapshot_tail_i),
@@ -297,10 +303,12 @@ module lsq_top #(
 
         // Writeback / Commit
         .rob_head(rob_head),
-        .sq_view_i(sq_internal_state),
+        //////////////////////////////////////////
+        .sq_view_i(sq_view_i),//snapshot??
         .sq_view_head(sq_view_head),
         .sq_view_tail(sq_view_tail),
         .sq_view_count(sq_view_count),
+        //////////////////////////////////////////
         .rob_commit_valid(commit_valid),
         .rob_commit_valid_idx(commit_rob_idx),
         .wb_valid(wb_valid),
@@ -358,9 +366,37 @@ module lsq_top #(
     assign sq_req_accept       = Dcache_req_1_accept;
 
     assign sq_snapshot_data_o = sq_internal_state;
-    assign sq_snapshot_head_o = sq_view_head;
-    assign sq_snapshot_tail_o = sq_view_tail;
-    assign sq_snapshot_count_o = sq_view_count;
+    assign sq_snapshot_head_o = sq_internal_head;
+    assign sq_snapshot_tail_o = sq_internal_tail;
+    assign sq_snapshot_count_o = sq_internal_count;
+    // assign sq_snapshot_head_o = sq_view_head;
+    // assign sq_snapshot_tail_o = sq_view_tail;
+    // assign sq_snapshot_count_o = sq_view_count;
+
+    always_comb begin
+        for (int i =0 ; i < SQ_SIZE ; i++)begin
+            sq_view_i[i] = '0;
+        end
+        sq_view_head = '0;
+        sq_view_tail = '0;
+        sq_view_count = '0;
+        if(snapshot_restore_valid_i)begin
+            sq_view_i = sq_snapshot_data_i;
+            sq_view_head = sq_snapshot_head_i;
+            sq_view_tail = sq_snapshot_tail_i;
+            sq_view_count = sq_snapshot_count_i;
+            // sq_internal_state = sq_snapshot_data_i;
+            // sq_view_head = sq_snapshot_head_i;
+            // sq_view_tail = sq_snapshot_tail_i;
+            // sq_view_count = sq_snapshot_count_i;
+        end
+        else begin
+            sq_view_i = sq_internal_state;
+            sq_view_head = sq_internal_head;
+            sq_view_tail = sq_internal_tail;
+            sq_view_count = sq_internal_count;
+        end
+    end
 
     // =====================================================
     // Debug Display Task

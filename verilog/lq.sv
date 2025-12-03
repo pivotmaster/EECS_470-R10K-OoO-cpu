@@ -68,6 +68,7 @@ module lq #(
 
     // Snapshot interface (Keep as is)
     input logic [DISPATCH_WIDTH-1:0] is_branch_i,
+    input logic                      flush_i,
     input logic                      snapshot_restore_valid_i,
     output logic                     checkpoint_valid_o,
     output lq_entry_t                snapshot_data_o[LQ_SIZE-1:0],
@@ -77,6 +78,7 @@ module lq #(
     input logic    [IDX_WIDTH-1 : 0] snapshot_head_i , snapshot_tail_i,
     input logic   [$clog2(LQ_SIZE+1)-1:0] snapshot_count_i,
 
+    //////////////////////////////////////////////////
     input sq_entry_t sq_view_i [SQ_SIZE-1:0],
     input logic [IDX_WIDTH-1 : 0] sq_view_head, sq_view_tail,
     input logic [$clog2(LQ_SIZE+1)-1:0] sq_view_count
@@ -110,19 +112,41 @@ module lq #(
     endfunction
 
     lq_entry_t lq[LQ_SIZE];
-    logic [IDX_WIDTH-1 : 0] head, tail;
-    logic [$clog2(LQ_SIZE+1)-1:0] count;
+    logic [IDX_WIDTH-1 : 0] head, next_head, tail, next_tail;
+    logic [$clog2(LQ_SIZE+1)-1:0] count, next_count;
     
     assign full = (count == LQ_SIZE);
     assign empty = (count == 0);
 
+
+//     always_comb begin
+//     // N_alloc = 0;
+//     // N_free = 0;
+//     next_head = head;
+//     next_tail = tail;
+//     next_count = count;
+
+//     // if(enq_valid && !full && !(dc_req_valid && dc_req_accept)) N_alloc++;
+//     // if(dc_req_valid && dc_req_accept && !(enq_valid && !full)) N_free++;
+
+//     if(lq[head].valid && rob_commit_valid && (rob_commit_valid_idx == lq[head].rob_idx)) next_head++;
+//     if(next_head > LQ_SIZE - 1) next_head = next_head - LQ_SIZE;
+
+//     if(enq_valid && !full) next_tail++;
+//     else if(snapshot_restore_valid_i)next_tail = snapshot_tail_i;
+//     if(next_tail > LQ_SIZE - 1) next_tail = next_tail - LQ_SIZE;
+
+//     if(next_tail >= next_head) next_count = next_tail - next_count;
+//     else next_count = next_tail - next_count + SQ_SIZE;
+//   end
+
     // Snapshot logic
-    logic checkpoint_valid_next;
+    // logic checkpoint_valid_next;
     always_comb begin 
-        checkpoint_valid_next = 1'b0;
+        checkpoint_valid_o = 1'b0;
         for(int i =0 ; i < DISPATCH_WIDTH ; i++) begin
             if(is_branch_i[i]) begin
-                checkpoint_valid_next = 1'b1;
+                checkpoint_valid_o= 1'b1;
                 break;
             end
         end        
@@ -334,7 +358,7 @@ module lq #(
             head <= '0;
             tail <= '0;
             count <= '0;
-            checkpoint_valid_o <= 1'b0;
+            // checkpoint_valid_o <= 1'b0;
             wb_valid <= 1'b0;
             wb_rob_idx <= '0;
             wb_data <= '0;
@@ -349,17 +373,27 @@ module lq #(
                 lq[i].disp_rd_new_prf <= '0;
             end
         end else begin
-            checkpoint_valid_o <= checkpoint_valid_next;
+            // count <= next_count;
+            // tail <= next_tail;
+            // head <= next_head;
+
+            // checkpoint_valid_o <= checkpoint_valid_next;
             wb_valid <= 1'b0; 
             wb_data <= '0;
 
             if (do_enq && !do_commit)      count <= count + 1'b1;
             else if (!do_enq && do_commit) count <= count - 1'b1;
+            else if(do_enq && do_commit)   count <= count;
 
             if(snapshot_restore_valid_i) begin
-                head <= snapshot_head_i;
+                // head <= snapshot_head_i;
                 tail <= snapshot_tail_i;
-                count <= snapshot_count_i;
+                // count <= snapshot_count_i;
+                if(snapshot_tail_i >= head)begin
+                    count <= snapshot_tail_i - head;
+                end else begin
+                    count <= snapshot_tail_i - head + LQ_SIZE;
+                end
                 for(int i = 0; i < LQ_SIZE; i++) begin
                     lq[i] <= snapshot_data_i[i];
                 end
