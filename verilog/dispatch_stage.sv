@@ -120,7 +120,7 @@ logic [DISPATCH_WIDTH-1:0] disp_rd_wen_o;
     always_comb begin
         for (int i = 0; i < DISPATCH_WIDTH; i++) begin
           //### TODO: Fetch width need to be smaller then dispatch width ###//
-            is_branch_o[i] = disp_packet_o[i].valid && (disp_packet_o[i].cond_branch || disp_packet_o[i].uncond_branch);
+            is_branch_o[i] = (!branch_stall && !stall) && disp_packet_o[i].valid && (disp_packet_o[i].cond_branch || disp_packet_o[i].uncond_branch);
         end
     end
 
