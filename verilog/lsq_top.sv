@@ -189,8 +189,8 @@ module lsq_top #(
     ROB_IDX lq_data_rob_idx; // data rob idx from dcache to lq
     assign lq_data_rob_idx =(Dcache_valid_out_0) ? Dcache_data_rob_idx_0 : Dcache_data_rob_idx_1;
     logic  [LQ_IDX_WIDTH-1:0]Dcache_data_tag_0;
-    assign sq_enq_valid = (new_dispatch &&  dispatch_is_store);
-    assign lq_enq_valid = (new_dispatch && !dispatch_is_store);
+    assign sq_enq_valid = (dispatch_valid &&  dispatch_is_store);
+    assign lq_enq_valid = (dispatch_valid && !dispatch_is_store);
 
     // 如果 dispatch Store 但 SQ 滿，或 dispatch Load 但 LQ 滿 -> Stall
     assign lsq_full = (dispatch_is_store && sq_full) || (!dispatch_is_store && lq_full);

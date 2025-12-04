@@ -188,6 +188,7 @@ module ls_fu #(
       resp_o.is_sw     = 1'b1;
       resp_o.dest_prf  = '0;
       resp_o.sw_data   = req_i.src2_val;
+      $display("ROB %0d:sw | src2_val=%h", req_i.rob_idx, req_i.src2_val);
 
     end else begin
       resp_o.is_lw     = 1'b0;

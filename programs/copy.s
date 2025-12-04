@@ -24,7 +24,7 @@
     li	x2, data
     li  x31, 0x0a
 loop:	mul	x3,	x6,	x31
-    sw	x3, 0(x2)
+    sw	x3, 0(x2)  #(src2 = x3, src1=x2)
     lw	x4, 0(x2)
     sw	x4, 0x100(x2)
     addi	x2,	x2,	0x8 #
@@ -33,8 +33,8 @@ loop:	mul	x3,	x6,	x31
     bne	x5,	x0,	loop #
 
     sw x3, 0(x2)  # 2c
-    lw x4, 0(x2)
-    sw x4, 0x200(x2)
+   lw x4, 0(x2)
+   sw x4, 0x200(x2)
     wfi
     
 /*

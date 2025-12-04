@@ -187,7 +187,11 @@ module lq #(
         dc_req_addr  = '0;
         dc_req_size  = '0;
         stall_older_store_unknown = 1'b0;
-        
+        fwd_found = 1'b0;
+        // pending_found = 1'b0;
+        fwd_data = '0;
+        fwd_addr = '0;
+        sq_forward_valid = '0;
         //---------------check if there is older store address unknown---------------//
         if (found_unissued) begin
             for (int k=0; k<SQ_SIZE; k++) begin
@@ -247,11 +251,7 @@ module lq #(
             int i;
             int start;
             int checked;
-            fwd_found = 1'b0;
-            // pending_found = 1'b0;
-            fwd_data = '0;
-            fwd_addr = '0;
-            sq_forward_valid = '0;
+
             // $display("[DEBUG-ALWAYS STORE QUEUE] Count=%0d, Tail=%0d, Head=%0d", count, tail, head);
             if(sq_view_count != 0)begin
                 checked = 0;
@@ -364,24 +364,31 @@ module lq #(
                     count <= snapshot_tail_i - head + LQ_SIZE;
                 end
 
+                if (head <= snapshot_tail_i) begin
+                    for(int i = 0; i < LQ_SIZE; i++) begin
+                        if (i >= snapshot_tail_i) begin
+                            lq[i].valid <= 1'b0;
+                            lq[i].data_valid <= 1'b0;
+                            lq[i].issued <= 1'b0;
+                            lq[i].addr_valid <= 1'b0;
+                        end
+                    end
+                end else begin
+                    for(int i = 0; i < LQ_SIZE; i++) begin
+                        if (i >= snapshot_tail_i || i < head) begin
+                            lq[i].valid <= 1'b0;
+                            lq[i].data_valid <= 1'b0;
+                            lq[i].issued <= 1'b0;
+                            lq[i].addr_valid <= 1'b0;
+                        end
+                    end
+                end
                 if (head == snapshot_tail_i) begin
                     lq[head].valid <= 1'b0;
                     lq[head].data_valid <= 1'b0;
                     lq[head].issued <= 1'b0;
                     lq[head].addr_valid <= 1'b0;
                 end
-                // for(int i = 0; i < LQ_SIZE; i++) begin
-                //     lq[i] <= snapshot_data_i[i];
-                // end
-
-
-
-
-                // head <= snapshot_head_i;
-                // count <= snapshot_count_i;
-                // for(int i = 0; i < LQ_SIZE; i++) begin
-                //     lq[i] <= snapshot_data_i[i];
-                // end
 
                 if(!empty) begin
                      if(lq[head].valid && rob_commit_valid && (rob_commit_valid_idx == lq[head].rob_idx)) begin
@@ -453,7 +460,8 @@ module lq #(
                 // If we queried SQ and it says "Hit!", take the data directly
                 else if(wb_from_fwd) begin
                     // 直接寫入剛剛發起查詢的那個 Index (query_idx)
-                    $display("[sq_forwarding]: fwd_data: %0h", fwd_data);
+                    $display("[sq_forwarding]: fwd_data: %0h|fwd_found=%b", fwd_data,fwd_found);
+                    $display("sq_view_i[i].valid=%b | sq_view_i[i].data_valid=%b | sq_view_i[i].rob_idx=%d | addr_overlap=%b", sq_view_i[0].valid, sq_view_i[0].data_valid, sq_view_i[0].rob_idx, addr_overlap(sq_view_i[0].addr , sq_view_i[0].size , lq[query_idx].addr , lq[query_idx].size));
                     lq[query_idx].data <= fwd_data;
                     lq[query_idx].data_valid <= 1'b1;
                     // 不需要 set issued, 因為資料已經拿到了

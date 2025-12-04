@@ -1322,7 +1322,7 @@ module cpu #(
             mul_req_reg[i].src1_val = rdata[2 + i*8];
             mul_req_reg[i].src2_val = mul_req_reg_org[i].src2_valid ? rdata[3 + i*8] : mul_req_reg_org[i].src2_val;
             load_req_reg[i].src1_val = rdata[4 + i*8];
-            load_req_reg[i].src2_val = load_req_reg_org[i].src2_valid ? rdata[5 + i*8] : load_req_reg_org[i].src2_mux;
+            load_req_reg[i].src2_val = load_req_reg_org[i].src2_valid ? rdata[5 + i*8] : '1;
             br_req_reg[i].src1_mux = rdata[6 + i*8];
             br_req_reg[i].src2_mux = br_req_reg_org[i].src2_valid ? rdata[7 + i*8] : br_req_reg_org[i].src2_mux;
         end
@@ -1495,7 +1495,7 @@ lsq_top #(
     // =====================================================
     // 6. Snapshot / Recovery Interface
     // =====================================================
-    .is_branch_i             (is_branch_i),
+    .is_branch_i             (is_branch),
     .snapshot_restore_valid_i(snapshot_restore_i),
 
     // SQ Snapshot

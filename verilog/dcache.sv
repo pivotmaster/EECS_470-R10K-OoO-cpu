@@ -303,8 +303,6 @@ module dcache (
 
         // Data from memory refill_mshr_id
         end else if ((mem2proc_data_tag == mshr[refill_mshr_id].mem_tag || transaction_data_tag_the_same_time) && mshr[refill_mshr_id].valid && mshr[refill_mshr_id].command == MEM_STORE) begin
-            Dcache_valid_out_0 = (mshr[refill_mshr_id].port_id == 0);
-            Dcache_valid_out_1 = (mshr[refill_mshr_id].port_id == 1);  
             Dcache_data_rob_idx_0 = (mshr[refill_mshr_id].port_id == 0) ? mshr[refill_mshr_id].rob_idx: '0;
             Dcache_data_rob_idx_1 = (mshr[refill_mshr_id].port_id == 1) ? mshr[refill_mshr_id].rob_idx : '0;          
             unique case (Dcache_size_0)
@@ -979,7 +977,7 @@ endtask
 
 always_ff @(posedge clock) begin
     if (!reset) begin
-        //show_status();
+        show_status();
     end
 end
 

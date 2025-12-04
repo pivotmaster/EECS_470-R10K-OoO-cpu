@@ -230,7 +230,7 @@ module sq #(
           for(int i = 0 ; i < SQ_SIZE ; i++)begin
         // $display(" i = %d , commit_valid=%d |sq[i].valid=%d|sq[i].data_valid =%d|sq[i].rob_idx=%d|commit_rob_idx=%d",i, commit_valid,sq[i].valid,sq[i].data_valid,sq[i].rob_idx,commit_rob_idx); 
           
-            if(sq[i].valid && (sq[i].rob_idx == rob_head))begin
+            if(sq[i].valid && (sq[i].rob_idx == rob_head) && sq[i].data_valid)begin
               sq[i].commited <= 1'b1;
               rob_store_ready_idx <= sq[i].rob_idx;
               rob_store_ready_valid <= 1'b1;
@@ -376,6 +376,7 @@ module sq #(
     int i;
     $display("===================================================================");
     $display("Store Queue Status @ time %0t", $time);
+    $display("snapshot_restore_valid_i=%b", snapshot_restore_valid_i);
     $display("[SQ] head=%0d tail=%0d count=%0d full=%0b", head, tail, count, full);
     for (i = 0; i < SQ_SIZE; i++) begin
       if (sq[i].valid) begin
