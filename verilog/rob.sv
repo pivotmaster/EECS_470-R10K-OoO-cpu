@@ -440,7 +440,7 @@ module rob #(
                         // flush mispredict instructions                        
                         //free regs
                         flush_free_regs_valid[j] = 1'b1;
-                        flush_free_regs       |= (1 << rob_table[(mispredict_rob_idx_i + j) % ROB_DEPTH].old_prf);
+                        flush_free_regs       |= (1 << rob_table[(mispredict_rob_idx_i + j) % ROB_DEPTH].new_prf);
                     end
                 end
             end

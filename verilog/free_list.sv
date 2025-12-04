@@ -127,17 +127,18 @@ output logic [$clog2(PHYS_REGS+1)-1:0]                       free_count_o, // nu
                 N_free++;
             end
         end
-        // dispatch
+        // dispatch (free the instruction that stole the free reg)
         for (int j2 = 0; j2 < DISPATCH_WIDTH; j2++) begin
             if (flush2free_list_valid_i[j2]) begin
                 N_free++;
             end
         end
-        // chcekpoint
+        // chcekpoint (when flush)
         if (flush_i) begin
             for (int k = 0; k <(PHYS_REGS); k++) begin
                 if (flush_free_regs[k]) begin
                     N_free++;
+                $display("flush N_free= %d ", N_free);
                 end
             end
         end  
@@ -193,38 +194,42 @@ output logic [$clog2(PHYS_REGS+1)-1:0]                       free_count_o, // nu
     end
 
     int id;
-
+    // commmit :1 ; flush:2  
+    // 1110000.. -> 111x000000
+    // 36 ? ? -> x 1 2
     always_comb begin
         id = 0;
         total_free_valid = '0;
         total_free_reg_idx = '0;
         // retire
-        for (int j = 0; j < COMMIT_WIDTH; j++) begin
-            if (free_valid_i[j] && (free_phys_i[j] != 0)) begin
-                total_free_valid[id]   = 1;
-                total_free_reg_idx[id] = free_phys_i[j];
-                id ++;
-            end
-        end
-        // dispatch
-        for (int j2 = 0; j2 < DISPATCH_WIDTH; j2++) begin
-            if (flush2free_list_valid_i[j2]) begin
-                total_free_valid[id]   = 1;
-                total_free_reg_idx[id] = flush2free_list_new_prf_i[j2];
-                id ++;
-            end
-        end
-
-        // chcekpoint
-        if (flush_i) begin
-            for (int j3 = 0;  j3 <(PHYS_REGS);  j3++) begin
-                if (flush_free_regs_valid[j3]) begin
+        if (id < (COMMIT_WIDTH + DISPATCH_WIDTH + `ROB_DEPTH)) begin
+            for (int j = 0; j < COMMIT_WIDTH; j++) begin
+                if (free_valid_i[j] && (free_phys_i[j] != 0)) begin
                     total_free_valid[id]   = 1;
-                    total_free_reg_idx[id] = j3;
+                    total_free_reg_idx[id] = free_phys_i[j];
                     id ++;
                 end
             end
-        end  
+            // flush
+            for (int j2 = 0; j2 < DISPATCH_WIDTH; j2++) begin
+                if (flush2free_list_valid_i[j2]) begin
+                    total_free_valid[id]   = 1;
+                    total_free_reg_idx[id] = flush2free_list_new_prf_i[j2];
+                    id ++;
+                end
+            end
+
+            // chcekpoint
+            if (flush_i) begin
+                for (int j3 = 0;  j3 <(PHYS_REGS);  j3++) begin
+                    if (flush_free_regs[j3]) begin
+                        total_free_valid[id]   = 1;
+                        total_free_reg_idx[id] = j3;
+                        id ++;
+                    end
+                end
+            end  
+        end
     end
 
     ///////////////////////////////////////////////////////////////////////////////////////////
@@ -241,16 +246,12 @@ output logic [$clog2(PHYS_REGS+1)-1:0]                       free_count_o, // nu
                 free_fifo[i] <= i + ARCH_REGS; 
                 // $display("free_fifo[%0d] = %0d" , i , free_fifo[i]);
             end
-            // for (int i = 0 ; i < DISPATCH_WIDTH ; i++)begin
-            //     alloc_phys_o[i] <= '0;
-            //     alloc_valid_o[i] <= 1'b0;
-            // end
         end else begin
-
+            $display("flush_free_regs =%b" , flush_free_regs);
+  
             head <= next_head;
             tail <= next_tail;
             count <= next_count;
-
 
             // =========================================================
             //  Release (Commit) — push freed physical regs back
@@ -258,6 +259,7 @@ output logic [$clog2(PHYS_REGS+1)-1:0]                       free_count_o, // nu
             for (int k = 0; k < (COMMIT_WIDTH + DISPATCH_WIDTH + PHYS_REGS); k++) begin
                 if (total_free_valid[k]) begin
                     free_fifo[(tail + k) % (PHYS_REGS-ARCH_REGS)] <= total_free_reg_idx[k];
+                    $display("free reg[%0d] = %0d" , (tail + k) % (PHYS_REGS-ARCH_REGS) , total_free_reg_idx[k]);
                 end
             end
 
