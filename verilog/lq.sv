@@ -257,7 +257,7 @@ module lq #(
                 checked = 0;
                 // start at tail - 1 (most recent store) and go backwards up to count entries
                 start  = (sq_view_tail == 0) ? (SQ_SIZE - 1) : (sq_view_tail - 1);
-                // $display("[DEBUG-FWD] @Time : %t , sq_view_count: %d" , $time, sq_view_count);
+                $display("[DEBUG-FWD] @Time : %t , sq_view_count: %d" , $time, sq_view_count);
                 // idx = tail - 1;
                 for(k = 0 ; k < SQ_SIZE ; k++)begin
                     // int i = (idx - k) % SQ_SIZE;
@@ -265,10 +265,10 @@ module lq #(
                     if(i<0)i = i + SQ_SIZE;
                     // $display("[DEBUG-FWD] checked: %d ,Checking indx = %0d, sq[%0d] = %0d , k=%0d , start = %0d" ,checked, i , i , sq_view_i[i].valid , k , start);
                     if(sq_view_i[i].valid)begin
-                        // $display("[DEBUG-FWD]@Time %t Checking idx=%0d. SQ_Addr=%h, SQ_Size=%0d | Load_Addr=%h, Load_Size=%0d", 
-                                // $time, i, sq_view_i[i].addr, sq_view_i[i].size, lq[query_idx].addr, lq[query_idx].addr);
+                        $display("[DEBUG-FWD]@Time %t Checking idx=%0d. SQ_Addr=%h, SQ_Size=%0d | Load_Addr=%h, Load_Size=%0d", 
+                                $time, i, sq_view_i[i].addr, sq_view_i[i].size, lq[query_idx].addr, lq[query_idx].addr);
                         if(addr_overlap(sq_view_i[i].addr , sq_view_i[i].size , lq[query_idx].addr , lq[query_idx].size))begin
-                            // $display("[RTL-SQ-FWD] Overlap at idx=%0d. DataValid=%b. Data=%h", i, sq_view_i[i].data_valid, sq_view_i[i].data);
+                            $display("[RTL-SQ-FWD] Overlap at idx=%0d. DataValid=%b. Data=%h", i, sq_view_i[i].data_valid, sq_view_i[i].data);
                             if(sq_view_i[i].data_valid)begin
                                 fwd_found = 1'b1;
                                 // pending_found = 1'b0;
@@ -357,11 +357,48 @@ module lq #(
             else if (!do_enq && do_commit) count <= count - 1'b1;
 
             if(snapshot_restore_valid_i) begin
-                head <= snapshot_head_i;
                 tail <= snapshot_tail_i;
-                count <= snapshot_count_i;
-                for(int i = 0; i < LQ_SIZE; i++) begin
-                    lq[i] <= snapshot_data_i[i];
+                if(snapshot_tail_i >= head)begin
+                    count <= snapshot_tail_i - head;
+                end else begin
+                    count <= snapshot_tail_i - head + LQ_SIZE;
+                end
+
+                if (head == snapshot_tail_i) begin
+                    lq[head].valid <= 1'b0;
+                    lq[head].data_valid <= 1'b0;
+                    lq[head].issued <= 1'b0;
+                    lq[head].addr_valid <= 1'b0;
+                end
+                // for(int i = 0; i < LQ_SIZE; i++) begin
+                //     lq[i] <= snapshot_data_i[i];
+                // end
+
+
+
+
+                // head <= snapshot_head_i;
+                // count <= snapshot_count_i;
+                // for(int i = 0; i < LQ_SIZE; i++) begin
+                //     lq[i] <= snapshot_data_i[i];
+                // end
+
+                if(!empty) begin
+                     if(lq[head].valid && rob_commit_valid && (rob_commit_valid_idx == lq[head].rob_idx)) begin
+                        // 只有在 Commit 的時候才真正釋放 Entry
+                        lq[head].valid <= 1'b0;
+                        lq[head].data_valid <= 1'b0;
+                        head <= next_ptr(head);
+                        // count <= count - 1'b1;
+                        
+                        // 在 Commit 時送出 Writeback (配合你的 Testbench 預期)
+                        // $display("[DEBUG-ALWAYS LOAD QUEUE] lq[head].valid = %0b", lq[head].valid);
+                        // if (lq[head].data_valid) begin
+                        //     wb_valid <= 1'b1;
+                        //     //  wb_rob_idx <= lq[head].rob_idx;
+                        //     //  wb_data <= lq[head].data;
+                        // end
+                    end
                 end
             end else begin
                 
@@ -416,7 +453,7 @@ module lq #(
                 // If we queried SQ and it says "Hit!", take the data directly
                 else if(wb_from_fwd) begin
                     // 直接寫入剛剛發起查詢的那個 Index (query_idx)
-                    // $display("[sq_forwarding]: fwd_data: %0h", fwd_data);
+                    $display("[sq_forwarding]: fwd_data: %0h", fwd_data);
                     lq[query_idx].data <= fwd_data;
                     lq[query_idx].data_valid <= 1'b1;
                     // 不需要 set issued, 因為資料已經拿到了
@@ -607,7 +644,7 @@ module lq #(
 
   always_ff @(posedge clock) begin
     if (!reset) begin
-    //   show_lq_status();
+      show_lq_status();
     end
   end
     // initial begin

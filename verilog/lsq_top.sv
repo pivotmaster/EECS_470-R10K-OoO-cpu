@@ -145,6 +145,11 @@ module lsq_top #(
     sq_entry_t sq_internal_state [SQ_SIZE-1:0]; //TODO
     logic [SQ_IDX_WIDTH-1 : 0] sq_view_head, sq_view_tail;//TODO
     logic [$clog2(SQ_SIZE+1)-1:0] sq_view_count;//TODO
+
+    sq_entry_t sq_view_o [SQ_SIZE-1:0];
+    logic [SQ_IDX_WIDTH-1 : 0] sq_view_head_o, sq_view_tail_o;
+    logic [$clog2(SQ_SIZE+1)-1:0] sq_view_count_o;
+
     ////////////////
     // SQ Request Signals
     logic       sq_req_valid;
@@ -167,6 +172,8 @@ module lsq_top #(
     //### sychen 
     always_ff @(posedge clock or posedge reset) begin 
         if (reset) begin
+            pre_dispatch_rob <= '0;
+        end else if(snapshot_restore_valid_i)begin
             pre_dispatch_rob <= '0;
         end else if (dispatch_valid) begin
             pre_dispatch_rob <= dispatch_rob_idx;
@@ -251,7 +258,12 @@ module lsq_top #(
         .free_num_slot(sq_free_num_slot),
 
         .rob_store_ready_idx(rob_store_ready_idx),
-        .rob_store_ready_valid(rob_store_ready_valid)
+        .rob_store_ready_valid(rob_store_ready_valid),
+
+        .sq_view_o(sq_view_o),
+        .sq_view_head_o(sq_view_head_o),
+        .sq_view_tail_o(sq_view_tail_o),
+        .sq_view_count_o(sq_view_count_o)
     );
 
     // 2. Load Queue Instance
@@ -297,10 +309,11 @@ module lsq_top #(
 
         // Writeback / Commit
         .rob_head(rob_head),
-        .sq_view_i(sq_internal_state),
-        .sq_view_head(sq_view_head),
-        .sq_view_tail(sq_view_tail),
-        .sq_view_count(sq_view_count),
+        ////////////////////////////////////////
+        .sq_view_i(sq_view_o),
+        .sq_view_head(sq_view_head_o),
+        .sq_view_tail(sq_view_tail_o),
+        .sq_view_count(sq_view_count_o),
         .rob_commit_valid(commit_valid),
         .rob_commit_valid_idx(commit_rob_idx),
         .wb_valid(wb_valid),
@@ -326,6 +339,8 @@ module lsq_top #(
         .wb_disp_rd_new_prf_o(wb_disp_rd_new_prf_o)
     );
 
+
+   
     // =====================================================
     // Cache Interface Connections (Dual Port Mappings)
     // =====================================================
@@ -399,7 +414,7 @@ module lsq_top #(
     always_ff @(posedge clock) begin
         if (!reset) begin
             // Uncomment the line below to enable continuous debugging
-            //show_lsq_status();
+            show_lsq_status();
             
             // Or add specific conditions to trigger the display, for example:
             // if (dispatch_valid || commit_valid || wb_valid || Dcache_valid_out_0 || Dcache_valid_out_1) begin

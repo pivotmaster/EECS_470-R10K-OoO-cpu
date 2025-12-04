@@ -296,11 +296,11 @@ endtask
       $display("// ---------------- CYCLE = %d ---------------- //",cycle_count);
       //test_reqs();
       //test_grant_vector(cycle_count);
-      //show_rs_input();
+    //   show_rs_input();
       
       //show_issue_packets(cycle_count);
       //test_issue_selector(cycle_count);
-      //show_issue_output();
+      show_issue_output();
       
     
   end

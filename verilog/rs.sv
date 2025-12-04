@@ -218,6 +218,9 @@ module RS #(
 //     endtask
 
   task automatic show_rs_output();
+    $display("===================================================================");
+    $display("                            RS ENTRY                               ");
+    $display("===================================================================");
     for (int i = 0; i < RS_DEPTH; i++) begin
         if (!rs_empty[i]) begin
         $display("Entry %0d:br_tag=%b, i_imm = %0h, u_imm =%0h, opb_select=%0d, ready=%b, valid=%b, alu_func=%0d, rob_idx=%0d, fu_type=%0d, dest_reg_idx=%0d, dest_tag=%0d, src1_tag=%0d(%b), src2_tag=%0d(%b)", 
@@ -231,6 +234,9 @@ module RS #(
   endtask
   
   task automatic show_rs_input();
+    $display("===================================================================");
+    $display("                            RS ENTRY                               ");
+    $display("===================================================================");
     for (int i = 0; i < DISPATCH_WIDTH; i++) begin
         if (rs_packets_i[i].valid) begin
             $display("rs_input: %0d: i_imm = %0h, u_imm =%0h, valid=%b, alu_func=%0d, rob_idx=%0d, fu_type=%0d, dest_reg_idx=%0d, dest_tag=%0d, src1_tag=%0d(%b), src2_tag=%0d(%b)", 

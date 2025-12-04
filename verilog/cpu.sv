@@ -1527,9 +1527,11 @@ lsq_top #(
     always_ff @(posedge clock) begin 
         if (reset) begin
             sq_snapshot_tail_reg       <= '0;
+            lq_snapshot_tail_reg       <= '0;
         end else begin
             if (snapshot_valid) begin
                 sq_snapshot_tail_reg <= sq_snapshot_tail_o;
+                lq_snapshot_tail_reg <= lq_snapshot_tail_o;
             end          
         end
     end
@@ -1537,8 +1539,10 @@ lsq_top #(
     always_comb begin
         if (if_flush && has_snapshot) begin
             sq_snapshot_tail_i = sq_snapshot_tail_reg;
+            lq_snapshot_tail_i = lq_snapshot_tail_reg;
         end else begin
             sq_snapshot_tail_i = '0;
+            lq_snapshot_tail_i = '0;
         end
     end
 

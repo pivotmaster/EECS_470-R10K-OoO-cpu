@@ -64,8 +64,11 @@ module sq #(
     input logic   [$clog2(SQ_SIZE+1)-1:0] snapshot_count_i,
 
     output ROB_IDX rob_store_ready_idx,
-    output logic   rob_store_ready_valid
+    output logic   rob_store_ready_valid,
 
+    output sq_entry_t sq_view_o[SQ_SIZE-1:0],
+    output logic [IDX_WIDTH-1 : 0] sq_view_head_o, sq_view_tail_o,
+    output logic   [$clog2(SQ_SIZE+1)-1:0] sq_view_count_o
 );
   // typedef struct packed {
   //   logic     valid;
@@ -162,7 +165,15 @@ module sq #(
       // else if (do_enq && do_deq) count <= count; // 不變
 
       if (snapshot_restore_valid_i) begin
+        $display("[SQ mispredict snapshot restore!!]");
         tail <= snapshot_tail_i;
+
+        if(snapshot_tail_i >= head)begin
+              count <= snapshot_tail_i - head;
+          end else begin
+              count <= snapshot_tail_i - head + SQ_SIZE;
+          end
+        
         if (head == snapshot_tail_i) begin
           sq[head].valid <= 1'b0;
           sq[head].data_valid <= 1'b0;
@@ -345,11 +356,16 @@ module sq #(
           assign snapshot_data_o[i].data_valid = sq[i].data_valid;
           assign snapshot_data_o[i].data = sq[i].data;
           assign snapshot_data_o[i].commited = sq[i].commited;
+          assign sq_view_o[i] = sq[i];
       end
   endgenerate
   assign snapshot_head_o = head;
   assign snapshot_tail_o = tail;
   assign snapshot_count_o = count;
+
+  assign sq_view_head_o = head;
+  assign sq_view_tail_o = tail;
+  assign sq_view_count_o = count;
     // =======================================================
     // =======================================================
     // =======================================================
@@ -363,10 +379,11 @@ module sq #(
     $display("[SQ] head=%0d tail=%0d count=%0d full=%0b", head, tail, count, full);
     for (i = 0; i < SQ_SIZE; i++) begin
       if (sq[i].valid) begin
-        $display("[SQ[%0d]] valid=%b addr=%h size=%0d rob_idx=%0d data_valid=%b commited=%b data=%h",
+        $display("[SQ[%0d]] valid=%b addr=%h addr_valid=%b size=%0d rob_idx=%0d data_valid=%b commited=%b data=%h",
                  i,
                  sq[i].valid,
                  sq[i].addr,
+                 sq[i].addr_valid,
                  sq[i].size,
                  sq[i].rob_idx,
                  sq[i].data_valid,
