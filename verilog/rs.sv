@@ -216,7 +216,7 @@ module RS #(
 //             $write("\n");
 //         end
 //     endtask
-
+`ifndef SYNTHESIS
   task automatic show_rs_output();
     $display("===================================================================");
     $display("                            RS ENTRY                               ");
@@ -328,7 +328,7 @@ module RS #(
              show_rs_output();   
         end
     end
-
+`endif
 
 
 endmodule

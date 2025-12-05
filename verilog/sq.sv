@@ -143,6 +143,8 @@ module sq #(
       head <= '0;
       tail <= '0;
       count <= '0;
+      rob_store_ready_idx <= '0;
+      rob_store_ready_valid <= '0;
       for(int i = 0 ; i < SQ_SIZE ; i++)begin
         sq[i].valid <= '0;
         sq[i].addr <= '0;
@@ -165,7 +167,9 @@ module sq #(
       // else if (do_enq && do_deq) count <= count; // 不變
 
       if (snapshot_restore_valid_i) begin
+        `ifndef SYNTHESIS
         $display("[SQ mispredict snapshot restore!!]");
+        `endif
         tail <= snapshot_tail_i;
 
         if(snapshot_tail_i >= head)begin
@@ -180,8 +184,7 @@ module sq #(
           sq[head].commited <= 1'b0;
           sq[head].addr_valid <= 1'b0;
         end
-      end
-      else begin
+      end else begin
         if (enq_valid && !full)begin
           // $display("[RTL-SQ] Enqueue at tail=%0d, ROB=%0d, Addr=%h", tail, enq_rob_idx, enq_addr);
           sq[tail].valid <= 1'b1;
@@ -327,13 +330,17 @@ module sq #(
     if (count != 0) begin
       // if (sq[head].valid  && sq[head].data_valid) begin
       if (sq[head].valid &&sq[head].commited && sq[head].data_valid) begin
+        `ifndef SYNTHESIS
         $display("sent data to dcache!! %t", $time);
+        `endif
         dc_req_req = 1'b1;
         dc_req_addr = sq[head].addr;
         dc_req_size = sq[head].size;
         dc_store_data = sq[head].data;
         dc_rob_idx = sq[head].rob_idx;
+        `ifndef SYNTHESIS
         $display("dc_req_addr=%h, dc_req_size=%t, dc_store_data=%h", dc_req_addr, dc_req_size, dc_store_data);
+        `endif
       end
     end
   end
@@ -372,6 +379,7 @@ module sq #(
     // =======================================================
 
   // Simple debug display for Store Queue state
+  `ifndef SYNTHESIS
   task automatic show_sq_status();
     int i;
     $display("===================================================================");
@@ -404,6 +412,7 @@ module sq #(
         end
     end
   end
+  `endif
 
 endmodule
 

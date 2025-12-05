@@ -174,9 +174,13 @@ module map_table#(
                     if(disp_valid_i[i])begin
                         //### 11/21 r0 should always be zero ###//
                         if (disp_arch_i[i] == `ZERO_REG) begin
+                            `ifndef SYNTHESIS
                             $display("disp_arch_i = %d is zero reg", disp_arch_i[i]);
+                            `endif
                         end else begin
+                            `ifndef SYNTHESIS
                             $display("disp_arch_i = %d | old_phys = %d | disp_old_phys_o = %d ", disp_arch_i[i],table_reg[disp_arch_i[i]].phys,disp_old_phys_o[i] );
+                            `endif
                             table_reg[disp_arch_i[i]].phys <= disp_new_phys_i[i];
                             table_reg[disp_arch_i[i]].valid <= 1'b0; 
                         end
@@ -251,7 +255,7 @@ module map_table#(
             end                    
         end
     endgenerate
-
+`ifndef SYNTHESIS
     always_ff @(posedge clock) begin
         if (!reset) begin
             $display("MAP_TABLE: snapshot_restore_i=%b | is_branch_i=%b ",snapshot_restore_valid_i,is_branch_i);
@@ -260,6 +264,7 @@ module map_table#(
             end
         end
     end
+`endif
     // =======================================================
     // Snapshot output: provide current mapping (for ROB/CPU to save)
     // Drive it continuously from table_reg; CPU will latch on checkpoint_valid_o

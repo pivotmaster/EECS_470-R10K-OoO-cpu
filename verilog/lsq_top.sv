@@ -381,33 +381,34 @@ module lsq_top #(
     // =====================================================
     // Debug Display Task
     // =====================================================
+`ifndef SYNTHESIS
     task automatic show_lsq_status();
-        // $display("=== LSQ Status (Cycle %0d) ===", $time);
+        $display("=== LSQ Status (Cycle %0d) ===", $time);
         
-        // // LSQ Status
-        // $display("LSQ Dispatch");
-        // $display("LQ Status: lq_enq_valid=%b, dispatch_size=%p, dispatch_rob_idx=%d", lq_enq_valid, dispatch_size, dispatch_rob_idx);
-        // $display("SQ Status: sq_enq_valid=%b,  dispatch_size=%p, dispatch_rob_idx=%d", sq_enq_valid,dispatch_size, dispatch_rob_idx); 
+        // LSQ Status
+        $display("LSQ Dispatch");
+        $display("LQ Status: lq_enq_valid=%b, dispatch_size=%p, dispatch_rob_idx=%d", lq_enq_valid, dispatch_size, dispatch_rob_idx);
+        $display("SQ Status: sq_enq_valid=%b,  dispatch_size=%p, dispatch_rob_idx=%d", sq_enq_valid,dispatch_size, dispatch_rob_idx); 
 
-        // $display("LSQ Get DATA/ADDR");
-        // $display("LSQ: addr=%h | data=%h(%b) | rob_idx=%d", sq_data_addr, sq_data, sq_data_valid, sq_data_rob_idx);
+        $display("LSQ Get DATA/ADDR");
+        $display("LSQ: addr=%h | data=%h(%b) | rob_idx=%d", sq_data_addr, sq_data, sq_data_valid, sq_data_rob_idx);
 
-        // // D-Cache Interface Status
-        // $display("\n=== D-Cache Interface ===");
-        // $display("Load Port (0): cmd=%s, addr=%h, size=%0d, accept=%b, valid_out=%b, data_out=%h, lq_req_valid=%s",
-        //         Dcache_command_0.name(), Dcache_addr_0, Dcache_size_0, 
-        //         Dcache_req_0_accept, Dcache_valid_out_0, Dcache_data_out_0,lq_req_valid);
+        // D-Cache Interface Status
+        $display("\n=== D-Cache Interface ===");
+        $display("Load Port (0): cmd=%s, addr=%h, size=%0d, accept=%b, valid_out=%b, data_out=%h, lq_req_valid=%s",
+                Dcache_command_0.name(), Dcache_addr_0, Dcache_size_0, 
+                Dcache_req_0_accept, Dcache_valid_out_0, Dcache_data_out_0,lq_req_valid);
         
-        // $display("Store Port (1): cmd=%s, addr=%h, size=%0d, accept=%b, valid_out=%b, data_out=%h, sq_req_valid=%s",
-        //         Dcache_command_1.name(), Dcache_addr_1, Dcache_size_1,
-        //         Dcache_req_1_accept, Dcache_valid_out_1, Dcache_data_out_1,sq_req_valid);
+        $display("Store Port (1): cmd=%s, addr=%h, size=%0d, accept=%b, valid_out=%b, data_out=%h, sq_req_valid=%s",
+                Dcache_command_1.name(), Dcache_addr_1, Dcache_size_1,
+                Dcache_req_1_accept, Dcache_valid_out_1, Dcache_data_out_1,sq_req_valid);
         
-        // // Writeback Status
-        // $display("\n=== Writeback ===");
-        // $display("WB Valid: %b, ROB IDX: %0d, Data: %h", 
-        //         wb_valid, wb_rob_idx, wb_data);
+        // Writeback Status
+        $display("\n=== Writeback ===");
+        $display("WB Valid: %b, ROB IDX: %0d, Data: %h", 
+                wb_valid, wb_rob_idx, wb_data);
         
-        // $display("==================================\n");
+        $display("==================================\n");
     endtask
 
 
@@ -423,5 +424,6 @@ module lsq_top #(
             // end
         end
     end
+`endif
 
 endmodule

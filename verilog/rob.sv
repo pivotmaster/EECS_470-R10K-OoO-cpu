@@ -100,7 +100,7 @@ module rob #(
     end
 
     // ===== Sequential Block =====
-    always_ff @(posedge clock or posedge reset) begin
+    always_ff @(posedge clock) begin
         if (reset) begin
             head   <= '0;
             tail   <= '0;
@@ -356,7 +356,11 @@ module rob #(
     COMMIT_PACKET [`N-1:0] wb_packet;
 
     always_ff @(posedge clock) begin
-        wb_valid <= retire_en;
+        if(reset) begin    
+            wb_valid <= '0;
+        end else begin
+            wb_valid <= retire_en;
+        end
     end
 
     always_comb begin 
@@ -427,7 +431,9 @@ module rob #(
         flushed_mask = '0;
         if (mispredict_i) begin
             for (int j = 1; j < ROB_DEPTH; j++) begin
+                `ifndef SYNTHESIS
                 $display("m=%d,j=%d | valid=%b | rob_table[j].old_prf=%0d",mispredict_rob_idx_i, (mispredict_rob_idx_i + j) % ROB_DEPTH,rob_table[(mispredict_rob_idx_i + j) % ROB_DEPTH].valid,rob_table[(mispredict_rob_idx_i + j) % ROB_DEPTH].old_prf);
+                `endif
                 // (mispredict_rob_idx_i + 1 + j) % ROB_DEPTH = idx (but cannot 2 int in one block?)
                 if ((mispredict_rob_idx_i + j) % ROB_DEPTH == tail) begin
                     break;
@@ -448,7 +454,9 @@ module rob #(
            
         end
         flush_i = |flush_free_regs_valid;
+        `ifndef SYNTHESIS
         $display("flush_count=%d",flush_count);
+        `endif
     end
 
     // ===== Sequential Block =====
@@ -461,6 +469,12 @@ module rob #(
             flush_o <= 1'b0;
             flush_upto_rob_idx_o <= '0;
             retire_rob_idx_o <= '0;
+            commit_valid_o <= '0;
+
+            for (int i = 0; i < DISPATCH_WIDTH; i++) begin
+                flush2free_list_valid_o[i] <= '0;
+                flush2free_list_new_prf_o[i] <= '0;
+            end
             
             for(int i = 0 ; i< `N; i++)begin
                 wb_packet[i] <= '0;
@@ -468,6 +482,10 @@ module rob #(
 
             for(int i = 0 ; i< COMMIT_WIDTH; i++)begin
                 commit_old_prf_o[i] <= '0;
+            end
+
+            for(int i = 0 ; i< COMMIT_WIDTH; i++)begin
+                commit_new_prf_o[i] <= '0;
             end
 
             for (int i = 0; i < ROB_DEPTH; i++) begin
@@ -499,6 +517,11 @@ module rob #(
                 for (int i = 0; i < DISPATCH_WIDTH; i++) begin
                     flush2free_list_valid_o[i] <= disp_rd_wen_i[i];
                     flush2free_list_new_prf_o[i] <= disp_rd_new_prf_i[i];
+                end
+
+                for (int i = 0; i < COMMIT_WIDTH; i++) begin
+                    commit_rd_wen_o <= '0;
+                    commit_rd_arch_o <= '0;
                 end
 
             //################## (sychenn 11/6) ######################
@@ -593,7 +616,9 @@ module rob #(
             if (!reset) begin
                 for (int i = 0; i < WB_WIDTH; i++) begin
                     if (wb_valid_i[i] && rob_table[wb_rob_idx_i[i]].valid) begin  
+                        `ifndef SYNTHESIS
                         $display("bug value= %d | rob=%d",fu_value_wb_i[i],wb_rob_idx_i[i] );
+                        `endif
                         rob_table[wb_rob_idx_i[i]].ready     <= 1'b1;
                         rob_table[wb_rob_idx_i[i]].exception <= wb_exception_i[i];
                         rob_table[wb_rob_idx_i[i]].mispred   <= wb_mispred_i[i];
@@ -612,7 +637,7 @@ module rob #(
     //    // $display("head = %0d  , tail = %0d\n" , head, tail);
     //    $display("disp_rob_idx_o=%d | commit_old_prf_o: %d", disp_rob_idx_o[0], commit_old_prf_o[0]);
     // end
-
+`ifndef SYNTHESIS
 task automatic show_rob_output();
     $display("============================================");
     $display("                 ROB STATUS                 ");
@@ -682,7 +707,7 @@ endtask
             show_rob_output();
         end
     end
-
+`endif
 
 endmodule
 

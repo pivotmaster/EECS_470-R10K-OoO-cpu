@@ -47,7 +47,7 @@ module cdb #(
 
 );
 
-
+`ifndef SYNTHESIS
 always_ff @(posedge clock) begin
     if (!reset) begin
         for (int i = 0; i < CDB_WIDTH; i++) begin
@@ -64,6 +64,7 @@ always_ff @(posedge clock) begin
         end
     end
 end
+`endif
 
     // =========================================================
     // Internal signals
@@ -131,6 +132,7 @@ end
     // =========================================================
     // For GUI Debugger (CDB Trace)
     // =========================================================
+`ifndef SYNTHESIS
     integer cdb_trace_fd;
 
     initial begin
@@ -177,7 +179,7 @@ end
         end
     end
 
-
+`endif
 
 
 endmodule

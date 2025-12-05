@@ -28,8 +28,10 @@ module alu_fu #(
             // here to prevent latches:
             default:  result = 32'hfacebeec;
         endcase
+    `ifndef SYNTHESIS
     $display("ALU op=%0d src1=%h src2=%h result=%h time=%0t",
              req_i.opcode, req_i.src1_val, req_i.src2_val, result, $time);
+    `endif
     end
 
 /*
@@ -188,7 +190,9 @@ module ls_fu #(
       resp_o.is_sw     = 1'b1;
       resp_o.dest_prf  = '0;
       resp_o.sw_data   = req_i.src2_val;
+      `ifndef SYNTHESIS
       $display("ROB %0d:sw | src2_val=%h", req_i.rob_idx, req_i.src2_val);
+      `endif
 
     end else begin
       resp_o.is_lw     = 1'b0;
@@ -316,8 +320,10 @@ module fu #(
       if (fu_resp_bus[i].is_sw || fu_resp_bus[i].is_lw) begin
         fu_ls_valid_o[idx] = fu_resp_bus[i].valid;
         fu_ls_rob_idx_o[idx] = fu_resp_bus[i].rob_idx;
+        `ifndef SYNTHESIS
         $display("idx =%d | fu_resp_bus[i].rob_idx=%d", idx, fu_resp_bus[i].rob_idx);
         $display("idx =%d | fu_ls_rob_idx_o[i].rob_idx=%d", idx, fu_ls_rob_idx_o[idx]);
+        `endif
         fu_ls_addr_o[idx] = fu_resp_bus[i].value;
         fu_sw_data_o[idx] = fu_resp_bus[i].sw_data;
 
@@ -397,7 +403,7 @@ module fu #(
 
   end
 
-
+`ifndef SYNTHESIS
         // =========================================================
     // For GUI Debugger (FU Trace)
     // =========================================================
@@ -410,6 +416,7 @@ module fu #(
     end
 
     task automatic dump_fu_state(int cycle);
+
         $fdisplay(fu_trace_fd, "FU TRACE DUMP TRIGGERED AT CYCLE %0d", cycle);
         $fwrite(fu_trace_fd, "{ \"cycle\": %0d, \"FU\": [", cycle);
         for (int i = 0; i < TOTAL_FU; i++) begin
@@ -458,7 +465,7 @@ module fu #(
         end
     end
 
-
+`endif
 
 
 endmodule
