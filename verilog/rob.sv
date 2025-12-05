@@ -491,6 +491,11 @@ module rob #(
             for (int i = 0; i < ROB_DEPTH; i++) begin
                 rob_table[i] <= '0;
             end
+
+            for (int i = 0; i < COMMIT_WIDTH; i++) begin
+                commit_rd_wen_o <= '0;
+                commit_rd_arch_o <= '0;
+            end
         
         //################## (sychenn 11/6) ######################
         end else begin  
