@@ -567,7 +567,7 @@ module cpu #(
     //                  I-cache                     //
     //                                              //
     //////////////////////////////////////////////////
-    MEM_TAG mem2proc_data_tag_icache;
+    // MEM_TAG mem2proc_data_tag_icache;
 
     icache icache_0(
         .clock (clock),
@@ -575,9 +575,9 @@ module cpu #(
 
         // Inputs
         // From memory
-        .Imem2proc_transaction_tag(mem2proc_transaction_tag_icache), 
+        .Imem2proc_transaction_tag(mem2proc_transaction_tag), 
         .Imem2proc_data(mem2proc_data),
-        .Imem2proc_data_tag(mem2proc_data_tag_icache),
+        .Imem2proc_data_tag(mem2proc_data_tag),
 
         // From fetch stage (the insturction address)
         .proc2Icache_addr(proc2Icache_addr),
@@ -634,7 +634,7 @@ module cpu #(
         .if_packet_o (if_packet)
     );
 
-
+    
     // IF-stage debug outputs
     always_comb begin
 		for(int i=0;i<`FETCH_WIDTH;i++)begin
@@ -1618,7 +1618,7 @@ dcache dcache_0 (
     .Dcache2mem_data           (Dmem_store_data),
     .send_new_mem_req          (dcache_send_new_mem_req),
 
-    .mem2proc_transaction_tag  (mem2proc_transaction_tag_dcache),
+    .mem2proc_transaction_tag  (mem2proc_transaction_tag),
     .mem2proc_data             (mem2proc_data),
     .mem2proc_data_tag         (mem2proc_data_tag)
 );
@@ -1707,7 +1707,7 @@ dcache dcache_0 (
         .free_reg_o(free_phys),
         .retire_cnt_o(retire_cnt)
     );
-assign mem2proc_data_tag_icache = (Dmem_command == MEM_LOAD) ? '0 : mem2proc_data_tag;
+// assign mem2proc_data_tag_icache = (Dmem_command == MEM_LOAD) ? '0 : mem2proc_data_tag;
 //     // New address if:
 //     // 1) Previous instruction wasn't a load
 //     // 2) Load address changed

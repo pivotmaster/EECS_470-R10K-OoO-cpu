@@ -131,8 +131,8 @@ module dcache (
         end
         
         // hit or miss
-        cache_hit_0 = Dcache_req_0_accept && (|way_hit_0);
-        cache_hit_1 = Dcache_req_1_accept && (|way_hit_1);
+        cache_hit_0 = (|way_hit_0);
+        cache_hit_1 = (|way_hit_1);
 
         load_cache_hit_0 = cache_hit_0 && Dcache_command_0 == MEM_LOAD;
         load_cache_hit_1 = cache_hit_1 && Dcache_command_1 == MEM_LOAD;
@@ -164,8 +164,11 @@ module dcache (
     
     // ---------- WRITE ---------- 
     // Write enable signals
-    logic  [CACHE_WAYS-1:0] cache_write_en_0;
-    logic  [CACHE_WAYS-1:0] cache_write_en_1;
+    logic  [CACHE_WAYS-1:0] write_en_0;  //comb
+    logic  [CACHE_WAYS-1:0] write_en_1;  //comb 
+    logic  [CACHE_WAYS-1:0] cache_write_en_0; // reg send to mem_dp
+    logic  [CACHE_WAYS-1:0] cache_write_en_1; // reg send to mem_dp
+    
     logic  [CACHE_WAYS-1:0] cache_write_en_hit_0;
     logic  [CACHE_WAYS-1:0] cache_write_en_hit_1;
     logic  [CACHE_WAYS-1:0] cache_write_en_refill_0;
@@ -182,19 +185,49 @@ module dcache (
     // here 0/1 means banks
     genvar w;
     for (w = 0; w < CACHE_WAYS; w++) begin
-        assign cache_write_en_0[w] = cache_write_en_hit_0[w] | cache_write_en_refill_0[w];
-        assign cache_write_en_1[w] = cache_write_en_hit_1[w] | cache_write_en_refill_1[w];
+        assign write_en_0[w] = cache_write_en_hit_0[w] | cache_write_en_refill_0[w];
+        assign write_en_1[w] = cache_write_en_hit_1[w] | cache_write_en_refill_1[w];
     end
 
-    assign cache_write_addr_0 =
-        (cache_write_en_0) ? (|cache_write_en_refill_0) ? cache_write_addr_refill_0 : cache_write_addr_hit_0 : '0;
-    assign cache_write_addr_1 =
-        (cache_write_en_1) ? (|cache_write_en_refill_1) ? cache_write_addr_refill_1 : cache_write_addr_hit_1 : '0;
+    // assign cache_write_addr_0 =
+    //     (|cache_write_en_0) ? (|cache_write_en_refill_0) ? cache_write_addr_refill_0 : cache_write_addr_hit_0 : '0;
+    // assign cache_write_addr_1 =
+    //     (|cache_write_en_1) ? (|cache_write_en_refill_1) ? cache_write_addr_refill_1 : cache_write_addr_hit_1 : '0;
 
-    assign cache_write_data_0 =
-        (cache_write_en_0) ? (|cache_write_en_refill_0) ? cache_write_data_refill_0 : cache_write_data_hit_0 : '0;
-    assign cache_write_data_1 =
-        (cache_write_en_1) ? (|cache_write_en_refill_1) ? cache_write_data_refill_1 : cache_write_data_hit_1 : '0;
+    always_ff @( posedge clock or posedge reset) begin 
+        if (reset) begin
+            cache_write_data_0 <= '0;
+            cache_write_data_1 <= '0;
+
+            cache_write_addr_0 <= '0;
+            cache_write_addr_1 <= '0;
+        end else begin
+            if (|write_en_0) begin
+                cache_write_data_0 <= (|cache_write_en_refill_0) ? cache_write_data_refill_0 : cache_write_data_hit_0;
+                cache_write_addr_0 <= (|cache_write_en_refill_0) ? cache_write_addr_refill_0 : cache_write_addr_hit_0;
+                cache_write_en_0 <= write_en_0;
+            end else begin
+                cache_write_data_0 <= '0;
+                cache_write_addr_0 <= '0;
+                cache_write_en_0   <= '0;
+            end
+
+            if (|write_en_1) begin
+                cache_write_data_1 <= (|cache_write_en_refill_1) ? cache_write_data_refill_1 : cache_write_data_hit_1;
+                cache_write_addr_1 <= (|cache_write_en_refill_1) ? cache_write_addr_refill_1 : cache_write_addr_hit_1;
+                cache_write_en_1 <= write_en_1;
+            end else begin
+                cache_write_data_1 <= '0;
+                cache_write_en_1   <= '0;
+                cache_write_addr_1 <= '0;
+            end
+        end
+    end
+
+    // assign cache_write_data_0 =
+    //     (|cache_write_en_0) ? (|cache_write_en_refill_0) ? cache_write_data_refill_0 : cache_write_data_hit_0 : '0;
+    // assign cache_write_data_1 =
+    //     (|cache_write_en_1) ? (|cache_write_en_refill_1) ? cache_write_data_refill_1 : cache_write_data_hit_1 : '0;
 
     // =========================================================
     // Main Cache Arrays
@@ -449,15 +482,16 @@ module dcache (
     // logic send_new_mem_req; // have req to memory & has MSHR entry
     int free_mshr_idx;
     
-
+    int max_val_0;
+    int max_val_1;
     // ----------  LRU logic ----------  
     // Find the replacement way
     always_comb begin : LRU
-        int max_val_0 = -1;
-        int max_val_1 = -1;
+        max_val_0 = '0;
+        max_val_1 = '0;
         replace_way_0 = '0;
         replace_way_1 = '0;
-
+ 
         // Req 0
         // First find invalid
         if (!(&cache_valid[bank_0][index_0])) begin
@@ -628,7 +662,7 @@ module dcache (
                 mshr[free_mshr_idx].offset  <= (send_miss_0 ? offset_0         : offset_1);
                 mshr[free_mshr_idx].size   <= (send_miss_0 ? Dcache_size_0    : Dcache_size_1);
                 mshr[free_mshr_idx].store_data <= (send_miss_0 ? Dcache_store_data_0    : Dcache_store_data_1);
-                mshr[free_mshr_idx].mem_tag <= '0;   
+                mshr[free_mshr_idx].mem_tag <= mem2proc_transaction_tag;   
                 mshr[free_mshr_idx].rob_idx <= send_miss_0 ? Dcache_req_rob_idx_0    : Dcache_req_rob_idx_1; 
                 mshr[free_mshr_idx].port_id <= (send_miss_0 ? 0 : 1);
             end  
@@ -637,7 +671,6 @@ module dcache (
             // Get Tag from memory (save to MSHR & clear pending bit)
             if (mem2proc_transaction_tag != 0 && pending_req_to_mem) begin
                 // $display("tag = %d | ",mem2proc_transaction_tag);
-                mshr[pending_mshr_id].mem_tag <= mem2proc_transaction_tag;
                 pending_req_to_mem <= 0;
                 pending_mshr_id <= 0;
             end
@@ -768,16 +801,16 @@ module dcache (
             wb_mem_addr <= '0;
             wb_mem_size <= DOUBLE;
         end else if (send_new_mem_req) begin
-            wb_mem_valid <= 1'b0;
             wb_mem_size <= DOUBLE;
-            if (miss_0) begin // cache_miss_0 and replace_way_0 here is req 0/1
+            wb_mem_addr <= {victim_tag, victim_index, victim_bank, {OFFSET_BITS{1'b0}}};
+
+            if (miss_0 && cache_dirty[victim_bank][victim_index][victim_way] && cache_valid[victim_bank][victim_index][victim_way]) begin // cache_miss_0 and replace_way_0 here is req 0/1
                 wb_mem_valid <= 1'b1;
-                wb_mem_data <=  (bank_0) ? cache_data_read_1[replace_way_0] : cache_data_read_0[replace_way_0];
-            end else if (miss_1) begin // cache_miss_1
+                wb_mem_data <=  (bank_1) ? cache_data_read_1[replace_way_0] : cache_data_read_0[replace_way_0];
+            end else if (miss_1 && cache_dirty[victim_bank][victim_index][victim_way] && cache_valid[victim_bank][victim_index][victim_way]) begin // cache_miss_1
                 wb_mem_valid <= 1'b1;
                 wb_mem_data <=  (bank_1) ? cache_data_read_1[replace_way_1] : cache_data_read_0[replace_way_1];
             end
-            wb_mem_addr <= {victim_tag, victim_index, victim_bank, {OFFSET_BITS{1'b0}}};
             
         end else begin
             wb_mem_valid <= 1'b0;
@@ -795,17 +828,22 @@ module dcache (
         Dcache2mem_size    = BYTE;  
         Dcache2mem_data    = '0;
 
+        // Load
         if (send_new_mem_req) begin
-            if (send_miss_0) begin
+            Dcache2mem_command = MEM_LOAD;
+            Dcache2mem_size    = DOUBLE;
+            Dcache2mem_data = '0; 
+            if (send_miss_0 ) begin
                 Dcache2mem_addr = {tag_0, index_0, bank_0, {OFFSET_BITS{1'b0}}};
-            end else begin // send_miss_1
+            end else if (send_miss_1) begin // send_miss_1
                 Dcache2mem_addr = {tag_1, index_1, bank_1, {OFFSET_BITS{1'b0}}};
             end
-            
-            Dcache2mem_command = MEM_LOAD; // load back first (nomatter is load or store)
-            Dcache2mem_size = DOUBLE;  // MEM_BLOCK = 8 bytes
-            Dcache2mem_data = '0;      // TODO: READ ONLY NOW
-        end
+        end else if (wb_mem_valid) begin //store
+            Dcache2mem_command = MEM_STORE;
+            Dcache2mem_addr = wb_mem_addr;
+            Dcache2mem_size = wb_mem_size;
+            Dcache2mem_data = wb_mem_data;
+        end 
     end
 
     // ---------- MSHR Conflict ------------------
@@ -958,13 +996,12 @@ task automatic show_status();
 
         end
     end
-    
-
 
     // =================================================================
     // Memory Interface
     // =================================================================
     $display("== Memory Interface ===============================================");
+    $display("wb_mem_valid=%b wb_mem_data=%h wb_mem_addr=%h tag=%h index=%h bank=%h way=%h", wb_mem_valid, wb_mem_data, wb_mem_addr, victim_tag, victim_index, victim_bank, victim_way);
     $display("[TO  MEM] cmd=%s addr=%h size=%s data=%h",
              Dcache2mem_command.name(), Dcache2mem_addr,
              Dcache2mem_size.name(), Dcache2mem_data.dbbl_level);
@@ -982,4 +1019,7 @@ always_ff @(posedge clock) begin
 end
 
 endmodule
+
+
+
 
