@@ -308,6 +308,7 @@ module cpu #(
             raddr[5 + i*8] <= load_req[i].src2_mux; 
             raddr[6 + i*8] <= br_req[i].src1_mux; 
             raddr[7 + i*8] <= br_req[i].src2_mux;
+            $display("[read Address @ %t] br_req[i].src1_mux=%d, br_req[i].src2_mux=%d" , $time, br_req[i].src1_mux, br_req[i].src2_mux);
         end
     end
 
@@ -1330,6 +1331,7 @@ module cpu #(
             load_req_reg[i].src2_val = load_req_reg_org[i].src2_valid ? rdata[5 + i*8] : '1;
             br_req_reg[i].src1_mux = rdata[6 + i*8];
             br_req_reg[i].src2_mux = br_req_reg_org[i].src2_valid ? rdata[7 + i*8] : br_req_reg_org[i].src2_mux;
+            $display("[Real Value @ %t]br_req_reg_org[i].src2_valid = %b,br_req_reg[i].src1_mux=%d, br_req_reg[i].src2_mux= %d" ,$time, br_req_reg_org[i].src2_valid, br_req_reg[i].src1_mux,br_req_reg[i].src2_mux);
         end
     end
     

@@ -135,7 +135,7 @@ module issue_logic #(
                     OPB_IS_RS2:   src2_valid =  1;
                     OPB_IS_I_IMM: src2_valid = 0;
                     OPB_IS_S_IMM: src2_valid = 0;
-                    OPB_IS_B_IMM: src2_valid = 0;
+                    OPB_IS_B_IMM: src2_valid = 1;
                     OPB_IS_U_IMM: src2_valid = 0;
                     OPB_IS_J_IMM: src2_valid = 0;
                     default:      src2_valid = 1; // face feed
