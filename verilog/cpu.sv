@@ -92,6 +92,7 @@ module cpu #(
     logic take_branch;
 // Dispactch
     logic [$clog2(`DISPATCH_WIDTH+1)-1:0] disp_n;
+    logic [$clog2(`DISPATCH_WIDTH+1)-1:0] disp_n_fetch;
     //Free list
     logic [`DISPATCH_WIDTH-1:0] disp_free_space;
     logic [`DISPATCH_WIDTH-1:0] alloc_req;
@@ -281,9 +282,10 @@ module cpu #(
     logic       Dcache2mem_valid;
 
     // mem output
-     MEM_TAG   mem2proc_transaction_tag_dcache; // Memory tag for current transaction
-     MEM_BLOCK mem2proc_data_dcache;            // Data coming back from memory
-     MEM_TAG   mem2proc_data_tag_dcache;        // Tag for which transaction data is for
+    MEM_TAG   mem2proc_transaction_tag_dcache; // Memory tag for current transaction     
+    MEM_TAG   mem2proc_transaction_tag_icache;
+    MEM_BLOCK mem2proc_data_dcache;            // Data coming back from memory
+    MEM_TAG   mem2proc_data_tag_dcache;        // Tag for which transaction data is for
 // Issue
 
     // =========================================================
@@ -410,7 +412,6 @@ module cpu #(
     logic       rd_mem_q;       // previous load
     MEM_TAG     outstanding_mem_tag;    // tag load is waiting in
     MEM_COMMAND Dmem_command_filtered;  // removes redundant loads
-
     //////////////////////////////////////////////////
     //                                              //
     //                Memory Outputs                //
@@ -611,7 +612,7 @@ module cpu #(
         .if_flush (if_flush),  
         .take_branch(take_branch),   
 
-        .disp_n(`N),  //todo
+        .disp_n(disp_n_fetch),  //todo
 
         .pred_valid_i(pred_valid_i),     
         .pred_lane_i(pred_lane_i),      
@@ -1555,8 +1556,6 @@ lsq_top #(
 
 MEM_COMMAND Dcache_command_0_reg;
 MEM_COMMAND Dcache_command_1_reg;
-MEM_TAG mem2proc_transaction_tag_dcache;
-MEM_TAG mem2proc_transaction_tag_icache;
 logic dcache_send_new_mem_req;
 
 always_ff @(posedge clock) begin
@@ -1745,7 +1744,7 @@ always_ff @(posedge clock) begin
         if (stall_dcache) begin
             $display("[%t]stall_dcache = %b", $time, stall_dcache);
         end
-        $display("[%t]proc2mem_command = %s, Imem_command = %s, Dmem_command = %s", $time, proc2mem_command.name, Imem_command.name, Dmem_command.name);
+        // $display("[%t]proc2mem_command = %s, Imem_command = %s, Dmem_command = %s", $time, proc2mem_command.name, Imem_command.name, Dmem_command.name);
         for (i = 0; i < `N; i++) begin
             if(committed_insts[i].valid) begin
             $display("[%t]Commit[%0d]: valid=%b halt=%b illegal=%b reg=%0d data=%h NPC=%h",

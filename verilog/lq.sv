@@ -146,6 +146,7 @@ module lq #(
         query_idx = '0;
         sq_query_addr = '0;
         sq_query_size = '0;
+        rob_idx_to_dcache = '0;
         // stall_older_store_unknown = 1'b0;
         // Find the oldest valid entry that needs data (not valid, not issued)
         // This acts as the candidate for BOTH Forwarding and D-Cache Issue
@@ -192,6 +193,9 @@ module lq #(
         fwd_data = '0;
         fwd_addr = '0;
         sq_forward_valid = '0;
+
+        dc_req_tag = '0;
+        dc_rob_idx = '0;
         //---------------check if there is older store address unknown---------------//
         if (found_unissued) begin
             for (int k=0; k<SQ_SIZE; k++) begin
@@ -604,50 +608,50 @@ module lq #(
   // Debug Task: Show Load Queue Status
   // =================================================================
   task automatic show_lq_status();
-    int i;
-    $display("\n===================================================================");
-    $display("[LQ DUMP] Time: %0t", $time);
+    // int i;
+    // $display("\n===================================================================");
+    // $display("[LQ DUMP] Time: %0t", $time);
     
-    // 1. 顯示佇列基本狀態 (State)
-    $display("[LQ State] Head=%0d | Tail=%0d | Count=%0d | Full=%b | Empty=%b", 
-             head, tail, count, full, empty);
+    // // 1. 顯示佇列基本狀態 (State)
+    // $display("[LQ State] Head=%0d | Tail=%0d | Count=%0d | Full=%b | Empty=%b", 
+    //          head, tail, count, full, empty);
 
-    // 2. 顯示目前的控制邏輯判斷 (Combinational Logic Status)
-    // 這些訊號解釋了為什麼 LQ 現在發送請求，或是為什麼停住了
-    $display("[LQ Logic] --------------------------------------------------------");
-    if (found_unissued)
-        $display("  -> Candidate Found at Index: %0d", query_idx);
-    else
-        $display("  -> No Candidate Found (All done or empty)");
+    // // 2. 顯示目前的控制邏輯判斷 (Combinational Logic Status)
+    // // 這些訊號解釋了為什麼 LQ 現在發送請求，或是為什麼停住了
+    // $display("[LQ Logic] --------------------------------------------------------");
+    // if (found_unissued)
+    //     $display("  -> Candidate Found at Index: %0d", query_idx);
+    // else
+    //     $display("  -> No Candidate Found (All done or empty)");
 
-    $display("  -> Stall by Unknown Older Store? : %b", stall_older_store_unknown);
-    // $display("  -> SQ Forwarding Pending?        : %b", sq_fwd_pending);
-    $display("  -> Final DC Request Valid?       : %b", dc_req_valid);
-    $display("-------------------------------------------------------------------");
+    // $display("  -> Stall by Unknown Older Store? : %b", stall_older_store_unknown);
+    // // $display("  -> SQ Forwarding Pending?        : %b", sq_fwd_pending);
+    // $display("  -> Final DC Request Valid?       : %b", dc_req_valid);
+    // $display("-------------------------------------------------------------------");
 
-    // 3. 顯示佇列內容 (Entry Content)
-    for (i = 0; i < LQ_SIZE; i++) begin
-      if (lq[i].valid) begin
-        // 使用 %s 或標記來指出誰是 Head, 誰是 Candidate
-        string tag;
-        if (i == head) tag = "(HEAD)";
-        else if (found_unissued && i == query_idx) tag = "(*CAND*)";
-        else tag = "";
+    // // 3. 顯示佇列內容 (Entry Content)
+    // for (i = 0; i < LQ_SIZE; i++) begin
+    //   if (lq[i].valid) begin
+    //     // 使用 %s 或標記來指出誰是 Head, 誰是 Candidate
+    //     string tag;
+    //     if (i == head) tag = "(HEAD)";
+    //     else if (found_unissued && i == query_idx) tag = "(*CAND*)";
+    //     else tag = "";
 
-        $display("[LQ[%2d]] %-8s ROB#=%0d Addr=%h (AV=%b) | Data=%h (DV=%b) | Issued=%b | PRF=%0d",
-                 i,
-                 tag,
-                 lq[i].rob_idx,
-                 lq[i].addr,
-                 lq[i].addr_valid,      // Address Valid
-                 lq[i].data,
-                 lq[i].data_valid,      // Data Valid
-                 lq[i].issued,          // Issued to Cache
-                 lq[i].disp_rd_new_prf
-        );
-      end
-    end
-    $display("===================================================================\n");
+    //     $display("[LQ[%2d]] %-8s ROB#=%0d Addr=%h (AV=%b) | Data=%h (DV=%b) | Issued=%b | PRF=%0d",
+    //              i,
+    //              tag,
+    //              lq[i].rob_idx,
+    //              lq[i].addr,
+    //              lq[i].addr_valid,      // Address Valid
+    //              lq[i].data,
+    //              lq[i].data_valid,      // Data Valid
+    //              lq[i].issued,          // Issued to Cache
+    //              lq[i].disp_rd_new_prf
+    //     );
+    //   end
+    // end
+    // $display("===================================================================\n");
   endtask
 
   always_ff @(posedge clock) begin

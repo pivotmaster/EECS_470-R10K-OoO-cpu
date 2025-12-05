@@ -87,7 +87,7 @@ module stage_if #(
             // end else if(PC_reg == 32'hA8) begin //###
             //     PC_next = 32'hA8; //###
             end else begin
-                PC_next = PC_reg + (disp_n << 2); // + 4 * FETCH_WIDTH
+                PC_next = PC_reg + (`N << 2); // + 4 * FETCH_WIDTH
             end
         end
         
