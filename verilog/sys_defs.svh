@@ -94,7 +94,7 @@ typedef logic [$clog2(`ROB_DEPTH)-1:0] ROB_IDX;
 // `define MEM_LATENCY_IN_CYCLES (100.0/`CLOCK_PERIOD+0.49999)
 // the 0.49999 is to force ceiling(100/period). The default behavior for
 // float to integer conversion is rounding to nearest
-
+`define CACHE_MODE 1
 // memory tags represent a unique id for outstanding mem transactions
 // 0 is a sentinel value and is not a valid tag
 `define NUM_MEM_TAGS 15

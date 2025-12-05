@@ -76,6 +76,8 @@ module cpu #(
     MEM_BLOCK Icache_data_out;  //to fetch
     logic     Icache_valid_out;
     ADDR Imem_addr;
+    MEM_TAG mem2proc_transaction_tag_icache;
+
 
 
     // 2. I-Cache -> Fetch
@@ -439,6 +441,7 @@ module cpu #(
         
     end
 
+    assign mem2proc_transaction_tag_icache = (Dmem_command != MEM_NONE) ? '0 : mem2proc_transaction_tag;
     // assign proc2mem_size = DOUBLE; // needed when only has icache
 
     //////////////////////////////////////////////////
@@ -575,7 +578,7 @@ module cpu #(
 
         // Inputs
         // From memory
-        .Imem2proc_transaction_tag(mem2proc_transaction_tag), 
+        .Imem2proc_transaction_tag(mem2proc_transaction_tag_icache), 
         .Imem2proc_data(mem2proc_data),
         .Imem2proc_data_tag(mem2proc_data_tag),
 
@@ -1553,34 +1556,33 @@ lsq_top #(
     //                                              //
     //////////////////////////////////////////////////
 
-MEM_COMMAND Dcache_command_0_reg;
-MEM_COMMAND Dcache_command_1_reg;
-MEM_TAG mem2proc_transaction_tag_dcache;
-MEM_TAG mem2proc_transaction_tag_icache;
-logic dcache_send_new_mem_req;
+// MEM_COMMAND Dcache_command_0_reg;
+// MEM_COMMAND Dcache_command_1_reg;
+// MEM_TAG mem2proc_transaction_tag_dcache;
+// logic dcache_send_new_mem_req;
 
-always_ff @(posedge clock) begin
-    if (reset) begin
-        Dcache_command_0_reg <= MEM_NONE;
-        Dcache_command_1_reg <= MEM_NONE;
-    end else begin
-        Dcache_command_0_reg <=  (dcache_send_new_mem_req) ? Dcache_command_0 : MEM_NONE;
-        Dcache_command_1_reg <=  (dcache_send_new_mem_req) ? Dcache_command_1 : MEM_NONE;
-        $display("Dcache_command_0_reg = %d, Dcache_command_1_reg = %d", Dcache_command_0_reg, Dcache_command_1_reg);
-        $display("mem2proc_transaction_tag_dcache = %d, mem2proc_transaction_tag_icache = %d, mem2proc_transaction_tag = %d", mem2proc_transaction_tag_dcache, mem2proc_transaction_tag_icache, mem2proc_transaction_tag);
-    end
+// always_ff @(posedge clock) begin
+//     if (reset) begin
+//         Dcache_command_0_reg <= MEM_NONE;
+//         Dcache_command_1_reg <= MEM_NONE;
+//     end else begin
+//         Dcache_command_0_reg <=  (dcache_send_new_mem_req) ? Dcache_command_0 : MEM_NONE;
+//         Dcache_command_1_reg <=  (dcache_send_new_mem_req) ? Dcache_command_1 : MEM_NONE;
+//         $display("Dcache_command_0_reg = %d, Dcache_command_1_reg = %d", Dcache_command_0_reg, Dcache_command_1_reg);
+//         $display("mem2proc_transaction_tag_dcache = %d, mem2proc_transaction_tag_icache = %d, mem2proc_transaction_tag = %d", mem2proc_transaction_tag_dcache, mem2proc_transaction_tag_icache, mem2proc_transaction_tag);
+//     end
 
-end
+// end
 
-assign mem2proc_transaction_tag_dcache =
-    (Dcache_command_0_reg != MEM_NONE || Dcache_command_1_reg != MEM_NONE )
-        ? mem2proc_transaction_tag
-        : '0;
+// assign mem2proc_transaction_tag_dcache =
+//     (Dcache_command_0_reg != MEM_NONE || Dcache_command_1_reg != MEM_NONE )
+//         ? mem2proc_transaction_tag
+//         : '0;
 
-assign mem2proc_transaction_tag_icache =
-    (Dcache_command_0_reg != MEM_NONE || Dcache_command_1_reg != MEM_NONE )
-        ? '0
-        : mem2proc_transaction_tag;
+// assign mem2proc_transaction_tag_icache =
+//     (Dcache_command_0_reg != MEM_NONE || Dcache_command_1_reg != MEM_NONE )
+//         ? '0
+//         : mem2proc_transaction_tag;
 
 dcache dcache_0 (
 
@@ -1745,7 +1747,7 @@ always_ff @(posedge clock) begin
         if (stall_dcache) begin
             $display("[%t]stall_dcache = %b", $time, stall_dcache);
         end
-        $display("[%t]proc2mem_command = %s, Imem_command = %s, Dmem_command = %s", $time, proc2mem_command.name, Imem_command.name, Dmem_command.name);
+        $display("[%t]proc2mem_command = %s, Imem_command = %s, Dmem_command = %s, mem2proc_transaction_tag = %d,mem2proc_data_tag = %d", $time, proc2mem_command.name, Imem_command.name, Dmem_command.name, mem2proc_transaction_tag, mem2proc_data_tag);
         for (i = 0; i < `N; i++) begin
             if(committed_insts[i].valid) begin
             $display("[%t]Commit[%0d]: valid=%b halt=%b illegal=%b reg=%0d data=%h NPC=%h",
