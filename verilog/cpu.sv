@@ -338,6 +338,8 @@ module cpu #(
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0][$clog2(`ROB_DEPTH)-1:0] fu_rob_idx;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_exception;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_mispred; 
+    ADDR [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0]  fu_jtype_value;
+    logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_is_jtype;
 
     //FU -> LSQ
     logic [`LOAD_COUNT-1:0] fu_ls_valid_o; 
@@ -352,6 +354,9 @@ module cpu #(
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0][$clog2(`ROB_DEPTH)-1:0] fu_rob_idx_reg;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_exception_reg;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_mispred_reg;
+    ADDR [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0]  fu_jtype_value_reg;
+    logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_is_jtype_reg;
+
     logic [`LOAD_COUNT-1:0] [`XLEN-1:0] fu_sw_data_o_reg; 
     logic [`LOAD_COUNT-1:0] fu_ls_valid_o_reg; 
     logic [`LOAD_COUNT-1:0] [$clog2(`ROB_DEPTH)-1:0] fu_ls_rob_idx_o_reg; 
@@ -1360,6 +1365,8 @@ module cpu #(
         .fu_rob_idx_o(fu_rob_idx),
         .fu_exception_o(fu_exception),
         .fu_mispred_o(fu_mispred),
+        .fu_jtype_value_o(fu_jtype_value),
+        .fu_is_jtype_o(fu_is_jtype),
 
         .fu_ls_valid_o(fu_ls_valid_o),
         .fu_ls_rob_idx_o(fu_ls_rob_idx_o),
@@ -1394,6 +1401,8 @@ module cpu #(
             fu_rob_idx_reg <= '0;
             fu_exception_reg <= '0;
             fu_mispred_reg <= '0;
+            fu_jtype_value_reg <= '0;
+            fu_is_jtype_reg <= '0;
         end else begin
             fu_ls_valid_o_reg <= fu_ls_valid_o;
             fu_ls_rob_idx_o_reg <= fu_ls_rob_idx_o;
@@ -1406,7 +1415,8 @@ module cpu #(
             fu_rob_idx_reg <= fu_rob_idx;
             fu_exception_reg <= fu_exception;
             fu_mispred_reg <= fu_mispred;
-
+            fu_jtype_value_reg <= fu_jtype_value;
+            fu_is_jtype_reg <= fu_is_jtype;
 
             for(int i=0;i<`DISPATCH_WIDTH;i++) begin
                 ex_c_inst_dbg[i] <= s_ex_inst_dbg[i]; // debug output, just forwarded from ID
@@ -1646,7 +1656,8 @@ dcache dcache_0 (
         .fu_rob_idx_i(fu_rob_idx_reg),
         .fu_exception_i(fu_exception_reg),
         .fu_mispred_i(fu_mispred_reg),
-
+        .fu_jtype_value_i(fu_jtype_value_reg),
+        .fu_is_jtype(fu_is_jtype_reg),
         // PR
         .prf_wr_en_o(prf_wr_en),
         .prf_waddr_o(prf_waddr),

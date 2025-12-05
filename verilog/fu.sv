@@ -60,6 +60,8 @@ module alu_fu #(
     resp_o.is_lw     = 1'b0;
     resp_o.is_sw     = 1'b0;
     resp_o.sw_data   = '0;
+    resp_o.j_type_value = '0;
+    resp_o.is_jtype = '0;
   end
 endmodule
 
@@ -149,6 +151,8 @@ module mul_fu #(
         resp_o.is_lw     = 1'b0;
         resp_o.is_sw     = 1'b0;
         resp_o.sw_data   = '0;
+        resp_o.j_type_value = '0;
+        resp_o.is_jtype = '0;
       end
     end
 
@@ -176,6 +180,8 @@ module ls_fu #(
     resp_o.rob_idx   = req_i.rob_idx;
     resp_o.exception = 1'b0;
     resp_o.mispred   = 1'b0;
+    resp_o.j_type_value = '0;
+    resp_o.is_jtype = '0;
 
     if (req_i.disp_packet.rd_mem) begin
       resp_o.is_lw     = 1'b1;
@@ -212,6 +218,7 @@ module branch_fu #(
 );
 
   fu_resp_t resp_local_o;
+  logic is_jtype;
 
   alu_fu #(.XLEN(XLEN), .PHYS_REGS(PHYS_REGS), .ROB_DEPTH(ROB_DEPTH)) u_alu_br (
         .req_i  (req_i),
@@ -222,8 +229,10 @@ module branch_fu #(
   logic take;
   
   always_comb begin
+    is_jtype = '0;
     take = `FALSE;
     if(req_i.disp_packet.uncond_branch == 1'b1) begin
+          is_jtype = 1'b1;
           take = `TRUE;
     end else begin
           case (req_i.disp_packet.inst.b.funct3)
@@ -243,7 +252,7 @@ module branch_fu #(
 
   always_comb begin
     resp_o.valid     = req_i.valid;
-    resp_o.value     = resp_local_o.value; // alu value
+    resp_o.value     = resp_local_o.value; // alu value // addr
     resp_o.dest_prf  = req_i.dest_tag;
     resp_o.rob_idx   = req_i.rob_idx;
     resp_o.exception = 1'b1; // TODO: is branch
@@ -251,6 +260,8 @@ module branch_fu #(
     resp_o.is_lw     = 1'b0;
     resp_o.is_sw     = 1'b0;
     resp_o.sw_data   = '0;
+    resp_o.j_type_value = req_i.disp_packet.NPC;
+    resp_o.is_jtype = is_jtype;
   end
 endmodule
 
@@ -290,7 +301,8 @@ module fu #(
     output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0][$clog2(ROB_DEPTH)-1:0] fu_rob_idx_o,
     output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0]                    fu_exception_o,
     output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0]                    fu_mispred_o,
-
+    output ADDR  [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0]                    fu_jtype_value_o,               
+    output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0]                    fu_is_jtype_o,
     //FU -> LSQ
     output logic [LOAD_COUNT-1:0]                                               fu_ls_valid_o,
     output logic [LOAD_COUNT-1:0]             [$clog2(ROB_DEPTH)-1:0]           fu_ls_rob_idx_o,
@@ -393,6 +405,8 @@ module fu #(
       fu_rob_idx_o  [k] = fu_resp_bus[k].rob_idx;
       fu_exception_o[k] = fu_resp_bus[k].exception;
       fu_mispred_o  [k] = fu_resp_bus[k].mispred;
+      fu_jtype_value_o[k] = fu_resp_bus[k].j_type_value; //addr
+      fu_is_jtype_o[k]    = fu_resp_bus[k].is_jtype;
     end
 
   end

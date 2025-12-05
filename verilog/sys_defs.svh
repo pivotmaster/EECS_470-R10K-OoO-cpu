@@ -474,15 +474,17 @@ typedef enum logic [1:0] {
 
 
 typedef struct packed {
-    logic                         valid;
-    logic [`XLEN-1:0]                  value;
+    logic                          valid;
+    logic [`XLEN-1:0]              value;
     logic [$clog2(`PHYS_REGS)-1:0] dest_prf;
     logic [`XLEN-1:0] sw_data;
     logic                          is_lw;
     logic                          is_sw;
     logic [$clog2(`ROB_DEPTH)-1:0] rob_idx;
-    logic                         exception;
-    logic                         mispred;
+    logic                          exception;
+    logic                          mispred;
+    ADDR                           j_type_value;
+    logic                          is_jtype;
 } fu_resp_t;
 
 typedef struct packed {

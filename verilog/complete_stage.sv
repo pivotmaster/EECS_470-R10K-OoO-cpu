@@ -22,7 +22,8 @@ module complete_stage #(
     input  logic [WB_WIDTH-1:0][$clog2(ROB_DEPTH)-1:0] fu_rob_idx_i,
     input  logic [WB_WIDTH-1:0]                    fu_exception_i,
     input  logic [WB_WIDTH-1:0]                    fu_mispred_i,
-
+    input  ADDR [WB_WIDTH-1:0]                 fu_jtype_value_i,
+    input  logic [WB_WIDTH-1:0]                    fu_is_jtype,
     // PR
     output logic [WB_WIDTH-1:0]                    prf_wr_en_o,
     output logic [WB_WIDTH-1:0][$clog2(PHYS_REGS)-1:0] prf_waddr_o,
@@ -62,13 +63,17 @@ module complete_stage #(
                 wb_rob_idx_o[i]   = fu_rob_idx_i[i];
                 wb_exception_o[i] = fu_exception_i[i];
                 wb_mispred_o[i]   = fu_mispred_i[i];
-                wb_value_o[i]   = fu_value_i[i]; // 11/21 sychenn
+                if(fu_is_jtype[i])begin
+                    wb_value_o[i] = fu_jtype_value_i[i];
+                end else begin
+                    wb_value_o[i]   = fu_value_i[i]; // 11/21 sychenn
+                end
 
                 cdb_o[i].valid     = 1'b1;
                 cdb_o[i].dest_arch = '0; //todo: why is zero?
                 cdb_o[i].phys_tag  = fu_dest_prf_i[i];
                 cdb_o[i].value     = fu_value_i[i];          
-            end else  if (wb_valid) begin 
+            end else if (wb_valid) begin 
                 // todo: lsq wb is valid
                 $display("complete stage: wb_valid=%b | wb_rob_idx=%d | wb_data=%h | wb_disp_rd_new_prf_i=%d ",wb_valid, wb_rob_idx, wb_data, wb_disp_rd_new_prf_i);
                 // from lsq
@@ -90,6 +95,7 @@ module complete_stage #(
             // $display("complete stage i, out, in = %0d, %0d, %0d", i, cdb_o[i].value, fu_value_i[i]);
         end
     end
+    
 
 endmodule
 
