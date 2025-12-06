@@ -269,22 +269,13 @@ module map_table#(
     // Snapshot output: provide current mapping (for ROB/CPU to save)
     // Drive it continuously from table_reg; CPU will latch on checkpoint_valid_o
     // =======================================================
-    // generate
-    //     for(genvar i = 0; i < ARCH_REGS; i++) begin
-    //         assign snapshot_data_o[i].phys  = table_reg[i].phys;
-    //         assign snapshot_data_o[i].valid = table_reg[i].valid;
-    //     end
-    // endgenerate
-    always_comb begin 
-        for(int i = 0 ; i < ARCH_REGS ; i++)begin
-            snapshot_data_o[i].phys = table_reg[i].phys;
-            snapshot_data_o[i].valid = table_reg[i].valid;
+    generate
+        for(genvar i = 0; i < ARCH_REGS; i++) begin
+            assign snapshot_data_o[i].phys  = table_reg[i].phys;
+            assign snapshot_data_o[i].valid = table_reg[i].valid;
         end
-        if (disp_valid_i[0]) begin
-            snapshot_data_o[disp_arch_i[0]].phys = disp_new_phys_i[0];
-            snapshot_data_o[disp_arch_i[0]].valid = 1'b0;
-        end
-    end
+    endgenerate
+
 
     // always_ff @(negedge clock) begin
     //     // for(int i = 0 ; )
