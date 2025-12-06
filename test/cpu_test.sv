@@ -127,11 +127,11 @@ module testbench;
 
     // Instantiate the Data Memory
     MEM_COMMAND debug_proc2mem_command;//###
-    assign debug_proc2mem_command = MEM_LOAD;//###
+    // assign debug_proc2mem_command = MEM_LOAD;//###
     mem memory (
         // Inputs
         .clock            (clock),
-        .proc2mem_command (debug_proc2mem_command),//###
+        .proc2mem_command (proc2mem_command),//###
         .proc2mem_addr    (proc2mem_addr),
         .proc2mem_data    (proc2mem_data),
 `ifndef CACHE_MODE
@@ -232,6 +232,7 @@ module testbench;
             //              proc2mem_data[63:32], proc2mem_data[31:0]);
 
             print_custom_data();
+            //show_mem_per_cycle();
 
             output_reg_writeback_and_maybe_halt();
 
@@ -308,9 +309,29 @@ module testbench;
         end
     endtask // task output_cpi_file
 
+    // Show contents of Unified Memory at each cycle for debugging
+    task show_mem_per_cycle;
+        int showing_data;
+        begin
+            $fdisplay(out_fileno, "\n=== Cycle %d Memory State ===", clock_count);
+            $fdisplay(out_fileno, "@@@ Unified Memory contents hex on left, decimal on right: ");
+            $fdisplay(out_fileno, "@@@");
+            showing_data = 0;
+            for (int k = 0; k <= `MEM_64BIT_LINES - 1; k = k+1) begin
+                if (memory.unified_memory[k] != 0) begin
+                    $fdisplay(out_fileno, "@@@ mem[%5d] = %x : %0d", k*8, memory.unified_memory[k],
+                                                             memory.unified_memory[k]);
+                    showing_data = 1;
+                end else if (showing_data != 0) begin
+                    $fdisplay(out_fileno, "@@@");
+                    showing_data = 0;
+                end
+            end
+            $fdisplay(out_fileno, "@@@");
+            $fdisplay(out_fileno, "=== End Cycle %d Memory State ===\n", clock_count);
+        end
+    endtask // task show_mem_per_cycle
 
-    // Show contents of Unified Memory in both hex and decimal
-    // Also output the final processor status
     task show_final_mem_and_status;
         input EXCEPTION_CODE final_status;
         int showing_data;
@@ -342,8 +363,6 @@ module testbench;
         end
     endtask // task show_final_mem_and_status
 
-
-
     // OPTIONAL: Print our your data here
     // It will go to the $program.log file
     task print_custom_data;
@@ -360,7 +379,7 @@ module testbench;
     // end
 
     always_ff @(negedge clock) begin
-        if(clock_count > 3000) begin
+        if(clock_count > 10000) begin
             $display("forced finished");
             $finish;
         end

@@ -146,6 +146,7 @@ module lq #(
         query_idx = '0;
         sq_query_addr = '0;
         sq_query_size = '0;
+        rob_idx_to_dcache = '0;
         // stall_older_store_unknown = 1'b0;
         // Find the oldest valid entry that needs data (not valid, not issued)
         // This acts as the candidate for BOTH Forwarding and D-Cache Issue
@@ -192,14 +193,19 @@ module lq #(
         fwd_data = '0;
         fwd_addr = '0;
         sq_forward_valid = '0;
+
+        dc_req_tag = '0;
+        dc_rob_idx = '0;
         //---------------check if there is older store address unknown---------------//
         if (found_unissued) begin
             for (int k=0; k<SQ_SIZE; k++) begin
+                `ifndef SYNTHESIS
                 // 條件：SQ有效 + 地址未知 + 比目前的 Load 老
                 $display("{%t} sq_view_i[%0d].valid = %0b", $time, k, sq_view_i[k].valid);
                 $display("{%t} sq_view_i[%0d].addr_valid = %0b", $time, k, sq_view_i[k].addr_valid);
                 $display("{%t} is old =%b", $time, is_older(sq_view_i[k].rob_idx, lq[query_idx].rob_idx, rob_head));
                 $display("{%t} sq_view_i[%0d].rob_idx = %0d, lq[query_idx].rob_idx = %0d, rob_head = %0d", $time, k, sq_view_i[k].rob_idx, lq[query_idx].rob_idx, rob_head);
+                `endif
                 if (sq_view_i[k].valid && 
                     !sq_view_i[k].addr_valid && 
                     is_older(sq_view_i[k].rob_idx, lq[query_idx].rob_idx, rob_head)) begin
@@ -209,7 +215,9 @@ module lq #(
                 end
             end
         end
+        `ifndef SYNTHESIS
         $display("{%t} stall_older_store_unknown = %0b", $time, stall_older_store_unknown);
+        `endif
 
         // Only issue request if:
         // 1. We found a candidate (found_unissued)
@@ -257,7 +265,9 @@ module lq #(
                 checked = 0;
                 // start at tail - 1 (most recent store) and go backwards up to count entries
                 start  = (sq_view_tail == 0) ? (SQ_SIZE - 1) : (sq_view_tail - 1);
+                `ifndef SYNTHESIS
                 $display("[DEBUG-FWD] @Time : %t , sq_view_count: %d" , $time, sq_view_count);
+                `endif
                 // idx = tail - 1;
                 for(k = 0 ; k < SQ_SIZE ; k++)begin
                     // int i = (idx - k) % SQ_SIZE;
@@ -265,10 +275,14 @@ module lq #(
                     if(i<0)i = i + SQ_SIZE;
                     // $display("[DEBUG-FWD] checked: %d ,Checking indx = %0d, sq[%0d] = %0d , k=%0d , start = %0d" ,checked, i , i , sq_view_i[i].valid , k , start);
                     if(sq_view_i[i].valid)begin
+                        `ifndef SYNTHESIS
                         $display("[DEBUG-FWD]@Time %t Checking idx=%0d. SQ_Addr=%h, SQ_Size=%0d | Load_Addr=%h, Load_Size=%0d", 
                                 $time, i, sq_view_i[i].addr, sq_view_i[i].size, lq[query_idx].addr, lq[query_idx].addr);
+                        `endif
                         if(addr_overlap(sq_view_i[i].addr , sq_view_i[i].size , lq[query_idx].addr , lq[query_idx].size))begin
+                            `ifndef SYNTHESIS
                             $display("[RTL-SQ-FWD] Overlap at idx=%0d. DataValid=%b. Data=%h", i, sq_view_i[i].data_valid, sq_view_i[i].data);
+                            `endif
                             if(sq_view_i[i].data_valid)begin
                                 fwd_found = 1'b1;
                                 // pending_found = 1'b0;
@@ -338,9 +352,11 @@ module lq #(
             wb_valid <= 1'b0;
             wb_rob_idx <= '0;
             wb_data <= '0;
+            wb_disp_rd_new_prf_o <= '0;
             for(int i = 0; i < LQ_SIZE; i++) begin
                 lq[i].valid <= '0;
                 lq[i].data_valid <= '0;
+                lq[i].addr_valid <= '0;
                 lq[i].issued <= '0;
                 lq[i].addr <= '0;
                 lq[i].size <= '0;
@@ -460,8 +476,10 @@ module lq #(
                 // If we queried SQ and it says "Hit!", take the data directly
                 else if(wb_from_fwd) begin
                     // 直接寫入剛剛發起查詢的那個 Index (query_idx)
+                    `ifndef SYNTHESIS
                     $display("[sq_forwarding]: fwd_data: %0h|fwd_found=%b", fwd_data,fwd_found);
                     $display("sq_view_i[i].valid=%b | sq_view_i[i].data_valid=%b | sq_view_i[i].rob_idx=%d | addr_overlap=%b", sq_view_i[0].valid, sq_view_i[0].data_valid, sq_view_i[0].rob_idx, addr_overlap(sq_view_i[0].addr , sq_view_i[0].size , lq[query_idx].addr , lq[query_idx].size));
+                    `endif
                     lq[query_idx].data <= fwd_data;
                     lq[query_idx].data_valid <= 1'b1;
                     // 不需要 set issued, 因為資料已經拿到了
@@ -603,6 +621,7 @@ module lq #(
     // =================================================================
   // Debug Task: Show Load Queue Status
   // =================================================================
+`ifndef SYNTHESIS
   task automatic show_lq_status();
     int i;
     $display("\n===================================================================");
@@ -659,4 +678,5 @@ module lq #(
     //     $dumpfile("lq.vcd");
     //     $dumpvars(0, lq);
     // end
+`endif
 endmodule

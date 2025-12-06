@@ -170,7 +170,7 @@ module lsq_top #(
     assign  new_dispatch = (dispatch_valid && (dispatch_rob_idx!= pre_dispatch_rob));
 
     //### sychen 
-    always_ff @(posedge clock or posedge reset) begin 
+    always_ff @(posedge clock) begin 
         if (reset) begin
             pre_dispatch_rob <= '0;
         end else if(snapshot_restore_valid_i)begin
@@ -269,7 +269,8 @@ module lsq_top #(
     // 2. Load Queue Instance
     lq #(
         .DISPATCH_WIDTH(DISPATCH_WIDTH),
-        .LQ_SIZE(LQ_SIZE)
+        .LQ_SIZE(LQ_SIZE),
+        .SQ_SIZE(SQ_SIZE)
     ) lq_inst (
         .clock(clock),
         .reset(reset),
@@ -380,6 +381,7 @@ module lsq_top #(
     // =====================================================
     // Debug Display Task
     // =====================================================
+`ifndef SYNTHESIS
     task automatic show_lsq_status();
         $display("=== LSQ Status (Cycle %0d) ===", $time);
         
@@ -422,5 +424,6 @@ module lsq_top #(
             // end
         end
     end
+`endif
 
 endmodule

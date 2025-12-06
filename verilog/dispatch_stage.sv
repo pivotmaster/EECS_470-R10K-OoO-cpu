@@ -115,6 +115,7 @@ module dispatch_stage #(
 
 logic [DISPATCH_WIDTH-1:0] disp_has_dest;
 logic [DISPATCH_WIDTH-1:0] disp_rd_wen_o;
+logic [$clog2(DISPATCH_WIDTH+1)-1:0] total_valid_instr;
 
     //### 11/10 sychenn ###// (for map table restore)
     always_comb begin
@@ -127,6 +128,14 @@ logic [DISPATCH_WIDTH-1:0] disp_rd_wen_o;
     assign stall = (disp_n < `N);
 
     always_comb begin
+      total_valid_instr = '0;
+      for (int i = 0; i < DISPATCH_WIDTH; i++) begin
+        if (if_packet_i[i].valid)
+          total_valid_instr = total_valid_instr + 1;
+      end
+    end
+
+    always_comb begin
         disp_n = DISPATCH_WIDTH;
         if (free_rs_slots_i < disp_n)  disp_n = free_rs_slots_i;
         if (free_rob_slots_i < disp_n) disp_n = free_rob_slots_i;
@@ -134,13 +143,17 @@ logic [DISPATCH_WIDTH-1:0] disp_rd_wen_o;
         // if (lq_count < disp_n)         disp_n = lq_count;
         // if (st_count < disp_n)         disp_n = st_count;
     end
-
+`ifndef SYNTHESIS
     always_ff @(posedge clock) begin
       if (!reset) begin
-        $display("[%0t] DISPATCH: now valid=%b | RS=%0d ROB=%0d REG=%0d  W=%0d  -> disp_n=%0d",
-                $time, if_packet_i[0].valid, free_rs_slots_i, free_rob_slots_i, free_regs_i, DISPATCH_WIDTH, disp_n);
+        for (int i = 0; i < DISPATCH_WIDTH; i++) begin
+            $display("[%0t] DISPATCH: if_packet_i[%b] valid=%0d", $time, i, if_packet_i[i].valid);
+        end
+        $display("[%0t] DISPATCH: RS=%0d ROB=%0d REG=%0d  W=%0d  -> disp_n=%0d",
+                $time,free_rs_slots_i, free_rob_slots_i, free_regs_i, DISPATCH_WIDTH, disp_n);
       end
     end
+`endif
 
     //pass packet
     always_comb begin

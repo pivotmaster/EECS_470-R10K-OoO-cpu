@@ -27,10 +27,10 @@
 `define ROB_DEPTH 32
 `define MULT_STAGES 4
 
-`define SQ_SIZE 128
-`define LQ_SIZE 128  
-`define LQ_IDX_WIDTH 7 //### clog2(128) 
-`define SQ_IDX_WIDTH 7
+`define SQ_SIZE 4
+`define LQ_SIZE 4  
+`define LQ_IDX_WIDTH $clog2(`SQ_SIZE) 
+`define SQ_IDX_WIDTH $clog2(`LQ_SIZE)
 
 // fixed data
 `define FU_ALU `SINGLE_FU_NUM
@@ -90,11 +90,11 @@ typedef logic [$clog2(`ROB_DEPTH)-1:0] ROB_IDX;
 // you are not allowed to change this definition for your final processor
 // the project 3 processor has a massive boost in performance just from having no mem latency
 // see if you can beat it's CPI in project 4 even with a 100ns latency!
-`define MEM_LATENCY_IN_CYCLES  0
+`define MEM_LATENCY_IN_CYCLES  8
 // `define MEM_LATENCY_IN_CYCLES (100.0/`CLOCK_PERIOD+0.49999)
 // the 0.49999 is to force ceiling(100/period). The default behavior for
 // float to integer conversion is rounding to nearest
-
+`define CACHE_MODE 1
 // memory tags represent a unique id for outstanding mem transactions
 // 0 is a sentinel value and is not a valid tag
 `define NUM_MEM_TAGS 15

@@ -76,6 +76,8 @@ module cpu #(
     MEM_BLOCK Icache_data_out;  //to fetch
     logic     Icache_valid_out;
     ADDR Imem_addr;
+    MEM_TAG mem2proc_transaction_tag_icache;
+
 
 
     // 2. I-Cache -> Fetch
@@ -92,6 +94,7 @@ module cpu #(
     logic take_branch;
 // Dispactch
     logic [$clog2(`DISPATCH_WIDTH+1)-1:0] disp_n;
+    logic [$clog2(`DISPATCH_WIDTH+1)-1:0] disp_n_fetch;
     //Free list
     logic [`DISPATCH_WIDTH-1:0] disp_free_space;
     logic [`DISPATCH_WIDTH-1:0] alloc_req;
@@ -281,9 +284,10 @@ module cpu #(
     logic       Dcache2mem_valid;
 
     // mem output
-     MEM_TAG   mem2proc_transaction_tag_dcache; // Memory tag for current transaction
-     MEM_BLOCK mem2proc_data_dcache;            // Data coming back from memory
-     MEM_TAG   mem2proc_data_tag_dcache;        // Tag for which transaction data is for
+    MEM_TAG   mem2proc_transaction_tag_dcache; // Memory tag for current transaction     
+    MEM_TAG   mem2proc_transaction_tag_icache;
+    MEM_BLOCK mem2proc_data_dcache;            // Data coming back from memory
+    MEM_TAG   mem2proc_data_tag_dcache;        // Tag for which transaction data is for
 // Issue
 
     // =========================================================
@@ -299,16 +303,20 @@ module cpu #(
 
     assign rd_en = '1;
     always_ff @(posedge clock) begin //###
-        for(int i = 0; i < `SINGLE_FU_NUM; i++) begin
-            raddr[0 + i*8] <= alu_req[i].src1_val; 
-            raddr[1 + i*8] <= alu_req[i].src2_val; 
-            raddr[2 + i*8] <= mul_req[i].src1_val; 
-            raddr[3 + i*8] <= mul_req[i].src2_val; 
-            raddr[4 + i*8] <= load_req[i].src1_mux; 
-            raddr[5 + i*8] <= load_req[i].src2_mux; 
-            raddr[6 + i*8] <= br_req[i].src1_mux; 
-            raddr[7 + i*8] <= br_req[i].src2_mux;
-            $display("[read Address @ %t] br_req[i].src1_mux=%d, br_req[i].src2_mux=%d" , $time, br_req[i].src1_mux, br_req[i].src2_mux);
+
+        if(reset) begin
+            raddr <= '0;
+        end else begin
+            for(int i = 0; i < `SINGLE_FU_NUM; i++) begin
+                raddr[0 + i*8] <= alu_req[i].src1_val; 
+                raddr[1 + i*8] <= alu_req[i].src2_val; 
+                raddr[2 + i*8] <= mul_req[i].src1_val; 
+                raddr[3 + i*8] <= mul_req[i].src2_val; 
+                raddr[4 + i*8] <= load_req[i].src1_mux; 
+                raddr[5 + i*8] <= load_req[i].src2_mux; 
+                raddr[6 + i*8] <= br_req[i].src1_mux; 
+                raddr[7 + i*8] <= br_req[i].src2_mux;
+            end
         end
     end
 
@@ -409,6 +417,8 @@ module cpu #(
 
     // Outputs from WB-Stage (These loop back to the register file in ID)
     COMMIT_PACKET [`N-1:0]  wb_packet;
+    COMMIT_PACKET wfi;
+    logic wfi_tag;
 
     // Logic for stalling memory stage
     logic       new_load;
@@ -417,6 +427,9 @@ module cpu #(
     MEM_TAG     outstanding_mem_tag;    // tag load is waiting in
     MEM_COMMAND Dmem_command_filtered;  // removes redundant loads
 
+    logic system_stop, system_stop_next, finished_wb_to_mem;
+    // COMMIT_PACKET wfi;
+    
     //////////////////////////////////////////////////
     //                                              //
     //                Memory Outputs                //
@@ -445,6 +458,7 @@ module cpu #(
         
     end
 
+    assign mem2proc_transaction_tag_icache = (Dmem_command != MEM_NONE) ? '0 : mem2proc_transaction_tag;
     // assign proc2mem_size = DOUBLE; // needed when only has icache
 
     //////////////////////////////////////////////////
@@ -493,7 +507,7 @@ module cpu #(
     assign branch_resolve = wb_valid[`FU_NUM - `FU_BRANCH]; // no matter it is mispredict or not
     assign stall_dispatch = branch_stall || stall;
 
-
+`ifndef SYNTHESIS
     always_ff @(posedge clock) begin
         if(!reset) begin
             $display("|is_branch=%b | has_branch_in_pipline=%b | branch_stall=%b | branch_resolve=%b", |is_branch, has_branch_in_pipline, branch_stall, branch_resolve);
@@ -509,6 +523,7 @@ module cpu #(
             $display("inst[%d] valid(%b) : %h", i, if_packet[i].valid, if_packet[i].inst);
         end
     end
+`endif
     // assign if_valid = 1'b1;
     assign if_valid = !stall && !branch_stall && !stall_dcache;
     //###
@@ -540,9 +555,11 @@ module cpu #(
             cycle_count <= 0;
         end else begin
             if (if_flush) begin
+                `ifndef SYNTHESIS
                 $display("cycle[%d]| if_flush=%b | wb_valid=%b | wb_mispred=%b | wb_rob_idx=%d | correct_pc_target_o=%h", cycle_count, if_flush, wb_valid, wb_mispred, wb_rob_idx[`FU_NUM - `FU_BRANCH], fu_value_reg[`FU_NUM - `FU_BRANCH]);
+                `endif
             end else begin
-            cycle_count <= cycle_count + 1;
+                cycle_count <= cycle_count + 1;
             end
         end
     end
@@ -573,7 +590,7 @@ module cpu #(
     //                  I-cache                     //
     //                                              //
     //////////////////////////////////////////////////
-    MEM_TAG mem2proc_data_tag_icache;
+    // MEM_TAG mem2proc_data_tag_icache;
 
     icache icache_0(
         .clock (clock),
@@ -583,7 +600,7 @@ module cpu #(
         // From memory
         .Imem2proc_transaction_tag(mem2proc_transaction_tag_icache), 
         .Imem2proc_data(mem2proc_data),
-        .Imem2proc_data_tag(mem2proc_data_tag_icache),
+        .Imem2proc_data_tag(mem2proc_data_tag),
 
         // From fetch stage (the insturction address)
         .proc2Icache_addr(proc2Icache_addr),
@@ -617,7 +634,7 @@ module cpu #(
         .if_flush (if_flush),  
         .take_branch(take_branch),   
 
-        .disp_n(`N),  //todo
+        .disp_n(disp_n_fetch),  //todo
 
         .pred_valid_i(pred_valid_i),     
         .pred_lane_i(pred_lane_i),      
@@ -640,7 +657,7 @@ module cpu #(
         .if_packet_o (if_packet)
     );
 
-
+    
     // IF-stage debug outputs
     always_comb begin
 		for(int i=0;i<`FETCH_WIDTH;i++)begin
@@ -839,7 +856,10 @@ module cpu #(
         .rob_head_o(rob_head),
 
         .rob_store_ready_idx(rob_store_ready_idx),
-        .rob_store_ready_valid(rob_store_ready_valid)
+        .rob_store_ready_valid(rob_store_ready_valid),
+
+        //halt
+        .system_stop(system_stop)
     );
 
     //////////////////////////////////////////////////
@@ -847,7 +867,7 @@ module cpu #(
     //                  map table                   //
     //                                              //
     //////////////////////////////////////////////////
-
+`ifndef SYNTHESIS
     always_ff @(negedge clock) begin
         for (int i = 0; i < `DISPATCH_WIDTH; i++) begin
             $display("DISP[%0d] rs1_arch=%0d rs2_arch=%0d rd_arch=%0d rs1_phys=%0d rs2_phys=%0d rd_phys=%0d",
@@ -861,6 +881,7 @@ module cpu #(
         end
         $display();
     end
+`endif
 
 
     always_comb begin
@@ -921,6 +942,10 @@ module cpu #(
  // valid bit here means ready
     always_ff @(posedge clock) begin : checkpoint
         if (reset) begin
+            for(int i = 0; i < `ARCH_REGS; i++) begin
+                snapshot_reg[i].phys <= '0;
+                snapshot_reg[i].valid <= '0;
+            end
             has_snapshot       <= 1'b0;
         end else begin
             if (if_flush && has_snapshot) begin
@@ -1577,8 +1602,6 @@ lsq_top #(
 
 MEM_COMMAND Dcache_command_0_reg;
 MEM_COMMAND Dcache_command_1_reg;
-MEM_TAG mem2proc_transaction_tag_dcache;
-MEM_TAG mem2proc_transaction_tag_icache;
 logic dcache_send_new_mem_req;
 
 always_ff @(posedge clock) begin
@@ -1588,8 +1611,10 @@ always_ff @(posedge clock) begin
     end else begin
         Dcache_command_0_reg <=  (dcache_send_new_mem_req) ? Dcache_command_0 : MEM_NONE;
         Dcache_command_1_reg <=  (dcache_send_new_mem_req) ? Dcache_command_1 : MEM_NONE;
+        `ifndef SYNTHESIS
         $display("Dcache_command_0_reg = %d, Dcache_command_1_reg = %d", Dcache_command_0_reg, Dcache_command_1_reg);
         $display("mem2proc_transaction_tag_dcache = %d, mem2proc_transaction_tag_icache = %d, mem2proc_transaction_tag = %d", mem2proc_transaction_tag_dcache, mem2proc_transaction_tag_icache, mem2proc_transaction_tag);
+        `endif
     end
 
 end
@@ -1599,10 +1624,10 @@ assign mem2proc_transaction_tag_dcache =
         ? mem2proc_transaction_tag
         : '0;
 
-assign mem2proc_transaction_tag_icache =
-    (Dcache_command_0_reg != MEM_NONE || Dcache_command_1_reg != MEM_NONE )
-        ? '0
-        : mem2proc_transaction_tag;
+// assign mem2proc_transaction_tag_icache =
+//     (Dcache_command_0_reg != MEM_NONE || Dcache_command_1_reg != MEM_NONE )
+//         ? '0
+//         : mem2proc_transaction_tag;
 
 dcache dcache_0 (
 
@@ -1640,9 +1665,12 @@ dcache dcache_0 (
     .Dcache2mem_data           (Dmem_store_data),
     .send_new_mem_req          (dcache_send_new_mem_req),
 
-    .mem2proc_transaction_tag  (mem2proc_transaction_tag_dcache),
+    .mem2proc_transaction_tag  (mem2proc_transaction_tag),
     .mem2proc_data             (mem2proc_data),
-    .mem2proc_data_tag         (mem2proc_data_tag)
+    .mem2proc_data_tag         (mem2proc_data_tag),
+
+    .halt_by_wfi(system_stop),
+    .finished_wb_to_mem(finished_wb_to_mem)
 );
 
     //////////////////////////////////////////////////
@@ -1730,7 +1758,7 @@ dcache dcache_0 (
         .free_reg_o(free_phys),
         .retire_cnt_o(retire_cnt)
     );
-assign mem2proc_data_tag_icache = (Dmem_command == MEM_LOAD) ? '0 : mem2proc_data_tag;
+// assign mem2proc_data_tag_icache = (Dmem_command == MEM_LOAD) ? '0 : mem2proc_data_tag;
 //     // New address if:
 //     // 1) Previous instruction wasn't a load
 //     // 2) Load address changed
@@ -1761,29 +1789,72 @@ assign mem2proc_data_tag_icache = (Dmem_command == MEM_LOAD) ? '0 : mem2proc_dat
     //////////////////////////////////////////////////
 
     // Output the committed instruction to the testbench for counting
-    assign committed_insts = wb_packet;
-always_ff @(posedge clock) begin
-    if (!reset) begin
-        integer i;
-        if (stall_dcache) begin
-            $display("[%t]stall_dcache = %b", $time, stall_dcache);
-        end
-        $display("[%t]proc2mem_command = %s, Imem_command = %s, Dmem_command = %s", $time, proc2mem_command.name, Imem_command.name, Dmem_command.name);
-        for (i = 0; i < `N; i++) begin
-            if(committed_insts[i].valid) begin
-            $display("[%t]Commit[%0d]: valid=%b halt=%b illegal=%b reg=%0d data=%h NPC=%h",
-                     $time,
-                     i,
-                     committed_insts[i].valid,
-                     committed_insts[i].halt,
-                     committed_insts[i].illegal,
-                     committed_insts[i].reg_idx,
-                     committed_insts[i].data,
-                     committed_insts[i].NPC);
-        end
-        end
-        $display("-------------------\n");
+    always_ff @(posedge clock) begin
+        if(reset) begin
+            system_stop <= '0;
+        end else begin
+            system_stop <= system_stop | system_stop_next;
+        end// system_stop <= '0;
     end
-end
+
+    
+    always_ff @(posedge clock) begin
+        if(reset) begin
+            wfi <= '0;
+            wfi_tag <= '0;
+        end else begin
+            for(int i = 0; i < `N; i++) begin
+                if(!wfi_tag && wb_packet[i].valid && wb_packet[i].halt) begin
+                    wfi_tag <= 1;
+                    wfi <= wb_packet[i];
+                end
+            end
+        end
+    end
+
+    always_comb begin
+        committed_insts = '0;
+        system_stop_next = '0;
+        if(finished_wb_to_mem) begin
+            committed_insts[0] = wfi;
+        end else begin
+            for(int i = 0; i < `N; i++) begin
+                if(wb_packet[i].halt != 1'b1) begin
+                    committed_insts[i] = wb_packet[i];
+                end else if(wb_packet[i].valid == 1'b1) begin
+                    system_stop_next = 1'b1;
+                    break;
+                end
+            end
+        end
+    end
+
+    // assign committed_insts = wb_packet;
+
+`ifndef SYNTHESIS
+    always_ff @(posedge clock) begin
+        if (!reset) begin
+            integer i;
+            if (stall_dcache) begin
+                $display("[%t]stall_dcache = %b", $time, stall_dcache);
+            end
+            // $display("[%t]proc2mem_command = %s, Imem_command = %s, Dmem_command = %s", $time, proc2mem_command.name, Imem_command.name, Dmem_command.name);
+            for (i = 0; i < `N; i++) begin
+                if(committed_insts[i].valid) begin
+                $display("[%t]Commit[%0d]: valid=%b halt=%b illegal=%b reg=%0d data=%h NPC=%h",
+                        $time,
+                        i,
+                        committed_insts[i].valid,
+                        committed_insts[i].halt,
+                        committed_insts[i].illegal,
+                        committed_insts[i].reg_idx,
+                        committed_insts[i].data,
+                        committed_insts[i].NPC);
+            end
+            end
+            $display("-------------------\n");
+        end
+    end
+`endif
 
 endmodule // pipeline

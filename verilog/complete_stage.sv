@@ -77,7 +77,9 @@ module complete_stage #(
                 cdb_o[i].value     = fu_value_i[i];          
             end else if (wb_valid) begin 
                 // todo: lsq wb is valid
+                `ifndef SYNTHESIS
                 $display("complete stage: wb_valid=%b | wb_rob_idx=%d | wb_data=%h | wb_disp_rd_new_prf_i=%d ",wb_valid, wb_rob_idx, wb_data, wb_disp_rd_new_prf_i);
+                `endif
                 // from lsq
                 prf_wr_en_o[i]   = wb_valid;
                 prf_waddr_o[i]   = wb_disp_rd_new_prf_i;

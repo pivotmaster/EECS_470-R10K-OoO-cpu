@@ -138,7 +138,9 @@ output logic [$clog2(PHYS_REGS+1)-1:0]                       free_count_o, // nu
             for (int k = 0; k <(PHYS_REGS); k++) begin
                 if (flush_free_regs[k]) begin
                     N_free++;
-                $display("flush N_free= %d ", N_free);
+                    `ifndef SYNTHESIS
+                    $display("flush N_free= %d ", N_free);
+                    `endif
                 end
             end
         end  
@@ -237,7 +239,7 @@ output logic [$clog2(PHYS_REGS+1)-1:0]                       free_count_o, // nu
     // =========================================================
     // Initialize free list
     // =========================================================
-    always_ff @(posedge clock or posedge reset ) begin
+    always_ff @(posedge clock) begin
         if (reset) begin
             head  <= '0;
             tail  <= PHYS_REGS - ARCH_REGS - 1;
@@ -247,7 +249,9 @@ output logic [$clog2(PHYS_REGS+1)-1:0]                       free_count_o, // nu
                 // $display("free_fifo[%0d] = %0d" , i , free_fifo[i]);
             end
         end else begin
+            `ifndef SYNTHESIS
             $display("flush_free_regs =%b" , flush_free_regs);
+            `endif
   
             head <= next_head;
             tail <= next_tail;
@@ -259,7 +263,9 @@ output logic [$clog2(PHYS_REGS+1)-1:0]                       free_count_o, // nu
             for (int k = 0; k < (COMMIT_WIDTH + DISPATCH_WIDTH + PHYS_REGS); k++) begin
                 if (total_free_valid[k]) begin
                     free_fifo[(tail + k) % (PHYS_REGS-ARCH_REGS)] <= total_free_reg_idx[k];
+                    `ifndef SYNTHESIS
                     $display("free reg[%0d] = %0d" , (tail + k) % (PHYS_REGS-ARCH_REGS) , total_free_reg_idx[k]);
+                    `endif
                 end
             end
 
@@ -281,7 +287,7 @@ output logic [$clog2(PHYS_REGS+1)-1:0]                       free_count_o, // nu
         end
     end 
     
-
+`ifndef SYNTHESIS
     always_ff @(negedge clock)begin 
         $display("free_phys = %0d , free_valid = %d\n", free_phys_i , free_valid_i);
         $display("N_alloc=%d, N_free=%d", N_alloc, N_free);
@@ -295,5 +301,6 @@ output logic [$clog2(PHYS_REGS+1)-1:0]                       free_count_o, // nu
     always_ff @(posedge clock) begin 
         $display("total_available = %0d", total_available);
     end
+`endif
 
 endmodule
