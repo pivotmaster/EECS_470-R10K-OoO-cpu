@@ -50,7 +50,7 @@ module lq #(
 
     output logic       wb_valid,
     output ROB_IDX     wb_rob_idx,
-    output logic [31:0]   wb_data, //TODO: only WORD level now
+    output MEM_BLOCK   wb_data, //TODO: only WORD level now
     output logic [$clog2(`PHYS_REGS)-1:0] wb_disp_rd_new_prf_o,
 
     // 6. Commit (From ROB - Free Entry)
@@ -204,7 +204,7 @@ module lq #(
                     !sq_view_i[k].addr_valid && 
                     is_older(sq_view_i[k].rob_idx, lq[query_idx].rob_idx, rob_head)) begin
                     
-                    stall_older_store_unknown = 1'b1;
+                        stall_older_store_unknown = 1'b1;
                     break; 
                 end
             end

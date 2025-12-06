@@ -534,6 +534,8 @@ typedef struct packed {
     logic [$clog2(`PHYS_REGS)-1:0] dest_tag;      // destination physical reg tag
     logic [`XLEN-1:0]               src1_mux;
     logic [`XLEN-1:0]               src2_mux;
+    logic                          src1_valid;      // if src1_valid = 1 用rs1 ;  if src1_valid = 0 用imm
+    // logic [`XLEN-1:0]               src1_val;
     logic [`XLEN-1:0]               src1_val;      // actual operand value 1
     logic [`XLEN-1:0]               src2_val;      // actual operand value 2
     logic                           src2_valid;      // if src2_valid = 1 用rs2 ;  if src2_valid = 0 用imm

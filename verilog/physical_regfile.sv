@@ -62,7 +62,7 @@ end
             rdata_o[r] = regfile[raddr[r]];
             if (BYPASS_EN) begin
                 for (int w = 0; w < WRITE_PORTS; w++) begin
-                    if (wr_en[w] && (waddr[w] == raddr[r]))
+                    if (wr_en[w] && waddr[w]!= 0 && (waddr[w] == raddr[r]) )
                         rdata_o[r] = wdata[w];
                 end
             end

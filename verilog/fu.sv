@@ -316,7 +316,7 @@ module fu #(
   always_comb begin 
     idx = 0;
     // clear zero
-    for (int j; j < LOAD_COUNT; j++) begin
+    for (int j = 0 ; j < LOAD_COUNT; j++) begin
         fu_ls_valid_o[j] = '0;
         fu_ls_rob_idx_o[j] = '0;
         fu_ls_addr_o[j] = '0;

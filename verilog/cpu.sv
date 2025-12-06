@@ -1216,6 +1216,7 @@ module cpu #(
                 alu_req_reg[i].fu_type     <= '0;
                 alu_req_reg[i].opcode      <= '0;
                 alu_req_reg[i].dest_tag    <= '0;
+                alu_req_reg[i].src1_valid  <= '0;
                 alu_req_reg[i].src2_valid  <= '0;
                 alu_req_reg[i].disp_packet <= '0;
 
@@ -1225,6 +1226,7 @@ module cpu #(
                 mul_req_reg[i].fu_type     <= '0;
                 mul_req_reg[i].opcode      <= '0;
                 mul_req_reg[i].dest_tag    <= '0;
+                mul_req_reg[i].src1_valid  <= '0;
                 mul_req_reg[i].src2_valid  <= '0;
                 mul_req_reg[i].disp_packet <= '0;
 
@@ -1234,6 +1236,7 @@ module cpu #(
                 load_req_reg[i].fu_type     <= '0;
                 load_req_reg[i].opcode      <= '0;
                 load_req_reg[i].dest_tag    <= '0;
+                load_req_reg[i].src1_valid  <= '0;
                 load_req_reg[i].src2_valid  <= '0;
                 load_req_reg[i].disp_packet <= '0;
 
@@ -1243,6 +1246,7 @@ module cpu #(
                 br_req_reg[i].fu_type     <= '0;
                 br_req_reg[i].opcode      <= '0;
                 br_req_reg[i].dest_tag    <= '0;
+                br_req_reg[i].src1_valid  <= '0;
                 br_req_reg[i].src2_valid  <= '0;
                 br_req_reg[i].disp_packet <= '0;
             end
@@ -1268,6 +1272,7 @@ module cpu #(
                 alu_req_reg[i].opcode <= alu_req[i].opcode;
                 alu_req_reg[i].dest_tag <= alu_req[i].dest_tag;
                 alu_req_reg[i].src2_valid <= alu_req[i].src2_valid;
+                alu_req_reg[i].src1_valid <= alu_req[i].src1_valid;
                 alu_req_reg[i].disp_packet <= alu_req[i].disp_packet;
                 
                 mul_req_reg[i].valid <= mul_req[i].valid;
@@ -1277,6 +1282,7 @@ module cpu #(
                 mul_req_reg[i].opcode <= mul_req[i].opcode;
                 mul_req_reg[i].dest_tag <= mul_req[i].dest_tag;
                 mul_req_reg[i].src2_valid <= mul_req[i].src2_valid;
+                mul_req_reg[i].src1_valid <= mul_req[i].src1_valid;
                 mul_req_reg[i].disp_packet <= mul_req[i].disp_packet;
 
                 load_req_reg[i].valid <= load_req[i].valid;
@@ -1286,6 +1292,7 @@ module cpu #(
                 load_req_reg[i].opcode <= load_req[i].opcode;
                 load_req_reg[i].dest_tag <= load_req[i].dest_tag;
                 load_req_reg[i].src2_valid <= load_req[i].src2_valid;
+                load_req_reg[i].src1_valid <= load_req[i].src1_valid;
                 load_req_reg[i].disp_packet <= load_req[i].disp_packet;
 
                 br_req_reg[i].valid <= br_req[i].valid; 
@@ -1295,9 +1302,10 @@ module cpu #(
                 br_req_reg[i].opcode <= br_req[i].opcode;
                 br_req_reg[i].dest_tag <= br_req[i].dest_tag;
                 br_req_reg[i].src2_valid <= br_req[i].src2_valid;
+                br_req_reg[i].src1_valid <= br_req[i].src1_valid;
                 br_req_reg[i].disp_packet <= br_req[i].disp_packet;
-                br_req_reg[i].src1_val <= br_req[i].src1_val;
-                br_req_reg[i].src2_val <= br_req[i].src2_val;
+                //br_req_reg[i].src1_val <= br_req[i].src1_val;
+                //br_req_reg[i].src2_val <= br_req[i].src2_val;
             end
         end
     end
@@ -1323,14 +1331,16 @@ module cpu #(
     
     always_comb begin
         for(int i = 0; i < `SINGLE_FU_NUM; i++) begin
-            alu_req_reg[i].src1_val = rdata[0 + i*8];
+            alu_req_reg[i].src1_val = alu_req_reg_org[i].src1_valid ? rdata[0 + i*8]: alu_req_reg_org[i].src1_val;
             alu_req_reg[i].src2_val = alu_req_reg_org[i].src2_valid ? rdata[1 + i*8] : alu_req_reg_org[i].src2_val; 
-            mul_req_reg[i].src1_val = rdata[2 + i*8];
+            mul_req_reg[i].src1_val = mul_req_reg_org[i].src1_valid ? rdata[2 + i*8] : mul_req_reg_org[i].src1_val;
             mul_req_reg[i].src2_val = mul_req_reg_org[i].src2_valid ? rdata[3 + i*8] : mul_req_reg_org[i].src2_val;
-            load_req_reg[i].src1_val = rdata[4 + i*8];
+            load_req_reg[i].src1_val = load_req_reg_org[i].src1_valid ? rdata[4 + i*8] : '1;
             load_req_reg[i].src2_val = load_req_reg_org[i].src2_valid ? rdata[5 + i*8] : '1;
+            br_req_reg[i].src1_val = br_req_reg_org[i].src1_valid ? rdata[6 + i*8]: br_req_reg_org[i].src1_val;
+            br_req_reg[i].src2_val =  br_req_reg_org[i].src2_valid ? rdata[7 + i*8]: br_req_reg_org[i].src2_val;
             br_req_reg[i].src1_mux = rdata[6 + i*8];
-            br_req_reg[i].src2_mux = br_req_reg_org[i].src2_valid ? rdata[7 + i*8] : br_req_reg_org[i].src2_mux;
+            br_req_reg[i].src2_mux = rdata[7 + i*8];
             $display("[Real Value @ %t]br_req_reg_org[i].src2_valid = %b,br_req_reg[i].src1_mux=%d, br_req_reg[i].src2_mux= %d" ,$time, br_req_reg_org[i].src2_valid, br_req_reg[i].src1_mux,br_req_reg[i].src2_mux);
         end
     end

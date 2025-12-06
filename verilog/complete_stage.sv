@@ -57,15 +57,17 @@ module complete_stage #(
             if (fu_valid_i[i]) begin
                 prf_wr_en_o[i]   = 1'b1;
                 prf_waddr_o[i]   = fu_dest_prf_i[i];
-                prf_wdata_o[i]   = fu_value_i[i];
+               
 
                 wb_valid_o[i]     = 1'b1;
                 wb_rob_idx_o[i]   = fu_rob_idx_i[i];
                 wb_exception_o[i] = fu_exception_i[i];
                 wb_mispred_o[i]   = fu_mispred_i[i];
                 if(fu_is_jtype[i])begin
+                     prf_wdata_o[i]   = fu_jtype_value_i[i];
                     wb_value_o[i] = fu_jtype_value_i[i];
                 end else begin
+                     prf_wdata_o[i]   = fu_value_i[i];
                     wb_value_o[i]   = fu_value_i[i]; // 11/21 sychenn
                 end
 

@@ -250,12 +250,12 @@ logic [DISPATCH_WIDTH-1:0] disp_rd_wen_o;
                     if (disp_packet_o[i].valid && (disp_packet_o[i].rd_mem || disp_packet_o[i].wr_mem)) begin
                       dispatch_valid[i] = 1;
                       dispatch_is_store[i] = disp_packet_o[i].wr_mem; // store = 1
-                      dispatch_size[i] = WORD;
+                      dispatch_size[i] = MEM_SIZE'(if_packet_i[i].inst.r.funct3[1:0]);
                       disp_rob_idx_o[i] = disp_rob_idx_i[i];
                     end else begin
                       dispatch_valid[i] = 0;
                       dispatch_is_store[i] = disp_packet_o[i].wr_mem; // store = 1
-                      dispatch_size[i] = WORD;
+                      dispatch_size[i] =  MEM_SIZE'(if_packet_i[i].inst.r.funct3[1:0]);
                       disp_rob_idx_o[i] = disp_rob_idx_i[i];
                     end
                     
