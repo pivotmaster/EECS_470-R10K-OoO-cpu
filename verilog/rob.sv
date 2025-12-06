@@ -290,7 +290,10 @@ module rob #(
     output ROB_IDX       rob_head_o,
 
     input ROB_IDX rob_store_ready_idx,
-    input logic   rob_store_ready_valid
+    input logic   rob_store_ready_valid,
+
+    //halt
+    input logic system_stop
 );
 
     
@@ -402,7 +405,7 @@ module rob #(
     // ===== Commit Ready Check =====
     always_comb begin
         retire_en = '0;
-        if(!mispredict_i)begin
+        if(!mispredict_i && !system_stop)begin
              for (int i = 0; i < COMMIT_WIDTH; i++) begin
                 // if (!empty && rob_table[(head + i) % ROB_DEPTH].valid && rob_table[(head + i) % ROB_DEPTH].ready && ((i == 0) || retire_en[i-1])) begin ### ?not sure the valid part
                 if (rob_table[(head + i) % ROB_DEPTH].valid && rob_table[(head + i) % ROB_DEPTH].ready) begin

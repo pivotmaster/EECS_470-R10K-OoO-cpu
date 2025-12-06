@@ -364,13 +364,11 @@ module dcache (
             wfi_bank  <= '0;
             wfi_set   <= '0;
             wfi_way   <= '0;
-            wfi_mem_req_pending <= 1'b0;
         end else begin
             wfi_state <= wfi_state_next;
             wfi_bank <= wfi_bank_next;
             wfi_set <= wfi_set_next;
             wfi_way <= wfi_way_next;
-            cache_dirty[wfi_bank_next][wfi_set_next][wfi_way_next] <= (wfi_state == WFI_WRITING_BACK) ? 1'b0 : 1'b1;
             send_wfi_to_mem <= (wfi_state == WFI_WRITING_BACK && wfi_found_dirty);
         end
     end
@@ -776,7 +774,7 @@ module dcache (
             if (send_new_mem_req && !pending_req_to_mem) begin
                 // Record #MSHR
                 pending_mshr_id <= free_mshr_idx;
-                pending_req_to_mem <= 1;
+                pending_req_to_mem <= 0;
                 // Allocate to the MSHR
                 mshr[free_mshr_idx].valid  <= 1;
                 mshr[free_mshr_idx].tag    <= (send_miss_0 ? tag_0   : tag_1);
@@ -794,37 +792,49 @@ module dcache (
 
             // ---------- Get tag/result from mem ---------- 
             // Get Tag from memory (save to MSHR & clear pending bit)
-            if (mem2proc_transaction_tag != 0 && pending_req_to_mem) begin
-                // $display("tag = %d | ",mem2proc_transaction_tag);
-                pending_req_to_mem <= 0;
-                pending_mshr_id <= 0;
-            end
-            
-            // UPDATE TAG/VALID/DIRTY => Read Miss, Write Hit, Write Miss
-            //  Get Result from memory => update cache state
-            if (mem2proc_data_tag != 0 && refill_enable) begin
-                // update cache tags and clear mshr entry
-                cache_tags [mshr[refill_mshr_id].bank][mshr[refill_mshr_id].index][mshr[refill_mshr_id].way]  <= mshr[refill_mshr_id].tag;
-                cache_valid[mshr[refill_mshr_id].bank][mshr[refill_mshr_id].index][mshr[refill_mshr_id].way]  <= 1'b1;
-                // only store in cache not memory so dirty bit = 1
-                cache_dirty[mshr[refill_mshr_id].bank][mshr[refill_mshr_id].index][mshr[refill_mshr_id].way]  <= (mshr[refill_mshr_id].command == MEM_STORE);
-                mshr[refill_mshr_id].valid <= 1'b0; 
-
-            end else begin
+            if (wfi_state == WFI_WRITING_BACK) begin
+                cache_dirty[wfi_bank_next][wfi_set_next][wfi_way_next] <=1'b0;
+            end else begin    
+                if (mem2proc_transaction_tag != 0 && pending_req_to_mem) begin
+                    // $display("tag = %d | ",mem2proc_transaction_tag);
+                    pending_req_to_mem <= 0;
+                    pending_mshr_id <= 0;
+                end
+                
+                // UPDATE TAG/VALID/DIRTY => Read Miss, Write Hit, Write Miss
+                //  Get Result from memory => update cache state
+                if (mem2proc_data_tag != 0 && refill_enable) begin
+                    mshr[refill_mshr_id].valid <= 1'b0; 
+                end
+                
                 // ---------- Write hit logic ---------- (store cache hit 0/1 is req )
                 if (store_cache_hit_0) begin
                     cache_dirty[bank_0][index_0][hit_way_0] <= 1'b1;
-                    cache_valid[bank_0][index_0][hit_way_0] <= 1'b1;
-                    cache_tags [bank_0][index_0][hit_way_0] <= tag_0;
+                    cache_valid[bank_0][index_0][hit_way_0] <= 1'b1; //useless
+                    cache_tags [bank_0][index_0][hit_way_0] <= tag_0; //useless
+                end else if (send_miss_0) begin 
+                    cache_dirty[bank_0][index_0][replace_way_0] <= 1'b1;
+                    cache_valid[bank_0][index_0][replace_way_0] <= 1'b1;
+                    cache_tags [bank_0][index_0][replace_way_0] <= tag_0;
                 end
+
                 if (store_cache_hit_1) begin
                     cache_dirty[bank_1][index_1][hit_way_1] <= 1'b1;
                     cache_valid[bank_1][index_1][hit_way_1] <= 1'b1;
                     cache_tags [bank_1][index_1][hit_way_1] <= tag_1;
-                end                
+                end else if (send_miss_1) begin 
+                    $display("tag=%d | data = %d", tag_1, Dcache_store_data_1);
+                    $display("bank_1=%d | index_1 = %d |replace_way_1=%d ", bank_1, index_1,replace_way_1);
+                    cache_dirty[bank_1][index_1][replace_way_1] <= 1'b1;
+                    cache_valid[bank_1][index_1][replace_way_1] <= 1'b1;
+                    cache_tags [bank_1][index_1][replace_way_1] <= tag_1;
+                end               
             end
-
-
+        end
+        for (int b = 0; b < BANKS; b++) begin
+            for (int s = 0; s < SETS_PER_BANK; s++) begin
+                $display("dirty[%b][%d]=%b",b,s,cache_dirty[b][s]);
+            end
         end
     end
 
@@ -905,12 +915,12 @@ module dcache (
         victim_way   = '0;
 
         if (send_new_mem_req) begin
-            if (miss_0) begin
+            if (send_miss_0) begin
                 victim_index = index_0;
                 victim_bank  = bank_0;
                 victim_way   = replace_way_0;
                 victim_tag   = cache_tags[bank_0][index_0][replace_way_0];
-            end else if (miss_1) begin
+            end else if (send_miss_1) begin
                 victim_index = index_1;
                 victim_bank  = bank_1;
                 victim_way   = replace_way_1;
@@ -926,13 +936,13 @@ module dcache (
             wb_mem_addr <= '0;
             wb_mem_size <= DOUBLE;
         end else if (send_new_mem_req) begin
-            wb_mem_size <= DOUBLE;
+            wb_mem_size <= (send_miss_0) ? Dcache_size_0 : Dcache_size_1;
             wb_mem_addr <= {victim_tag, victim_index, victim_bank, {OFFSET_BITS{1'b0}}};
 
-            if (miss_0 && cache_dirty[victim_bank][victim_index][victim_way] && cache_valid[victim_bank][victim_index][victim_way]) begin // cache_miss_0 and replace_way_0 here is req 0/1
+            if (send_miss_0 && cache_dirty[victim_bank][victim_index][victim_way] && cache_valid[victim_bank][victim_index][victim_way]) begin // cache_miss_0 and replace_way_0 here is req 0/1
                 wb_mem_valid <= 1'b1;
                 wb_mem_data <=  (bank_1) ? cache_data_read_1[replace_way_0] : cache_data_read_0[replace_way_0];
-            end else if (miss_1 && cache_dirty[victim_bank][victim_index][victim_way] && cache_valid[victim_bank][victim_index][victim_way]) begin // cache_miss_1
+            end else if (send_miss_1 && cache_dirty[victim_bank][victim_index][victim_way] && cache_valid[victim_bank][victim_index][victim_way]) begin // cache_miss_1
                 wb_mem_valid <= 1'b1;
                 wb_mem_data <=  (bank_1) ? cache_data_read_1[replace_way_1] : cache_data_read_0[replace_way_1];
             end
@@ -954,13 +964,14 @@ module dcache (
         Dcache2mem_data    = '0;
 
         // WFI flush has highest priority - write dirty cache lines back to memory
-        if (wfi_state == WFI_WRITING_BACK) begin
+        if (wfi_state == WFI_WRITING_BACK && wfi_found_dirty) begin
             Dcache2mem_command = MEM_STORE;
             Dcache2mem_size    = DOUBLE; // 64 bits
             Dcache2mem_addr    = {cache_tags[wfi_bank][wfi_set][wfi_way], wfi_set, wfi_bank, {OFFSET_BITS{1'b0}}};
             Dcache2mem_data    = wfi_cache_data;
         end 
         // Normal cache miss - load from memory
+        // todo: might happend at the same cycle need to fix
         else if (send_new_mem_req) begin
             Dcache2mem_command = MEM_LOAD;
             Dcache2mem_size    = DOUBLE;    

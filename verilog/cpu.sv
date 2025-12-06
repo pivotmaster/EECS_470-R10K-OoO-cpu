@@ -411,6 +411,8 @@ module cpu #(
 
     // Outputs from WB-Stage (These loop back to the register file in ID)
     COMMIT_PACKET [`N-1:0]  wb_packet;
+    COMMIT_PACKET wfi;
+    logic wfi_tag;
 
     // Logic for stalling memory stage
     logic       new_load;
@@ -419,8 +421,8 @@ module cpu #(
     MEM_TAG     outstanding_mem_tag;    // tag load is waiting in
     MEM_COMMAND Dmem_command_filtered;  // removes redundant loads
 
-    logic system_stop, system_stop_next, finish_write_back;
-    COMMIT_PACKET wfi;
+    logic system_stop, system_stop_next, finished_wb_to_mem;
+    // COMMIT_PACKET wfi;
     
     //////////////////////////////////////////////////
     //                                              //
@@ -848,7 +850,10 @@ module cpu #(
         .rob_head_o(rob_head),
 
         .rob_store_ready_idx(rob_store_ready_idx),
-        .rob_store_ready_valid(rob_store_ready_valid)
+        .rob_store_ready_valid(rob_store_ready_valid),
+
+        //halt
+        .system_stop(system_stop)
     );
 
     //////////////////////////////////////////////////
@@ -1640,7 +1645,10 @@ dcache dcache_0 (
 
     .mem2proc_transaction_tag  (mem2proc_transaction_tag),
     .mem2proc_data             (mem2proc_data),
-    .mem2proc_data_tag         (mem2proc_data_tag)
+    .mem2proc_data_tag         (mem2proc_data_tag),
+
+    .halt_by_wfi(system_stop),
+    .finished_wb_to_mem(finished_wb_to_mem)
 );
 
     //////////////////////////////////////////////////
@@ -1758,30 +1766,47 @@ dcache dcache_0 (
     //////////////////////////////////////////////////
 
     // Output the committed instruction to the testbench for counting
-    // always_ff @(posedge clock) begin
-    //     system_stop <= system_stop | system_stop_next;
-    // end
+    always_ff @(posedge clock) begin
+        if(reset) begin
+            system_stop <= '0;
+        end else begin
+            system_stop <= system_stop | system_stop_next;
+        end// system_stop <= '0;
+    end
 
     
-    
-    // always_comb begin
-    //     committed_insts = '0;
-    //     system_stop_next = '0;
-    //     if(finish_write_back) begin
-    //         committed_insts[0] = wfi;
-    //     end else begin
-    //         for(int i = 0; i < `N; i++) begin
-    //             if(wb_packet[i].halt != 1'b1) begin
-    //                 committed_insts[i] = wb_packet[i];
-    //             end else begin
-    //                 system_stop_next = 1'b1;
-    //                 break;
-    //             end
-    //         end
-    //     end
-    // end
+    always_ff @(posedge clock) begin
+        if(reset) begin
+            wfi <= '0;
+            wfi_tag <= '0;
+        end else begin
+            for(int i = 0; i < `N; i++) begin
+                if(!wfi_tag && wb_packet[i].valid && wb_packet[i].halt) begin
+                    wfi_tag <= 1;
+                    wfi <= wb_packet[i];
+                end
+            end
+        end
+    end
 
-    assign committed_insts = wb_packet;
+    always_comb begin
+        committed_insts = '0;
+        system_stop_next = '0;
+        if(finished_wb_to_mem) begin
+            committed_insts[0] = wfi;
+        end else begin
+            for(int i = 0; i < `N; i++) begin
+                if(wb_packet[i].halt != 1'b1) begin
+                    committed_insts[i] = wb_packet[i];
+                end else if(wb_packet[i].valid == 1'b1) begin
+                    system_stop_next = 1'b1;
+                    break;
+                end
+            end
+        end
+    end
+
+    // assign committed_insts = wb_packet;
 
 `ifndef SYNTHESIS
     always_ff @(posedge clock) begin
