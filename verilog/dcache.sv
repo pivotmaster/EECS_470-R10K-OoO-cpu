@@ -964,7 +964,7 @@ module dcache (
         Dcache2mem_data    = '0;
 
         // WFI flush has highest priority - write dirty cache lines back to memory
-        if (wfi_state == WFI_WRITING_BACK) begin
+        if (wfi_state == WFI_WRITING_BACK && wfi_found_dirty) begin
             Dcache2mem_command = MEM_STORE;
             Dcache2mem_size    = DOUBLE; // 64 bits
             Dcache2mem_addr    = {cache_tags[wfi_bank][wfi_set][wfi_way], wfi_set, wfi_bank, {OFFSET_BITS{1'b0}}};

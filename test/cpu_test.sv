@@ -232,7 +232,7 @@ module testbench;
             //              proc2mem_data[63:32], proc2mem_data[31:0]);
 
             print_custom_data();
-            show_mem_per_cycle();
+            //show_mem_per_cycle();
 
             output_reg_writeback_and_maybe_halt();
 
