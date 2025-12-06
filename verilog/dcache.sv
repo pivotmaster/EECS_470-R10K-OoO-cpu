@@ -37,7 +37,11 @@ module dcache (
     
     input  MEM_TAG   mem2proc_transaction_tag, //Tell you the tag for this to mem request (1 cycle after sending request)
     input  MEM_BLOCK mem2proc_data,
-    input  MEM_TAG   mem2proc_data_tag
+    input  MEM_TAG   mem2proc_data_tag,
+
+    // Halt by WFI and write back to memory
+    input logic halt_by_wfi,
+    output logic finished_wb_to_mem
 );
 
     // =========================================================
@@ -274,6 +278,106 @@ module dcache (
         );
     end
 
+    // ---------- WFI Logic ----------  
+    // cycle k founds dirty cache line (wfi_found_dirty = 1)
+    // cycle k+1 (1) gets dirty line bank set way 
+    //           (2) gets dirty line data (send_wfi_to_mem = 1, send signal to cache (cache_en = 1)) 
+    //           (3) sends dirty line to memory
+    //           (4) clear dirty bit
+    
+    typedef enum logic [1:0] {
+        WFI_IDLE,
+        WFI_WRITING_BACK,
+        WFI_DONE
+    } wfi_state_t;
+
+    wfi_state_t wfi_state, wfi_state_next;
+
+    assign finished_wb_to_mem = (wfi_state == WFI_DONE);
+
+    // Track which cache line we're currently writing back
+    logic [$clog2(BANKS)-1:0]          wfi_bank, wfi_bank_next;
+    logic [$clog2(SETS_PER_BANK)-1:0]  wfi_set, wfi_set_next;
+    logic [$clog2(CACHE_WAYS)-1:0]     wfi_way, wfi_way_next;
+    MEM_BLOCK wfi_cache_data;
+
+    logic wfi_found_dirty;
+    logic send_wfi_to_mem;
+    
+    // Scan for dirty cache lines
+    always_comb begin
+        wfi_found_dirty = 1'b0;
+
+        wfi_bank_next = wfi_bank;
+        wfi_set_next = wfi_set;
+        wfi_way_next = wfi_way;
+        
+        // Check if current line is dirty and valid
+        if (wfi_state == WFI_WRITING_BACK) begin
+            // Scan dirty cache lines
+            for (int b = 0; b < BANKS; b++) begin
+                for (int s = 0; s < SETS_PER_BANK; s++) begin
+                    for (int w = 0; w < CACHE_WAYS; w++) begin
+                        if (cache_dirty[b][s][w] && cache_valid[b][s][w]) begin
+                            wfi_bank_next = b;
+                            wfi_set_next = s;
+                            wfi_way_next = w;
+                            wfi_found_dirty = 1'b1;
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    always_comb begin
+        wfi_state_next = wfi_state;
+        
+        case (wfi_state)
+            WFI_IDLE: begin
+                if (halt_by_wfi) begin
+                    wfi_state_next = WFI_WRITING_BACK;
+                end
+            end
+            
+            WFI_WRITING_BACK: begin
+                // If still has dirty cache line => keep writing back
+                if (wfi_found_dirty) begin
+                    wfi_state_next = WFI_WRITING_BACK;  // Continue scanning
+                end else begin
+                    wfi_state_next = WFI_DONE;
+                end
+            end
+            
+            WFI_DONE: begin
+                if (!halt_by_wfi) begin
+                    wfi_state_next = WFI_IDLE;
+                end
+            end
+        endcase
+    end
+
+    // Sequential logic for WFI scanning
+    always_ff @(posedge clock) begin 
+        if (reset) begin
+            wfi_state <= WFI_IDLE;
+            wfi_bank  <= '0;
+            wfi_set   <= '0;
+            wfi_way   <= '0;
+            wfi_mem_req_pending <= 1'b0;
+        end else begin
+            wfi_state <= wfi_state_next;
+            wfi_bank <= wfi_bank_next;
+            wfi_set <= wfi_set_next;
+            wfi_way <= wfi_way_next;
+            cache_dirty[wfi_bank_next][wfi_set_next][wfi_way_next] <= (wfi_state == WFI_WRITING_BACK) ? 1'b0 : 1'b1;
+            send_wfi_to_mem <= (wfi_state == WFI_WRITING_BACK && wfi_found_dirty);
+        end
+    end
+    
+    // WFI cache get data from the same cycle
+    assign wfi_cache_data = (wfi_bank == 1'b0) ? cache_data_read_0[wfi_way] : cache_data_read_1[wfi_way];
+
     // =========================================================
     // Load (Read) Logic 
     // if this cycle accept :
@@ -284,14 +388,21 @@ module dcache (
     // ### Cannot use load_cache_hit because it still need to read the whole line while write! ###//
     // =========================================================  
     // ----------  Read enable signals ----------    
-    assign cache_read_en_0 = (req_0_to_bank_0 && Dcache_req_0_accept) || (req_1_to_bank_0 && Dcache_req_1_accept);
-    assign cache_read_en_1 = (req_0_to_bank_1 && Dcache_req_0_accept) || (req_1_to_bank_1 && Dcache_req_1_accept);
+    logic wfi_read_en;
+    assign wfi_read_en = (wfi_state == WFI_WRITING_BACK && send_wfi_to_mem);
+    
+    assign cache_read_en_0 = (req_0_to_bank_0 && Dcache_req_0_accept) || (req_1_to_bank_0 && Dcache_req_1_accept) || 
+                             (wfi_read_en && wfi_bank == 1'b0);
+    assign cache_read_en_1 = (req_0_to_bank_1 && Dcache_req_0_accept) || (req_1_to_bank_1 && Dcache_req_1_accept) || 
+                             (wfi_read_en && wfi_bank == 1'b1);
 
     // ----------  Assign Read address ----------    
     // Only need index to determine which set 
 
-    assign cache_read_addr_0 = (req_0_to_bank_0) ? index_0 : (req_1_to_bank_0) ? index_1 : '0;
-    assign cache_read_addr_1 = (req_0_to_bank_1) ? index_0 : (req_1_to_bank_1) ? index_1 : '0;
+    assign cache_read_addr_0 = wfi_read_en && (wfi_bank == 1'b0) ? wfi_set : 
+                               (req_0_to_bank_0) ? index_0 : (req_1_to_bank_0) ? index_1 : '0;
+    assign cache_read_addr_1 = wfi_read_en && (wfi_bank == 1'b1) ? wfi_set : 
+                               (req_0_to_bank_1) ? index_0 : (req_1_to_bank_1) ? index_1 : '0;
 
     // ----------  Get Read Result ---------- 
     always_comb begin
@@ -454,8 +565,9 @@ module dcache (
     assign send_miss_1  = !miss_0 && miss_1;  // request_0 go first
     assign has_req_to_mem = (send_miss_0 || send_miss_1);
 
-    assign Dcache_req_1_accept = req_1_accept && !(miss_0 && miss_1) && !mshr_hit_1 && (cache_hit_1 || mshr_found); // if request 0 and 1 both miss, give up request 1
-    assign Dcache_req_0_accept = req_0_accept && !mshr_hit_0 && (cache_hit_0 || mshr_found); // has free bank && not already in mshr && mshr not full
+    // Block normal operations during WFI flush
+    assign Dcache_req_1_accept = (wfi_state == WFI_IDLE) && req_1_accept && !(miss_0 && miss_1) && !mshr_hit_1 && (cache_hit_1 || mshr_found); // if request 0 and 1 both miss, give up request 1
+    assign Dcache_req_0_accept = (wfi_state == WFI_IDLE) && req_0_accept && !mshr_hit_0 && (cache_hit_0 || mshr_found); // has free bank && not already in mshr && mshr not full
 
     // ---------- MSHR for Non-Blocking ----------   
     typedef struct packed {
@@ -486,6 +598,7 @@ module dcache (
     
     int max_val_0;
     int max_val_1;
+
     // ----------  LRU logic ----------  
     // Find the replacement way
     always_comb begin : LRU
@@ -840,17 +953,26 @@ module dcache (
         Dcache2mem_size    = BYTE;  
         Dcache2mem_data    = '0;
 
-        // Load
-        if (send_new_mem_req) begin
+        // WFI flush has highest priority - write dirty cache lines back to memory
+        if (wfi_state == WFI_WRITING_BACK) begin
+            Dcache2mem_command = MEM_STORE;
+            Dcache2mem_size    = DOUBLE; // 64 bits
+            Dcache2mem_addr    = {cache_tags[wfi_bank][wfi_set][wfi_way], wfi_set, wfi_bank, {OFFSET_BITS{1'b0}}};
+            Dcache2mem_data    = wfi_cache_data;
+        end 
+        // Normal cache miss - load from memory
+        else if (send_new_mem_req) begin
             Dcache2mem_command = MEM_LOAD;
-            Dcache2mem_size    = DOUBLE;
+            Dcache2mem_size    = DOUBLE;    
             Dcache2mem_data = '0; 
             if (send_miss_0 ) begin
                 Dcache2mem_addr = {tag_0, index_0, bank_0, {OFFSET_BITS{1'b0}}};
             end else if (send_miss_1) begin // send_miss_1
                 Dcache2mem_addr = {tag_1, index_1, bank_1, {OFFSET_BITS{1'b0}}};
             end
-        end else if (wb_mem_valid) begin //store
+        end 
+        // Victim writeback - store evicted dirty line to memory
+        else if (wb_mem_valid) begin
             Dcache2mem_command = MEM_STORE;
             Dcache2mem_addr = wb_mem_addr;
             Dcache2mem_size = wb_mem_size;
@@ -882,6 +1004,7 @@ module dcache (
             end
         end
     end
+    
 `ifndef SYNTHESIS
 task automatic show_status();
     $display("===================================================================");
