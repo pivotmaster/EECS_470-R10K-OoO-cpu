@@ -127,11 +127,11 @@ module testbench;
 
     // Instantiate the Data Memory
     MEM_COMMAND debug_proc2mem_command;//###
-    assign debug_proc2mem_command = MEM_LOAD;//###
+    // assign debug_proc2mem_command = MEM_LOAD;//###
     mem memory (
         // Inputs
         .clock            (clock),
-        .proc2mem_command (debug_proc2mem_command),//###
+        .proc2mem_command (proc2mem_command),//###
         .proc2mem_addr    (proc2mem_addr),
         .proc2mem_data    (proc2mem_data),
 `ifndef CACHE_MODE

@@ -76,6 +76,8 @@ module cpu #(
     MEM_BLOCK Icache_data_out;  //to fetch
     logic     Icache_valid_out;
     ADDR Imem_addr;
+    MEM_TAG mem2proc_transaction_tag_icache;
+
 
 
     // 2. I-Cache -> Fetch
@@ -448,6 +450,7 @@ module cpu #(
         
     end
 
+    assign mem2proc_transaction_tag_icache = (Dmem_command != MEM_NONE) ? '0 : mem2proc_transaction_tag;
     // assign proc2mem_size = DOUBLE; // needed when only has icache
 
     //////////////////////////////////////////////////
@@ -587,7 +590,7 @@ module cpu #(
 
         // Inputs
         // From memory
-        .Imem2proc_transaction_tag(mem2proc_transaction_tag), 
+        .Imem2proc_transaction_tag(mem2proc_transaction_tag_icache), 
         .Imem2proc_data(mem2proc_data),
         .Imem2proc_data_tag(mem2proc_data_tag),
 
@@ -1594,10 +1597,10 @@ assign mem2proc_transaction_tag_dcache =
         ? mem2proc_transaction_tag
         : '0;
 
-assign mem2proc_transaction_tag_icache =
-    (Dcache_command_0_reg != MEM_NONE || Dcache_command_1_reg != MEM_NONE )
-        ? '0
-        : mem2proc_transaction_tag;
+// assign mem2proc_transaction_tag_icache =
+//     (Dcache_command_0_reg != MEM_NONE || Dcache_command_1_reg != MEM_NONE )
+//         ? '0
+//         : mem2proc_transaction_tag;
 
 dcache dcache_0 (
 
