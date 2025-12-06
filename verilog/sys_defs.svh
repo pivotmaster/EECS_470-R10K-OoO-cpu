@@ -22,11 +22,15 @@
 
 // superscalar width
 `define N 1
-`define SINGLE_FU_NUM 2
+`define SINGLE_FU_NUM 1
 `define RS_DEPTH 16
 `define ROB_DEPTH 32
 `define MULT_STAGES 4
 
+`define SQ_SIZE 4
+`define LQ_SIZE 4  
+`define LQ_IDX_WIDTH $clog2(`SQ_SIZE) 
+`define SQ_IDX_WIDTH $clog2(`LQ_SIZE)
 
 // fixed data
 `define FU_ALU `SINGLE_FU_NUM
@@ -86,11 +90,11 @@ typedef logic [$clog2(`ROB_DEPTH)-1:0] ROB_IDX;
 // you are not allowed to change this definition for your final processor
 // the project 3 processor has a massive boost in performance just from having no mem latency
 // see if you can beat it's CPI in project 4 even with a 100ns latency!
-`define MEM_LATENCY_IN_CYCLES  0
+`define MEM_LATENCY_IN_CYCLES  8
 // `define MEM_LATENCY_IN_CYCLES (100.0/`CLOCK_PERIOD+0.49999)
 // the 0.49999 is to force ceiling(100/period). The default behavior for
 // float to integer conversion is rounding to nearest
-
+`define CACHE_MODE 1
 // memory tags represent a unique id for outstanding mem transactions
 // 0 is a sentinel value and is not a valid tag
 `define NUM_MEM_TAGS 15
@@ -293,10 +297,10 @@ function automatic logic is_older(ROB_IDX a, ROB_IDX b, ROB_IDX head);
     int dist_a, dist_b;
     
     if (a >= head) dist_a = a - head;
-    else           dist_a = (a + ROB_SIZE) - head;
+    else           dist_a = (a + `ROB_DEPTH) - head;
 
     if (b >= head) dist_b = b - head;
-    else           dist_b = (b + ROB_SIZE) - head;
+    else           dist_b = (b + `ROB_DEPTH) - head;
 
     return (dist_a < dist_b);
 endfunction
@@ -500,11 +504,13 @@ typedef struct packed {
 typedef struct packed {
     logic     valid;
     ADDR      addr;
+    logic     addr_valid; //### sychenn
     MEM_SIZE  size;
     ROB_IDX   rob_idx;
     logic     data_valid;
     MEM_BLOCK data;
     logic     issued;  //whether request was sent to dcache
+    logic [$clog2(`PHYS_REGS)-1:0]disp_rd_new_prf;
 } lq_entry_t;
 
 

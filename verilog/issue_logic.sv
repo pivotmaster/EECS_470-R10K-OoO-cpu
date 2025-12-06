@@ -71,7 +71,7 @@ module issue_logic #(
 
     // Prevent issue_enable_o -> affect RS (input of issue selector) at the same cycle
     /*
-    always_ff @( posedge clock or posedge reset) begin 
+    always_ff @( posedge clock) begin 
         //$display("issue_enable_o_ = %b | issue_enable_o_next = %b", issue_enable_o, issue_enable_o_next);
         if (reset) begin
             issue_enable_o <= '0;
@@ -225,7 +225,7 @@ end
 //                 br_req_o[0].imm, br_req_o[0].src1_val, br_req_o[0].src2_val);
 //         */
 //     endtask
-
+`ifndef SYNTHESIS
 task automatic show_issue_output;
     // ---- ALU requests ----
 $write("ALU_REQ:\n");
@@ -296,7 +296,7 @@ endtask
       $display("// ---------------- CYCLE = %d ---------------- //",cycle_count);
       //test_reqs();
       //test_grant_vector(cycle_count);
-      //show_rs_input();
+    //   show_rs_input();
       
       //show_issue_packets(cycle_count);
       //test_issue_selector(cycle_count);
@@ -304,6 +304,7 @@ endtask
       
     
   end
+`endif
 
 endmodule
 

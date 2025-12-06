@@ -76,6 +76,8 @@ module cpu #(
     MEM_BLOCK Icache_data_out;  //to fetch
     logic     Icache_valid_out;
     ADDR Imem_addr;
+    MEM_TAG mem2proc_transaction_tag_icache;
+
 
 
     // 2. I-Cache -> Fetch
@@ -92,6 +94,7 @@ module cpu #(
     logic take_branch;
 // Dispactch
     logic [$clog2(`DISPATCH_WIDTH+1)-1:0] disp_n;
+    logic [$clog2(`DISPATCH_WIDTH+1)-1:0] disp_n_fetch;
     //Free list
     logic [`DISPATCH_WIDTH-1:0] disp_free_space;
     logic [`DISPATCH_WIDTH-1:0] alloc_req;
@@ -114,7 +117,10 @@ module cpu #(
     rs_entry_t  [`DISPATCH_WIDTH-1:0] rs_packets;
     // ROB
     logic [`DISPATCH_WIDTH-1:0] disp_rob_space;
-    logic [`DISPATCH_WIDTH-1:0] disp_rob_valid;
+    logic [`DISPATCH_WIDTH-1:0] disp_rob_valid;      
+    logic [`DISPATCH_WIDTH-1:0] dispatch_is_store;  
+    MEM_SIZE [`DISPATCH_WIDTH-1:0] dispatch_size;  
+
     logic [`DISPATCH_WIDTH-1:0] disp_rob_rd_wen;
     logic [`DISPATCH_WIDTH-1:0][$clog2(`ARCH_REGS)-1:0] disp_rd_arch;
     logic [`DISPATCH_WIDTH-1:0][$clog2(`PHYS_REGS)-1:0] disp_rd_new_prf;
@@ -122,6 +128,8 @@ module cpu #(
 
 
 // Free list
+    logic [`DISPATCH_WIDTH-1:0][$clog2(`PHYS_REGS)-1:0] flush2free_list_new_prf;
+    logic [`DISPATCH_WIDTH-1:0] flush2free_list_valid;
     logic [`DISPATCH_WIDTH-1:0][$clog2(`PHYS_REGS)-1:0] alloc_phys; // allocated PRF numbers
     logic [`DISPATCH_WIDTH-1:0] alloc_valid; // whether each alloc succeed
     logic free_full;      // true if no free regs left
@@ -153,6 +161,7 @@ module cpu #(
     logic [`DISPATCH_WIDTH-1:0] disp_ready;
     logic [`DISPATCH_WIDTH-1:0] disp_alloc;
     logic [`DISPATCH_WIDTH-1:0][$clog2(`ROB_DEPTH)-1:0] disp_rob_idx;
+    logic [`DISPATCH_WIDTH-1:0][$clog2(`ROB_DEPTH)-1:0] disp_rob_idx_o;
     logic [$clog2(`ROB_DEPTH+1)-1:0] free_rob_slots;
     // Commit
     logic [`COMMIT_WIDTH-1:0] commit_valid;
@@ -168,6 +177,14 @@ module cpu #(
     logic flush_rob_debug;
     logic [`ROB_DEPTH-1:0] flush_free_regs_valid;
     logic [`PHYS_REGS-1:0] flush_free_regs;
+
+    // TO LSQ
+     ROB_IDX      [`COMMIT_WIDTH-1:0]   retire_rob_idx;
+     ROB_IDX       rob_head ;
+     // lsq -> complete
+     logic [$clog2(`PHYS_REGS)-1:0] wb_disp_rd_new_prf;
+
+
 
 
 // RS
@@ -191,9 +208,86 @@ module cpu #(
     map_entry_t      snapshot_data_i [`ARCH_REGS-1:0];
     map_entry_t       snapshot_data_o [`ARCH_REGS-1:0] ;
     map_entry_t       snapshot_reg [`ARCH_REGS-1:0];
-    logic checkpoint_valid;//### 11/10 sychenn ###//
+    logic snapshot_valid;//### 11/10 sychenn ###//
     logic has_snapshot; // guard restore until a snapshot is captured
 
+// lsq
+    logic lsq_wb_valid;
+    ROB_IDX lsq_wb_rob_idx;
+    DATA wb_data;
+    lq_entry_t  lq_snapshot_reg [`LQ_SIZE-1:0];
+    lq_entry_t  lq_snapshot_data_i [`LQ_SIZE-1:0];
+    lq_entry_t  lq_snapshot_data_o [`LQ_SIZE-1:0];
+
+    logic       [`LQ_IDX_WIDTH-1:0]lq_snapshot_head_i;
+    logic       [`LQ_IDX_WIDTH-1:0]lq_snapshot_tail_i;
+    logic       [`LQ_IDX_WIDTH:0]lq_snapshot_count_i;
+    logic       [`SQ_IDX_WIDTH-1:0]sq_snapshot_head_i;
+    logic       [`SQ_IDX_WIDTH-1:0]sq_snapshot_tail_i;
+    logic       [`SQ_IDX_WIDTH:0]sq_snapshot_count_i;
+
+    logic       [`LQ_IDX_WIDTH-1:0]lq_snapshot_head_o;
+    logic       [`LQ_IDX_WIDTH-1:0]lq_snapshot_tail_o;
+    logic       [`LQ_IDX_WIDTH:0]lq_snapshot_count_o;
+    logic       [`SQ_IDX_WIDTH-1:0]sq_snapshot_head_o;
+    logic       [`SQ_IDX_WIDTH-1:0]sq_snapshot_tail_o;
+    logic       [`SQ_IDX_WIDTH:0]sq_snapshot_count_o;
+
+    logic       [`LQ_IDX_WIDTH-1:0]lq_snapshot_head_reg;
+    logic       [`LQ_IDX_WIDTH-1:0]lq_snapshot_tail_reg;
+    logic       [`LQ_IDX_WIDTH-1:0]lq_snapshot_count_reg;
+    logic       [`SQ_IDX_WIDTH-1:0]sq_snapshot_head_reg;
+    logic       [`SQ_IDX_WIDTH-1:0]sq_snapshot_tail_reg;
+    logic       [`SQ_IDX_WIDTH-1:0]sq_snapshot_count_reg;
+
+    sq_entry_t  sq_snapshot_data_i [`SQ_SIZE-1:0];
+    sq_entry_t  sq_snapshot_data_o [`SQ_SIZE-1:0];
+    sq_entry_t  sq_snapshot_reg [`SQ_SIZE-1:0];
+    
+    logic [$clog2(`LQ_SIZE+1)-1:0] lq_count;
+    logic [$clog2(`SQ_SIZE+1)-1:0] st_count;
+    logic [`DISPATCH_WIDTH-1:0] disp_rob_valid_lsq;   
+
+    ROB_IDX rob_store_ready_idx;
+    logic   rob_store_ready_valid; 
+
+// D-Cache
+    ADDR Dcache_addr_0;
+    MEM_COMMAND Dcache_command_0;
+    MEM_SIZE    Dcache_size_0;
+    MEM_BLOCK   Dcache_store_data_0;
+
+    logic       Dcache_req_0_accept;
+    MEM_BLOCK   Dcache_data_out_0;
+    logic       Dcache_valid_out_0;
+    
+    ROB_IDX     Dcache_req_rob_idx_0;
+    ROB_IDX     Dcache_data_rob_idx_0;
+    ROB_IDX     Dcache_req_rob_idx_1;
+    ROB_IDX     Dcache_data_rob_idx_1;
+
+    // Port 1: usually Store port from LSQ
+    ADDR        Dcache_addr_1;
+    MEM_COMMAND Dcache_command_1;
+    MEM_SIZE    Dcache_size_1;
+    MEM_BLOCK   Dcache_store_data_1;
+
+    logic       Dcache_req_1_accept;
+    MEM_BLOCK   Dcache_data_out_1;
+    logic       Dcache_valid_out_1;
+
+    // Memory interface (to memory system)
+    MEM_COMMAND Dcache2mem_command;
+    ADDR        Dcache2mem_addr;
+    MEM_SIZE    Dcache2mem_size;
+    MEM_BLOCK   Dcache2mem_data;
+    logic       Dcache2mem_valid;
+
+    // mem output
+    MEM_TAG   mem2proc_transaction_tag_dcache; // Memory tag for current transaction     
+    MEM_TAG   mem2proc_transaction_tag_icache;
+    MEM_BLOCK mem2proc_data_dcache;            // Data coming back from memory
+    MEM_TAG   mem2proc_data_tag_dcache;        // Tag for which transaction data is for
 // Issue
 
     // =========================================================
@@ -209,15 +303,19 @@ module cpu #(
 
     assign rd_en = '1;
     always_ff @(posedge clock) begin //###
-        for(int i = 0; i < `SINGLE_FU_NUM; i++) begin
-            raddr[0 + i*8] <= alu_req[i].src1_val; 
-            raddr[1 + i*8] <= alu_req[i].src2_val; 
-            raddr[2 + i*8] <= mul_req[i].src1_val; 
-            raddr[3 + i*8] <= mul_req[i].src2_val; 
-            raddr[4 + i*8] <= load_req[i].src1_mux; 
-            raddr[5 + i*8] <= load_req[i].src2_mux; 
-            raddr[6 + i*8] <= br_req[i].src1_mux; 
-            raddr[7 + i*8] <= br_req[i].src2_mux;
+        if(reset) begin
+            raddr <= '0;
+        end else begin
+            for(int i = 0; i < `SINGLE_FU_NUM; i++) begin
+                raddr[0 + i*8] <= alu_req[i].src1_val; 
+                raddr[1 + i*8] <= alu_req[i].src2_val; 
+                raddr[2 + i*8] <= mul_req[i].src1_val; 
+                raddr[3 + i*8] <= mul_req[i].src2_val; 
+                raddr[4 + i*8] <= load_req[i].src1_mux; 
+                raddr[5 + i*8] <= load_req[i].src2_mux; 
+                raddr[6 + i*8] <= br_req[i].src1_mux; 
+                raddr[7 + i*8] <= br_req[i].src2_mux;
+            end
         end
     end
 
@@ -247,7 +345,13 @@ module cpu #(
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0][$clog2(`PHYS_REGS)-1:0] fu_dest_prf;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0][$clog2(`ROB_DEPTH)-1:0] fu_rob_idx;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_exception;
-    logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_mispred;
+    logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_mispred; 
+
+    //FU -> LSQ
+    logic [`LOAD_COUNT-1:0] fu_ls_valid_o; 
+    logic [`LOAD_COUNT-1:0] [$clog2(`ROB_DEPTH)-1:0]   fu_ls_rob_idx_o; 
+    ADDR [`LOAD_COUNT-1:0] fu_ls_addr_o; 
+    logic [`LOAD_COUNT-1:0][`XLEN-1:0]      fu_sw_data_o; 
 
 //EX_C_REG
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_valid_reg;
@@ -256,6 +360,10 @@ module cpu #(
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0][$clog2(`ROB_DEPTH)-1:0] fu_rob_idx_reg;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_exception_reg;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_mispred_reg;
+    logic [`LOAD_COUNT-1:0] [`XLEN-1:0] fu_sw_data_o_reg; 
+    logic [`LOAD_COUNT-1:0] fu_ls_valid_o_reg; 
+    logic [`LOAD_COUNT-1:0] [$clog2(`ROB_DEPTH)-1:0] fu_ls_rob_idx_o_reg; 
+    ADDR [`LOAD_COUNT-1:0] fu_ls_addr_o_reg; 
 
 // Complete-stage
     // PR
@@ -311,6 +419,9 @@ module cpu #(
     MEM_TAG     outstanding_mem_tag;    // tag load is waiting in
     MEM_COMMAND Dmem_command_filtered;  // removes redundant loads
 
+    logic system_stop, system_stop_next, finish_write_back;
+    COMMIT_PACKET wfi;
+    
     //////////////////////////////////////////////////
     //                                              //
     //                Memory Outputs                //
@@ -324,20 +435,23 @@ module cpu #(
 
     always_comb begin
         // TODO: now only has icache
-        proc2mem_command = Imem_command;
-        proc2mem_addr    = Imem_addr;
-        // if (Dmem_command != MEM_NONE) begin  // read or write DATA from memory
-        //     proc2mem_command = Dmem_command_filtered;
-        //     proc2mem_size    = Dmem_size;
-        //     proc2mem_addr    = Dmem_addr;
-        // end else begin                      // read an INSTRUCTION from memory
-        //     proc2mem_command = Imem_command;
-        //     proc2mem_addr    = Imem_addr;
-        //     proc2mem_size    = DOUBLE;      // instructions load a full memory line (64 bits)
-        // end
-        // proc2mem_data = Dmem_store_data;
+        // proc2mem_command = Imem_command;
+        // proc2mem_addr    = Imem_addr;
+        if (Dmem_command != MEM_NONE) begin  // read or write DATA from memory
+            proc2mem_command = Dmem_command;
+            proc2mem_size    = Dmem_size;
+            proc2mem_addr    = Dmem_addr;
+        end else begin                      // read an INSTRUCTION from memory
+            proc2mem_command = Imem_command;
+            proc2mem_addr    = Imem_addr;
+            proc2mem_size    = DOUBLE;      // instructions load a full memory line (64 bits)
+        end
+        proc2mem_data = Dmem_store_data;
+        
     end
-    assign proc2mem_size = DOUBLE;
+
+    assign mem2proc_transaction_tag_icache = (Dmem_command != MEM_NONE) ? '0 : mem2proc_transaction_tag;
+    // assign proc2mem_size = DOUBLE; // needed when only has icache
 
     //////////////////////////////////////////////////
     //                                              //
@@ -347,8 +461,11 @@ module cpu #(
 
     // This state controls the stall signal that artificially forces IF
     // to stall until the previous instruction has completed.
-    // For project 3, start by assigning if_valid to always be 1
-
+    // For project 3, start by assigning if_valid to always be 1`
+    logic stall_dcache;
+    assign stall_dcache = 0;
+    // assign stall_dcache = (Dmem_command != MEM_NONE) && (Imem_command != MEM_NONE);
+    
     logic if_valid, if_flush,correct_predict;
     logic pred_valid_i, pred_taken_i;
     logic [$clog2(`FETCH_WIDTH)-1:0] pred_lane_i;   // which instruction is branch    
@@ -382,11 +499,12 @@ module cpu #(
     assign branch_resolve = wb_valid[`FU_NUM - `FU_BRANCH]; // no matter it is mispredict or not
     assign stall_dispatch = branch_stall || stall;
 
-
+`ifndef SYNTHESIS
     always_ff @(posedge clock) begin
         if(!reset) begin
             $display("|is_branch=%b | has_branch_in_pipline=%b | branch_stall=%b | branch_resolve=%b", |is_branch, has_branch_in_pipline, branch_stall, branch_resolve);
             $display("branch_stall_reg=%b |branch_stall_next=%b",branch_stall_reg,branch_stall_next);
+            $display("stall_disp=%b",stall_dispatch);
         end
     end
 
@@ -397,8 +515,9 @@ module cpu #(
             $display("inst[%d] valid(%b) : %h", i, if_packet[i].valid, if_packet[i].inst);
         end
     end
+`endif
     // assign if_valid = 1'b1;
-    assign if_valid = !stall && !branch_stall;
+    assign if_valid = !stall && !branch_stall && !stall_dcache;
     //###
     logic [16:0] cycle;
     always @(posedge clock) begin
@@ -428,9 +547,11 @@ module cpu #(
             cycle_count <= 0;
         end else begin
             if (if_flush) begin
+                `ifndef SYNTHESIS
                 $display("cycle[%d]| if_flush=%b | wb_valid=%b | wb_mispred=%b | wb_rob_idx=%d | correct_pc_target_o=%h", cycle_count, if_flush, wb_valid, wb_mispred, wb_rob_idx[`FU_NUM - `FU_BRANCH], fu_value_reg[`FU_NUM - `FU_BRANCH]);
+                `endif
             end else begin
-            cycle_count <= cycle_count + 1;
+                cycle_count <= cycle_count + 1;
             end
         end
     end
@@ -461,13 +582,15 @@ module cpu #(
     //                  I-cache                     //
     //                                              //
     //////////////////////////////////////////////////
+    // MEM_TAG mem2proc_data_tag_icache;
+
     icache icache_0(
         .clock (clock),
         .reset (reset),
 
         // Inputs
         // From memory
-        .Imem2proc_transaction_tag(mem2proc_transaction_tag), 
+        .Imem2proc_transaction_tag(mem2proc_transaction_tag_icache), 
         .Imem2proc_data(mem2proc_data),
         .Imem2proc_data_tag(mem2proc_data_tag),
 
@@ -503,7 +626,7 @@ module cpu #(
         .if_flush (if_flush),  
         .take_branch(take_branch),   
 
-        .disp_n(`N),  //todo
+        .disp_n(disp_n_fetch),  //todo
 
         .pred_valid_i(pred_valid_i),     
         .pred_lane_i(pred_lane_i),      
@@ -526,7 +649,7 @@ module cpu #(
         .if_packet_o (if_packet)
     );
 
-
+    
     // IF-stage debug outputs
     always_comb begin
 		for(int i=0;i<`FETCH_WIDTH;i++)begin
@@ -640,12 +763,23 @@ module cpu #(
         .disp_rd_new_prf_o(disp_rd_new_prf),
         .disp_rd_old_prf_o(disp_rd_old_prf),
 
-        .stall_dispatch(stall_dispatch),
+        .branch_stall(branch_stall),
 
         .disp_packet_o(disp_packet),
         .stall(stall),
 
-        .disp_n(disp_n)
+        .disp_n(disp_n),
+
+        // to lsq
+        //todo: signal n way, lsq one way 
+        .dispatch_valid          (disp_rob_valid_lsq[0]),
+        .dispatch_is_store       (dispatch_is_store[0]),
+        .dispatch_size           (dispatch_size[0]),
+        .disp_rob_idx_o        (disp_rob_idx_o[0]),
+
+        // lsq -> dispatch
+        .lq_count(lq_count),
+        .st_count(st_count)
     );
 
     //////////////////////////////////////////////////
@@ -702,10 +836,19 @@ module cpu #(
         .mispredict_i(if_flush),
         .mispredict_rob_idx_i(wb_rob_idx[`FU_NUM - `FU_BRANCH]),
          //### TODO: for debug only (sychenn 11/6) ###//
+        .flush2free_list_new_prf_o(flush2free_list_new_prf),
+        .flush2free_list_valid_o(flush2free_list_valid),
         .flush_i(flush_rob_debug),
         .flush_free_regs_valid(flush_free_regs_valid),
         .flush_free_regs(flush_free_regs),
-        .wb_packet_o(wb_packet)
+        .wb_packet_o(wb_packet),
+
+        //to lsq
+        .retire_rob_idx_o(retire_rob_idx),
+        .rob_head_o(rob_head),
+
+        .rob_store_ready_idx(rob_store_ready_idx),
+        .rob_store_ready_valid(rob_store_ready_valid)
     );
 
     //////////////////////////////////////////////////
@@ -713,7 +856,7 @@ module cpu #(
     //                  map table                   //
     //                                              //
     //////////////////////////////////////////////////
-
+`ifndef SYNTHESIS
     always_ff @(negedge clock) begin
         for (int i = 0; i < `DISPATCH_WIDTH; i++) begin
             $display("DISP[%0d] rs1_arch=%0d rs2_arch=%0d rd_arch=%0d rs1_phys=%0d rs2_phys=%0d rd_phys=%0d",
@@ -727,6 +870,7 @@ module cpu #(
         end
         $display();
     end
+`endif
 
 
     always_comb begin
@@ -770,53 +914,64 @@ module cpu #(
         .disp_arch_i(dest_arch),
         .disp_new_phys_i(dest_new_prf),
         .disp_old_phys_o(disp_old_phys),
-        //###
 
-        .wb_valid_i(cdb_valid_mp),//
-        .wb_phys_i(cdb_phy_tag_mp),//
+        .wb_valid_i(cdb_valid_mp),
+        .wb_phys_i(cdb_phy_tag_mp),
 
         .is_branch_i(is_branch),
-        .flush_i('0),
         .snapshot_restore_valid_i(snapshot_restore_i),
         .snapshot_data_i(snapshot_data_i),
 
         .snapshot_data_o(snapshot_data_o),
-        .checkpoint_valid_o(checkpoint_valid)
+        .snapshot_valid_o(snapshot_valid)
     );
 
 
  //### 11/10 sychenn ###// (for map table restore)
+ // valid bit here means ready
     always_ff @(posedge clock) begin : checkpoint
         if (reset) begin
-            for(int i =0 ; i <`ARCH_REGS ; i++)begin
-                snapshot_data_i[i].phys <= '0;
-                snapshot_data_i[i].valid <= '0;
+            for(int i = 0; i < `ARCH_REGS; i++) begin
+                snapshot_reg[i].phys <= '0;
+                snapshot_reg[i].valid <= '0;
             end
-            snapshot_restore_i <= 1'b0;
             has_snapshot       <= 1'b0;
         end else begin
-            // $display("snapshot_reg:");
-            // for(int i =0 ; i < `ARCH_REGS ; i++)begin
-            //     $display("snapshot_reg[%0d] = %d (%d)",i,snapshot_reg[i].phys,snapshot_reg[i].valid);
-            // end
             if (if_flush && has_snapshot) begin
-                for(int i =0 ; i <`ARCH_REGS ; i++)begin
-                    snapshot_data_i[i].phys <= snapshot_reg[i].phys;
-                    snapshot_data_i[i].valid <= snapshot_reg[i].valid;
-                end
-                snapshot_restore_i <= 1'b1;
-                has_snapshot       <= 1'b0; // consume snapshot
-            end else if (checkpoint_valid) begin
+                has_snapshot       <= 1'b0; 
+            end else if (snapshot_valid) begin
                 for(int i =0 ; i < `ARCH_REGS ; i++)begin
                     snapshot_reg[i].phys <= snapshot_data_o[i].phys;
                     snapshot_reg[i].valid <= snapshot_data_o[i].valid;
                 end
                 has_snapshot <= 1'b1;
-            end else begin
-                snapshot_restore_i <= 1'b0;
+            end else if (has_snapshot) begin
+                for(int i =0 ; i < `ARCH_REGS ; i++)begin
+                    // wb ready for the same phy reg in snapshot
+                    if (snapshot_reg[i].phys == snapshot_data_o[i].phys) begin
+                        snapshot_reg[i].valid <= snapshot_data_o[i].valid;
+                    end
+                end           
             end
         end
     end
+
+    always_comb begin
+        if (if_flush && has_snapshot) begin
+            for(int i =0 ; i <`ARCH_REGS ; i++)begin
+                snapshot_data_i[i].phys = snapshot_reg[i].phys;
+                snapshot_data_i[i].valid = snapshot_reg[i].valid;
+                snapshot_restore_i = 1'b1;
+            end
+        end else begin
+            for(int i =0 ; i <`ARCH_REGS ; i++)begin
+                snapshot_data_i[i].phys = '0;
+                snapshot_data_i[i].valid = '0;
+                snapshot_restore_i = 1'b0;
+            end
+        end
+    end
+
     //////////////////////////////////////////////////
     //                                              //
     //                 free list                    //
@@ -846,9 +1001,11 @@ module cpu #(
         //### TODO: for debug only (sychenn 11/6) ###//
         .flush_i(flush_rob_debug),
         .flush_free_regs_valid(flush_free_regs_valid),
-        .flush_free_regs(flush_free_regs)
+        .flush_free_regs(flush_free_regs),
 
-
+        //rob
+        .flush2free_list_new_prf_i(flush2free_list_new_prf),
+        .flush2free_list_valid_i(flush2free_list_valid)
     );
 
     //////////////////////////////////////////////////
@@ -1185,7 +1342,7 @@ module cpu #(
             mul_req_reg[i].src1_val = rdata[2 + i*8];
             mul_req_reg[i].src2_val = mul_req_reg_org[i].src2_valid ? rdata[3 + i*8] : mul_req_reg_org[i].src2_val;
             load_req_reg[i].src1_val = rdata[4 + i*8];
-            load_req_reg[i].src2_val = load_req_reg_org[i].src2_valid ? rdata[5 + i*8] : load_req_reg_org[i].src2_mux;
+            load_req_reg[i].src2_val = load_req_reg_org[i].src2_valid ? rdata[5 + i*8] : '1;
             br_req_reg[i].src1_mux = rdata[6 + i*8];
             br_req_reg[i].src2_mux = br_req_reg_org[i].src2_valid ? rdata[7 + i*8] : br_req_reg_org[i].src2_mux;
         end
@@ -1222,7 +1379,12 @@ module cpu #(
         .fu_dest_prf_o(fu_dest_prf),
         .fu_rob_idx_o(fu_rob_idx),
         .fu_exception_o(fu_exception),
-        .fu_mispred_o(fu_mispred)
+        .fu_mispred_o(fu_mispred),
+
+        .fu_ls_valid_o(fu_ls_valid_o),
+        .fu_ls_rob_idx_o(fu_ls_rob_idx_o),
+        .fu_ls_addr_o(fu_ls_addr_o),
+        .fu_sw_data_o(fu_sw_data_o)
     );
 
     // always_ff @(negedge clock) begin
@@ -1241,6 +1403,11 @@ module cpu #(
                 ex_c_inst_dbg <= `NOP; // debug output
                 ex_c_reg      <= 0;    // the defaults can all be zero!
             end
+            fu_ls_valid_o_reg <= '0;
+            fu_ls_rob_idx_o_reg <= '0;
+            fu_ls_addr_o_reg <= '0;            
+            fu_sw_data_o_reg <= '0; // for store instr
+
             fu_valid_reg <= '0;
             fu_value_reg <= '0;
             fu_dest_prf_reg <= '0;
@@ -1248,6 +1415,11 @@ module cpu #(
             fu_exception_reg <= '0;
             fu_mispred_reg <= '0;
         end else begin
+            fu_ls_valid_o_reg <= fu_ls_valid_o;
+            fu_ls_rob_idx_o_reg <= fu_ls_rob_idx_o;
+            fu_ls_addr_o_reg <= fu_ls_addr_o;
+            fu_sw_data_o_reg <= fu_sw_data_o; // for store instr
+
             fu_valid_reg <= fu_valid;
             fu_value_reg <= fu_value;
             fu_dest_prf_reg <= fu_dest_prf;
@@ -1263,12 +1435,213 @@ module cpu #(
         end
     end
 
-    // always_ff @(negedge clock) begin
-    //     $display("fu_valid : %b", fu_valid_reg);
-    // end
+    //////////////////////////////////////////////////
+    //                                              //
+    //                LSQ                           //
+    //                                              //
+    //////////////////////////////////////////////////
+// =====================================================
+// LSQ top instance
+// =====================================================
 
-    // debug outputs
-    //assign ex_c_NPC_dbg   = ex_c_reg.NPC;
+
+
+lsq_top #(
+    .DISPATCH_WIDTH (`DISPATCH_WIDTH),
+    .SQ_SIZE        (`SQ_SIZE),
+    .LQ_SIZE        (`LQ_SIZE)
+) lsq_top_0 (
+    .clock                   (clock),
+    .reset                   (reset),
+
+    // Dispatch Stage (ok)
+    .dispatch_valid          (disp_rob_valid_lsq[0]), 
+    .dispatch_is_store       (dispatch_is_store[0]),
+    .dispatch_size           (dispatch_size),
+    .dispatch_rob_idx        (disp_rob_idx_o), 
+    .disp_rd_new_prf_i  (disp_rd_new_prf),
+
+    .lq_free_num_slot                (lq_count), // output
+    .sq_free_num_slot                (st_count), //output
+
+    // Execution Stage  (###ok)
+    .sq_data_valid           (fu_ls_valid_o_reg),
+    .sq_data                 (fu_sw_data_o_reg),
+    .sq_data_rob_idx         (fu_ls_rob_idx_o_reg),
+    .sq_data_addr           (fu_ls_addr_o_reg),
+
+    // =====================================================
+    // 3. Commit Stage (from ROB) (OK)
+    // =====================================================
+    .rob_head                (rob_head),
+    .commit_valid            (commit_valid),
+    .commit_rob_idx          (retire_rob_idx),
+    .wb_disp_rd_new_prf_o    (wb_disp_rd_new_prf),
+
+    // =====================================================
+    // 4. Writeback Stage (Load -> CDB/ROB)
+    // =====================================================
+    // ALL Outputs
+    .wb_valid                (lsq_wb_valid),
+    .wb_rob_idx              (lsq_wb_rob_idx),
+    .wb_data                 (wb_data),
+
+    // 5. Dual Port D-Cache Interface (ok)
+
+    // --- Port 0: Load ---
+    .Dcache_addr_0           (Dcache_addr_0),
+    .Dcache_command_0        (Dcache_command_0),
+    .Dcache_size_0           (Dcache_size_0),
+    .Dcache_store_data_0     (Dcache_store_data_0),
+    .Dcache_req_rob_idx_0          (Dcache_req_rob_idx_0),
+    .Dcache_req_0_accept     (Dcache_req_0_accept),
+
+    .Dcache_data_out_0       (Dcache_data_out_0),
+    .Dcache_valid_out_0      (Dcache_valid_out_0),
+    .Dcache_data_rob_idx_0         (Dcache_data_rob_idx_0),
+
+    // --- Port 1: Store ---
+    .Dcache_addr_1           (Dcache_addr_1),
+    .Dcache_command_1        (Dcache_command_1),
+    .Dcache_size_1           (Dcache_size_1),
+    .Dcache_store_data_1     (Dcache_store_data_1),
+    .Dcache_req_1_accept     (Dcache_req_1_accept),
+    .Dcache_req_rob_idx_1          (Dcache_req_rob_idx_1),
+
+    .Dcache_data_out_1       (Dcache_data_out_1),
+    .Dcache_valid_out_1      (Dcache_valid_out_1),
+    .Dcache_data_rob_idx_1         (Dcache_data_rob_idx_1),
+
+    // =====================================================
+    // 6. Snapshot / Recovery Interface
+    // =====================================================
+    .is_branch_i             (is_branch),
+    .snapshot_restore_valid_i(snapshot_restore_i),
+
+    // SQ Snapshot
+    .sq_checkpoint_valid_o   (sq_checkpoint_valid_o),
+    .sq_snapshot_data_o      (sq_snapshot_data_o),
+    .sq_snapshot_head_o      (sq_snapshot_head_o),
+    .sq_snapshot_tail_o      (sq_snapshot_tail_o),
+    .sq_snapshot_count_o     (sq_snapshot_count_o),
+    .sq_snapshot_data_i      (sq_snapshot_data_i),
+    .sq_snapshot_head_i      (sq_snapshot_head_i),
+    .sq_snapshot_tail_i      (sq_snapshot_tail_i),
+    .sq_snapshot_count_i     (sq_snapshot_count_i),
+
+    // LQ Snapshot
+    .lq_checkpoint_valid_o   (lq_checkpoint_valid_o),
+    .lq_snapshot_data_o      (lq_snapshot_data_o),
+    .lq_snapshot_head_o      (lq_snapshot_head_o),
+    .lq_snapshot_tail_o      (lq_snapshot_tail_o),
+    .lq_snapshot_count_o     (lq_snapshot_count_o),
+    .lq_snapshot_data_i      (lq_snapshot_data_i),
+    .lq_snapshot_head_i      (lq_snapshot_head_i),
+    .lq_snapshot_tail_i      (lq_snapshot_tail_i),
+    .lq_snapshot_count_i     (lq_snapshot_count_i),
+
+    .rob_store_ready_idx(rob_store_ready_idx),
+    .rob_store_ready_valid(rob_store_ready_valid)
+);
+
+    always_ff @(posedge clock) begin 
+        if (reset) begin
+            sq_snapshot_tail_reg       <= '0;
+            lq_snapshot_tail_reg       <= '0;
+        end else begin
+            if (snapshot_valid) begin
+                sq_snapshot_tail_reg <= sq_snapshot_tail_o;
+                lq_snapshot_tail_reg <= lq_snapshot_tail_o;
+            end          
+        end
+    end
+
+    always_comb begin
+        if (if_flush && has_snapshot) begin
+            sq_snapshot_tail_i = sq_snapshot_tail_reg;
+            lq_snapshot_tail_i = lq_snapshot_tail_reg;
+        end else begin
+            sq_snapshot_tail_i = '0;
+            lq_snapshot_tail_i = '0;
+        end
+    end
+
+
+    //////////////////////////////////////////////////
+    //                                              //
+    //               D-CACHE                        //
+    //                                              //
+    //////////////////////////////////////////////////
+
+MEM_COMMAND Dcache_command_0_reg;
+MEM_COMMAND Dcache_command_1_reg;
+logic dcache_send_new_mem_req;
+
+always_ff @(posedge clock) begin
+    if (reset) begin
+        Dcache_command_0_reg <= MEM_NONE;
+        Dcache_command_1_reg <= MEM_NONE;
+    end else begin
+        Dcache_command_0_reg <=  (dcache_send_new_mem_req) ? Dcache_command_0 : MEM_NONE;
+        Dcache_command_1_reg <=  (dcache_send_new_mem_req) ? Dcache_command_1 : MEM_NONE;
+        `ifndef SYNTHESIS
+        $display("Dcache_command_0_reg = %d, Dcache_command_1_reg = %d", Dcache_command_0_reg, Dcache_command_1_reg);
+        $display("mem2proc_transaction_tag_dcache = %d, mem2proc_transaction_tag_icache = %d, mem2proc_transaction_tag = %d", mem2proc_transaction_tag_dcache, mem2proc_transaction_tag_icache, mem2proc_transaction_tag);
+        `endif
+    end
+
+end
+
+assign mem2proc_transaction_tag_dcache =
+    (Dcache_command_0_reg != MEM_NONE || Dcache_command_1_reg != MEM_NONE )
+        ? mem2proc_transaction_tag
+        : '0;
+
+// assign mem2proc_transaction_tag_icache =
+//     (Dcache_command_0_reg != MEM_NONE || Dcache_command_1_reg != MEM_NONE )
+//         ? '0
+//         : mem2proc_transaction_tag;
+
+dcache dcache_0 (
+
+    .clock                     (clock),
+    .reset                     (reset),
+
+    // Port 0 (Load / LSQ load port)
+    .Dcache_addr_0             (Dcache_addr_0),
+    .Dcache_command_0          (Dcache_command_0),
+    .Dcache_size_0             (Dcache_size_0),
+    .Dcache_store_data_0       (Dcache_store_data_0),
+    .Dcache_req_rob_idx_0            (Dcache_req_rob_idx_0),
+
+    .Dcache_req_0_accept       (Dcache_req_0_accept),
+    .Dcache_data_out_0         (Dcache_data_out_0),
+    .Dcache_valid_out_0        (Dcache_valid_out_0),
+    .Dcache_data_rob_idx_0           (Dcache_data_rob_idx_0),
+
+    // Port 1 (Store / LSQ store port)
+    .Dcache_addr_1             (Dcache_addr_1),
+    .Dcache_command_1          (Dcache_command_1),
+    .Dcache_size_1             (Dcache_size_1),
+    .Dcache_store_data_1       (Dcache_store_data_1),
+    .Dcache_req_rob_idx_1            (Dcache_req_rob_idx_1),
+
+    .Dcache_req_1_accept       (Dcache_req_1_accept),
+    .Dcache_data_out_1         (Dcache_data_out_1),
+    .Dcache_valid_out_1        (Dcache_valid_out_1),
+    .Dcache_data_rob_idx_1           (Dcache_data_rob_idx_1),
+
+    // Memory interface
+    .Dcache2mem_command        (Dmem_command),
+    .Dcache2mem_addr           (Dmem_addr),
+    .Dcache2mem_size           (Dmem_size),
+    .Dcache2mem_data           (Dmem_store_data),
+    .send_new_mem_req          (dcache_send_new_mem_req),
+
+    .mem2proc_transaction_tag  (mem2proc_transaction_tag),
+    .mem2proc_data             (mem2proc_data),
+    .mem2proc_data_tag         (mem2proc_data_tag)
+);
 
     //////////////////////////////////////////////////
     //                                              //
@@ -1307,7 +1680,15 @@ module cpu #(
         .wb_value_o(fu_value_wb), ///### sychenn 11/7 ###///
 
         // cdb
-        .cdb_o(cdb_packets)
+        .cdb_o(cdb_packets),
+
+
+        //lsq
+        .wb_valid(lsq_wb_valid),
+        .wb_rob_idx(lsq_wb_rob_idx),
+        .wb_data(wb_data),
+        .wb_disp_rd_new_prf_i(wb_disp_rd_new_prf)
+
     );
     // always_ff @(negedge clock) begin
     //     $display("Complete input: CDB_alu_value=%d | CDB_mul_value=%d | CDB_br_value=%d", fu_value_reg[0], fu_value_reg[1], fu_value_reg[3]);
@@ -1346,28 +1727,29 @@ module cpu #(
         .free_reg_o(free_phys),
         .retire_cnt_o(retire_cnt)
     );
+// assign mem2proc_data_tag_icache = (Dmem_command == MEM_LOAD) ? '0 : mem2proc_data_tag;
+//     // New address if:
+//     // 1) Previous instruction wasn't a load
+//     // 2) Load address changed
+//     logic valid_load;
+//     assign valid_load = ex_mem_reg.valid && ex_mem_reg.rd_mem; 
+//     assign new_load = valid_load && !rd_mem_q;
 
-    // New address if:
-    // 1) Previous instruction wasn't a load
-    // 2) Load address changed
-    logic valid_load;
-    //assign valid_load = ex_mem_reg.valid && ex_mem_reg.rd_mem; 
-    assign new_load = valid_load && !rd_mem_q;
+//     assign mem_tag_match = outstanding_mem_tag == mem2proc_data_tag;
 
-    assign mem_tag_match = outstanding_mem_tag == mem2proc_data_tag;
+// //    assign Dmem_command_filtered = (new_load || ex_mem_reg.wr_mem) ? Dmem_command : MEM_NONE;
+//    assign Dmem_command_filtered = (new_load) ? Dmem_command : MEM_NONE;
 
-//    assign Dmem_command_filtered = new_load || ex_mem_reg.wr_mem ? Dmem_command : MEM_NONE;
-
-    always_ff @(posedge clock) begin
-        if (reset) begin
-            rd_mem_q            <= 1'b0;
-            outstanding_mem_tag <= '0;
-        end else begin
-            rd_mem_q            <= valid_load;
-            outstanding_mem_tag <= new_load      ? mem2proc_transaction_tag : 
-                                   mem_tag_match ? '0 : outstanding_mem_tag;
-        end
-    end
+//     always_ff @(posedge clock) begin
+//         if (reset) begin
+//             rd_mem_q            <= 1'b0;
+//             outstanding_mem_tag <= '0;
+//         end else begin
+//             rd_mem_q            <= valid_load;
+//             outstanding_mem_tag <= new_load      ? mem2proc_transaction_tag : 
+//                                    mem_tag_match ? '0 : outstanding_mem_tag;
+//         end
+//     end
 
     //////////////////////////////////////////////////
     //                                              //
@@ -1376,24 +1758,55 @@ module cpu #(
     //////////////////////////////////////////////////
 
     // Output the committed instruction to the testbench for counting
+    // always_ff @(posedge clock) begin
+    //     system_stop <= system_stop | system_stop_next;
+    // end
+
+    
+    
+    // always_comb begin
+    //     committed_insts = '0;
+    //     system_stop_next = '0;
+    //     if(finish_write_back) begin
+    //         committed_insts[0] = wfi;
+    //     end else begin
+    //         for(int i = 0; i < `N; i++) begin
+    //             if(wb_packet[i].halt != 1'b1) begin
+    //                 committed_insts[i] = wb_packet[i];
+    //             end else begin
+    //                 system_stop_next = 1'b1;
+    //                 break;
+    //             end
+    //         end
+    //     end
+    // end
+
     assign committed_insts = wb_packet;
-always_ff @(posedge clock) begin
-    if (!reset) begin
-        integer i;
-        for (i = 0; i < `N; i++) begin
-            if(committed_insts[i].valid) begin
-            $display("Commit[%0d]: valid=%b halt=%b illegal=%b reg=%0d data=%h NPC=%h",
-                     i,
-                     committed_insts[i].valid,
-                     committed_insts[i].halt,
-                     committed_insts[i].illegal,
-                     committed_insts[i].reg_idx,
-                     committed_insts[i].data,
-                     committed_insts[i].NPC);
+
+`ifndef SYNTHESIS
+    always_ff @(posedge clock) begin
+        if (!reset) begin
+            integer i;
+            if (stall_dcache) begin
+                $display("[%t]stall_dcache = %b", $time, stall_dcache);
+            end
+            // $display("[%t]proc2mem_command = %s, Imem_command = %s, Dmem_command = %s", $time, proc2mem_command.name, Imem_command.name, Dmem_command.name);
+            for (i = 0; i < `N; i++) begin
+                if(committed_insts[i].valid) begin
+                $display("[%t]Commit[%0d]: valid=%b halt=%b illegal=%b reg=%0d data=%h NPC=%h",
+                        $time,
+                        i,
+                        committed_insts[i].valid,
+                        committed_insts[i].halt,
+                        committed_insts[i].illegal,
+                        committed_insts[i].reg_idx,
+                        committed_insts[i].data,
+                        committed_insts[i].NPC);
+            end
+            end
+            $display("-------------------\n");
         end
-        end
-        $display("-------------------\n");
     end
-end
+`endif
 
 endmodule // pipeline

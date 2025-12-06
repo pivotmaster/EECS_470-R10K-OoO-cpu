@@ -75,7 +75,7 @@ module FIFO #(
     end
 
     // Save update to FIFO pointers
-    always_ff @(posedge clock or posedge reset) begin
+    always_ff @(posedge clock) begin
         if (reset) begin
             tail    <= 0;
             head    <= 0;

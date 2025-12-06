@@ -81,13 +81,15 @@ module stage_if #(
         end else if (if_valid && !stall_fetch) begin
             if (pred_valid_i && pred_taken_i) begin
                 PC_next = pred_target_i;
+                `ifndef SYNTHESIS
                 $display("PC_next=%h", PC_next);
+                `endif
             // end else if(PC_reg == 32'hA4) begin //### close flush
             //     PC_next = 32'h68; //###
             // end else if(PC_reg == 32'hA8) begin //###
             //     PC_next = 32'hA8; //###
             end else begin
-                PC_next = PC_reg + (disp_n << 2); // + 4 * FETCH_WIDTH
+                PC_next = PC_reg + (`N << 2); // + 4 * FETCH_WIDTH
             end
         end
         
@@ -167,11 +169,15 @@ module stage_if #(
             assign if_packet_o[k].valid = this_valid;
         end
     endgenerate
-
+`ifndef SYNTHESIS
     always_ff @(posedge clock) begin
         if (!reset) begin
-            $display("PC_next=%h | Icache_valid=%b | if_valid=%b", PC_next, Icache_valid, if_packet_o[0].valid );
+            $display("[%t] PC_reg = %h | PC_next=%h | Icache_valid=%b Icache_data = %h| if_packet_o_valid=%b", $time, PC_reg,PC_next, Icache_valid,Icache_data, if_packet_o[0].valid );
         end
     end
-
+    initial begin
+        $dumpfile("fetch_stage.vcd");
+        $dumpvars(0, stage_if);
+    end
+`endif
 endmodule

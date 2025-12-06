@@ -9,6 +9,12 @@ module complete_stage #(
     input  logic clock,
     input  logic reset,
 
+    // LSQ (only load instruction)
+    input logic       wb_valid,
+    input ROB_IDX     wb_rob_idx,
+    input logic [31:0]   wb_data, 
+    input logic [$clog2(PHYS_REGS)-1:0] wb_disp_rd_new_prf_i,
+
     // FU
     input  logic [WB_WIDTH-1:0]                    fu_valid_i,
     input  logic [WB_WIDTH-1:0][XLEN-1:0]          fu_value_i,
@@ -33,7 +39,9 @@ module complete_stage #(
     output cdb_entry_t [CDB_WIDTH-1:0]             cdb_o
 );
 
+    // int idx;
     always_comb begin
+        // idx = 0;
         prf_wr_en_o   = '0;
         prf_waddr_o   = '0;
         prf_wdata_o   = '0;
@@ -57,9 +65,29 @@ module complete_stage #(
                 wb_value_o[i]   = fu_value_i[i]; // 11/21 sychenn
 
                 cdb_o[i].valid     = 1'b1;
-                cdb_o[i].dest_arch = '0;
+                cdb_o[i].dest_arch = '0; //todo: why is zero?
                 cdb_o[i].phys_tag  = fu_dest_prf_i[i];
                 cdb_o[i].value     = fu_value_i[i];          
+            end else  if (wb_valid) begin 
+                // todo: lsq wb is valid
+                `ifndef SYNTHESIS
+                $display("complete stage: wb_valid=%b | wb_rob_idx=%d | wb_data=%h | wb_disp_rd_new_prf_i=%d ",wb_valid, wb_rob_idx, wb_data, wb_disp_rd_new_prf_i);
+                `endif
+                // from lsq
+                prf_wr_en_o[i]   = wb_valid;
+                prf_waddr_o[i]   = wb_disp_rd_new_prf_i;
+                prf_wdata_o[i]   = wb_data;
+
+                wb_valid_o[i]     = wb_valid;
+                wb_rob_idx_o[i]   = wb_rob_idx;
+                wb_exception_o[i] = '0;
+                wb_mispred_o[i]   = '0;
+                wb_value_o[i]   = wb_data;
+
+                cdb_o[i].valid     = wb_valid;
+                cdb_o[i].dest_arch = '0;
+                cdb_o[i].phys_tag  = wb_disp_rd_new_prf_i;
+                cdb_o[i].value     =wb_data; 
             end
             // $display("complete stage i, out, in = %0d, %0d, %0d", i, cdb_o[i].value, fu_value_i[i]);
         end

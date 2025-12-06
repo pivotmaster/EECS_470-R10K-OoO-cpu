@@ -95,42 +95,65 @@ module dispatch_stage #(
     //output  logic                          btb_update_valid_o,
     //output  logic      [ADDR_WIDTH-1:0]    btb_update_pc_o,
     //output  logic      [ADDR_WIDTH-1:0]    btb_update_target_o,
-    input stall_dispatch, // from cpu 
+    input branch_stall, // from cpu 
     //packet
     output DISP_PACKET [DISPATCH_WIDTH-1:0] disp_packet_o,
     output logic stall,
 
-    output logic [$clog2(DISPATCH_WIDTH+1)-1:0] disp_n
+    output logic [$clog2(DISPATCH_WIDTH+1)-1:0] disp_n,
+
+    // Dispatch <-> LSQ
+    output  logic     [DISPATCH_WIDTH-1:0]  dispatch_valid,
+    output  logic      [DISPATCH_WIDTH-1:0] dispatch_is_store, // 1=Store, 0=Load
+    output  MEM_SIZE   [DISPATCH_WIDTH-1:0] dispatch_size,
+    output  ROB_IDX    [DISPATCH_WIDTH-1:0] disp_rob_idx_o,
+
+    input   logic   [$clog2(`LQ_SIZE+1)-1:0]    lq_count,         
+    input   logic    [$clog2(`LQ_SIZE+1)-1:0]   st_count          
 
 );
+
+logic [DISPATCH_WIDTH-1:0] disp_has_dest;
+logic [DISPATCH_WIDTH-1:0] disp_rd_wen_o;
+logic [$clog2(DISPATCH_WIDTH+1)-1:0] total_valid_instr;
+
     //### 11/10 sychenn ###// (for map table restore)
     always_comb begin
         for (int i = 0; i < DISPATCH_WIDTH; i++) begin
           //### TODO: Fetch width need to be smaller then dispatch width ###//
-            is_branch_o[i] = if_packet_i[i] && (rs_packets_o[i].fu_type == FU_BRANCH);
+            is_branch_o[i] = disp_packet_o[i].valid && (disp_packet_o[i].cond_branch || disp_packet_o[i].uncond_branch);
         end
     end
 
     assign stall = (disp_n < `N);
 
+    always_comb begin
+      total_valid_instr = '0;
+      for (int i = 0; i < DISPATCH_WIDTH; i++) begin
+        if (if_packet_i[i].valid)
+          total_valid_instr = total_valid_instr + 1;
+      end
+    end
 
     always_comb begin
         disp_n = DISPATCH_WIDTH;
         if (free_rs_slots_i < disp_n)  disp_n = free_rs_slots_i;
         if (free_rob_slots_i < disp_n) disp_n = free_rob_slots_i;
         if (free_regs_i < disp_n)      disp_n = free_regs_i;
+        // if (lq_count < disp_n)         disp_n = lq_count;
+        // if (st_count < disp_n)         disp_n = st_count;
     end
-
+`ifndef SYNTHESIS
     always_ff @(posedge clock) begin
       if (!reset) begin
-        $display("[%0t] DISPATCH: now valid=%b | RS=%0d ROB=%0d REG=%0d  W=%0d  -> disp_n=%0d",
-                $time, if_packet_i[0].valid, free_rs_slots_i, free_rob_slots_i, free_regs_i, DISPATCH_WIDTH, disp_n);
+        for (int i = 0; i < DISPATCH_WIDTH; i++) begin
+            $display("[%0t] DISPATCH: if_packet_i[%b] valid=%0d", $time, i, if_packet_i[i].valid);
+        end
+        $display("[%0t] DISPATCH: RS=%0d ROB=%0d REG=%0d  W=%0d  -> disp_n=%0d",
+                $time,free_rs_slots_i, free_rob_slots_i, free_regs_i, DISPATCH_WIDTH, disp_n);
       end
     end
-
-
-
-    assign disp_rob_rd_wen_o = disp_rs_rd_wen_o;
+`endif
 
     //pass packet
     always_comb begin
@@ -139,7 +162,7 @@ module dispatch_stage #(
             disp_packet_o[i].PC = if_packet_i[i].PC;
             disp_packet_o[i].NPC = if_packet_i[i].NPC;
             disp_packet_o[i].valid = if_packet_i[i].valid;
-            disp_packet_o[i].dest_reg_idx = (disp_rs_rd_wen_o[i]) ? if_packet_i[i].inst.r.rd : `ZERO_REG;
+            disp_packet_o[i].dest_reg_idx = (disp_has_dest[i]) ? if_packet_i[i].inst.r.rd : `ZERO_REG;
         end
     end
 
@@ -151,7 +174,7 @@ module dispatch_stage #(
 
             .opa_select    (disp_packet_o[i].opa_select),
             .opb_select    (disp_packet_o[i].opb_select),
-            .has_dest      (disp_rs_rd_wen_o[i]),
+            .has_dest      (disp_has_dest[i]),
             .alu_func      (disp_packet_o[i].alu_func),
             .mult          (disp_packet_o[i].mult),
             .rd_mem        (disp_packet_o[i].rd_mem),
@@ -164,6 +187,15 @@ module dispatch_stage #(
             .fu_type       (disp_packet_o[i].fu_type)
         );
     end
+
+    always_comb begin
+      for (int i=0; i < DISPATCH_WIDTH; i++) begin
+        disp_rd_wen_o[i] = (disp_has_dest[i]) && (if_packet_i[i].inst.r.rd != '0);
+      end
+    end
+
+    assign disp_rob_rd_wen_o = disp_rd_wen_o;
+    assign disp_rs_rd_wen_o = disp_rd_wen_o;
 
 
     //TODO exist latch
@@ -181,15 +213,20 @@ module dispatch_stage #(
         src2_arch_o = '0;
         dest_arch_o = '0;
 
-        if (!stall_dispatch) begin
+        dispatch_valid = '0;
+        dispatch_is_store = '0;
+        dispatch_size = '0;
+        disp_rob_idx_o = '0;
+
+        if (!branch_stall && !stall) begin
           for (int i = 0; i < DISPATCH_WIDTH; i++) begin
               if (if_packet_i[i].valid) begin //### Account for icache miss (valid = 0)
                 // Dispatch -> Map Table
                 src1_arch_o[i] = if_packet_i[i].inst.r.rs1;
                 src2_arch_o[i]= if_packet_i[i].inst.r.rs2;
                 dest_arch_o[i] = disp_packet_o[i].dest_reg_idx;  // from decoder
-                rename_valid_o[i] = if_packet_i[i].valid & disp_rs_rd_wen_o[i] & (i < disp_n); // only if instruction is valid
-                alloc_req_o[i] = if_packet_i[i].valid & disp_rs_rd_wen_o[i] & (i < disp_n);
+                rename_valid_o[i] = if_packet_i[i].valid & disp_rd_wen_o[i] & (i < disp_n); // only if instruction is valid
+                alloc_req_o[i] = if_packet_i[i].valid & disp_rd_wen_o[i] & (i < disp_n);
 
                 // To RS
                 if(i < disp_n) begin
@@ -208,7 +245,9 @@ module dispatch_stage #(
                     rs_packets_o[i].src1_tag = src1_phys_i[i];  // physical tag for rs1
                     rs_packets_o[i].src2_tag = src2_phys_i[i];  // physical tag for rs2
                     rs_packets_o[i].src1_ready = src1_ready_i[i]; // whether rs1 is ready (+)
-                    rs_packets_o[i].src2_ready = src2_ready_i[i];
+                    rs_packets_o[i].src2_ready = src2_ready_i[i]; // If is IMM ALWAYS READY
+
+                    // rs_packets_o[i].src2_ready = (disp_packet_o[i].opb_select == 3'h0 && !disp_packet_o[i].wr_mem) ? src2_ready_i[i] : 1; // If is IMM ALWAYS READY
                     rs_packets_o[i].disp_packet = disp_packet_o[i];
 
                     // To ROB
@@ -219,38 +258,24 @@ module dispatch_stage #(
 
                     // To map table
                     dest_new_prf[i] = new_reg_i[i];
+
+                    // To LSQ
+                    if (disp_packet_o[i].valid && (disp_packet_o[i].rd_mem || disp_packet_o[i].wr_mem)) begin
+                      dispatch_valid[i] = 1;
+                      dispatch_is_store[i] = disp_packet_o[i].wr_mem; // store = 1
+                      dispatch_size[i] = WORD;
+                      disp_rob_idx_o[i] = disp_rob_idx_i[i];
+                    end else begin
+                      dispatch_valid[i] = 0;
+                      dispatch_is_store[i] = disp_packet_o[i].wr_mem; // store = 1
+                      dispatch_size[i] = WORD;
+                      disp_rob_idx_o[i] = disp_rob_idx_i[i];
+                    end
+                    
                 end 
               end
           end
-        end else begin
-          for (int i = 0; i < DISPATCH_WIDTH; i++) begin
-            src1_arch_o[i]     = src1_arch_o[i];
-            src2_arch_o[i]     = src2_arch_o[i];
-            dest_arch_o[i]     = dest_arch_o[i];
-            rename_valid_o[i]  = 0;   
-            alloc_req_o[i]     = 0;  
-
-            disp_rs_valid_o[i] = 0;
-            disp_rob_valid_o[i] = 0;
-
-            rs_packets_o[i].valid       = 0;
-            rs_packets_o[i].fu_type     = 2'b00;
-            rs_packets_o[i].rob_idx     = '0;
-            rs_packets_o[i].dest_arch_reg = '0;
-            rs_packets_o[i].dest_tag    = '0;
-            rs_packets_o[i].src1_tag    = '0;
-            rs_packets_o[i].src2_tag    = '0;
-            rs_packets_o[i].src1_ready  = 0;
-            rs_packets_o[i].src2_ready  = 0;
-            rs_packets_o[i].disp_packet = '0;
-
-            disp_rd_arch_o[i]     = disp_rd_arch_o[i];
-            disp_rd_old_prf_o[i]  = disp_rd_old_prf_o[i];
-            disp_rd_new_prf_o[i]  = disp_rd_new_prf_o[i];
-            dest_new_prf[i]       = dest_new_prf[i];
-          end
-        end
-
+        end 
       end
 
 /*

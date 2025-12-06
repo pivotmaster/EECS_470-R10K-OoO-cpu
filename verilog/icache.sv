@@ -70,7 +70,7 @@ module icache (
         .WIDTH     ($bits(MEM_BLOCK)),
         .DEPTH     (`ICACHE_LINES),
         .READ_PORTS(1),
-        .BYPASS_EN (0))
+        .BYPASS_EN (1))
     icache_mem (
         .clock(clock),
         .reset(reset),
@@ -108,12 +108,12 @@ module icache (
     // Set mem tag to zero if we changed_addr, and keep resetting while there is
     // a miss_outstanding. Then set to zero when we got_mem_data.
     // (this relies on Imem2proc_transaction_tag being zero when there is no request)
-    assign update_mem_tag = changed_addr || miss_outstanding || got_mem_data;
+    assign update_mem_tag = (changed_addr || miss_outstanding || got_mem_data);
 
     // If we have a new miss or still waiting for the response tag, we might
     // need to wait for the response tag because dcache has priority over icache
     assign unanswered_miss = changed_addr ? !Icache_valid_out :
-                                        miss_outstanding && (Imem2proc_transaction_tag == 0);
+                                        miss_outstanding && (Imem2proc_transaction_tag == 0) ;
 
     // Keep sending memory requests until we receive a response tag or change addresses
     assign proc2Imem_command = (miss_outstanding && !changed_addr) ? MEM_LOAD : MEM_NONE;
@@ -139,6 +139,13 @@ module icache (
                 icache_tags[current_index].tags  <= current_tag;
                 icache_tags[current_index].valid <= 1'b1;
             end
+        end
+    end
+
+    always_ff @(posedge clock) begin
+            if(!reset) begin
+                $display("current_mem_tag=%h | Imem2proc_data_tag=%h |Imem2proc_transaction_tag=%h", current_mem_tag, Imem2proc_data_tag, Imem2proc_transaction_tag);
+                $display("proc2Icache_addr=%h | Imem2proc_data=%h | icache_we=%b | Icache_data_out=%h valid=%b | current_index=%d ", proc2Icache_addr, Imem2proc_data,icache_we, Icache_data_out, Icache_valid_out, current_index);
         end
     end
 

@@ -42,19 +42,28 @@ output logic [$clog2(PHYS_REGS+1)-1:0]                       free_count_o, // nu
     //### TODO: for debug only (sychenn 11/6) ###//
     input  logic flush_i,
     input logic [`ROB_DEPTH-1:0] flush_free_regs_valid, /// unused
-    input logic [(PHYS_REGS)-1:0]  flush_free_regs
+    input logic [(PHYS_REGS)-1:0]  flush_free_regs,
+
+    //rob
+    input logic [DISPATCH_WIDTH-1:0][$clog2(PHYS_REGS)-1:0] flush2free_list_new_prf_i,
+    input logic [DISPATCH_WIDTH-1:0] flush2free_list_valid_i
 
 );
 
     // =========================================================
     // Internal storage for free registers
     // =========================================================
+    // free free list 
+    logic [(COMMIT_WIDTH + DISPATCH_WIDTH + PHYS_REGS -1):0] total_free_valid;
+    logic [(COMMIT_WIDTH + DISPATCH_WIDTH + PHYS_REGS -1):0][$clog2(PHYS_REGS)-1:0] total_free_reg_idx;
+
     logic [$clog2(PHYS_REGS)-1:0] free_fifo [PHYS_REGS-ARCH_REGS-1:0];
     logic [$clog2(PHYS_REGS)-1:0] head, tail;
     logic [$clog2(PHYS_REGS):0]   count;
 
     logic [$clog2(PHYS_REGS)-1:0] next_head, next_tail;
     logic [$clog2(PHYS_REGS):0]    next_count;
+    logic [$clog2(PHYS_REGS):0]    next_count_debug;
 
     // Used to track simultaneous transactions
     int N_alloc; // Actual number of successful allocations (0 to DISPATCH_WIDTH)
@@ -111,12 +120,30 @@ output logic [$clog2(PHYS_REGS+1)-1:0]                       free_count_o, // nu
     always_comb begin
         
         // --- 1. 計算 N_free (釋放的數量) ---
+        // retire
         N_free = 0;
         for (int j = 0; j < COMMIT_WIDTH; j++) begin
             if (free_valid_i[j]) begin
                 N_free++;
             end
         end
+        // dispatch (free the instruction that stole the free reg)
+        for (int j2 = 0; j2 < DISPATCH_WIDTH; j2++) begin
+            if (flush2free_list_valid_i[j2]) begin
+                N_free++;
+            end
+        end
+        // chcekpoint (when flush)
+        if (flush_i) begin
+            for (int k = 0; k <(PHYS_REGS); k++) begin
+                if (flush_free_regs[k]) begin
+                    N_free++;
+                    `ifndef SYNTHESIS
+                    $display("flush N_free= %d ", N_free);
+                    `endif
+                end
+            end
+        end  
 
         // 總可用資源：舊 count + N_free (體現 Release-first policy)
         total_available = count + N_free; 
@@ -168,26 +195,51 @@ output logic [$clog2(PHYS_REGS+1)-1:0]                       free_count_o, // nu
         // next_count = 2;
     end
 
-    //### sychenn 11/10 checkpoint ###
-    logic [$clog2(PHYS_REGS)-1:0] t, added;
-    always_comb begin 
-        t = next_tail;
-        added = 0;
-        if (flush_i) begin
-            for (int k = 0; k <(PHYS_REGS); k++) begin
-                if (flush_free_regs[k]) begin
-                    t = (t + 1) % (PHYS_REGS-ARCH_REGS);
-                    added++;
+    int id;
+    // commmit :1 ; flush:2  
+    // 1110000.. -> 111x000000
+    // 36 ? ? -> x 1 2
+    always_comb begin
+        id = 0;
+        total_free_valid = '0;
+        total_free_reg_idx = '0;
+        // retire
+        if (id < (COMMIT_WIDTH + DISPATCH_WIDTH + `ROB_DEPTH)) begin
+            for (int j = 0; j < COMMIT_WIDTH; j++) begin
+                if (free_valid_i[j] && (free_phys_i[j] != 0)) begin
+                    total_free_valid[id]   = 1;
+                    total_free_reg_idx[id] = free_phys_i[j];
+                    id ++;
                 end
             end
-        end    
+            // flush
+            for (int j2 = 0; j2 < DISPATCH_WIDTH; j2++) begin
+                if (flush2free_list_valid_i[j2]) begin
+                    total_free_valid[id]   = 1;
+                    total_free_reg_idx[id] = flush2free_list_new_prf_i[j2];
+                    id ++;
+                end
+            end
+
+            // chcekpoint
+            if (flush_i) begin
+                for (int j3 = 0;  j3 <(PHYS_REGS);  j3++) begin
+                    if (flush_free_regs[j3]) begin
+                        total_free_valid[id]   = 1;
+                        total_free_reg_idx[id] = j3;
+                        id ++;
+                    end
+                end
+            end  
+        end
     end
+
     ///////////////////////////////////////////////////////////////////////////////////////////
 
     // =========================================================
     // Initialize free list
     // =========================================================
-    always_ff @(posedge clock or posedge reset ) begin
+    always_ff @(posedge clock) begin
         if (reset) begin
             head  <= '0;
             tail  <= PHYS_REGS - ARCH_REGS - 1;
@@ -196,30 +248,25 @@ output logic [$clog2(PHYS_REGS+1)-1:0]                       free_count_o, // nu
                 free_fifo[i] <= i + ARCH_REGS; 
                 // $display("free_fifo[%0d] = %0d" , i , free_fifo[i]);
             end
-            // for (int i = 0 ; i < DISPATCH_WIDTH ; i++)begin
-            //     alloc_phys_o[i] <= '0;
-            //     alloc_valid_o[i] <= 1'b0;
-            // end
         end else begin
-
+            `ifndef SYNTHESIS
+            $display("flush_free_regs =%b" , flush_free_regs);
+            `endif
+  
             head <= next_head;
             tail <= next_tail;
             count <= next_count;
 
-
             // =========================================================
             //  Release (Commit) — push freed physical regs back
             // ==============================================================
-            for (int j = 0; j < COMMIT_WIDTH; j++) begin
-                if (free_valid_i[j] && (free_phys_i[j] != 0)) begin
-                    free_fifo[(tail + j) % (PHYS_REGS-ARCH_REGS)] <= free_phys_i[j];
+            for (int k = 0; k < (COMMIT_WIDTH + DISPATCH_WIDTH + PHYS_REGS); k++) begin
+                if (total_free_valid[k]) begin
+                    free_fifo[(tail + k) % (PHYS_REGS-ARCH_REGS)] <= total_free_reg_idx[k];
+                    `ifndef SYNTHESIS
+                    $display("free reg[%0d] = %0d" , (tail + k) % (PHYS_REGS-ARCH_REGS) , total_free_reg_idx[k]);
+                    `endif
                 end
-            end
-
-            //### TODO: for debug only (sychenn 11/6) ###//
-            if (flush_i) begin
-                tail  <= t;
-                count <= next_count + added;
             end
 
             // =====================================================
@@ -240,10 +287,11 @@ output logic [$clog2(PHYS_REGS+1)-1:0]                       free_count_o, // nu
         end
     end 
     
-
+`ifndef SYNTHESIS
     always_ff @(negedge clock)begin 
         $display("free_phys = %0d , free_valid = %d\n", free_phys_i , free_valid_i);
-        $display("next: head: %d , tail: %d, count: %d" , next_head, next_tail, next_count);
+        $display("N_alloc=%d, N_free=%d", N_alloc, N_free);
+        $display("next: head: %d , tail: %d, count: %d, next_count_debug: %d" , next_head, next_tail, next_count, next_count_debug);
         $display("head: %d , tail: %d, count: %d, full: %b" , head, tail, count, full_o);
         for(int i =0 ; i< (PHYS_REGS-ARCH_REGS); i++)begin
             $display("free_fifo[%d] = %0d ", i, free_fifo[i]);
@@ -253,5 +301,6 @@ output logic [$clog2(PHYS_REGS+1)-1:0]                       free_count_o, // nu
     always_ff @(posedge clock) begin 
         $display("total_available = %0d", total_available);
     end
+`endif
 
 endmodule

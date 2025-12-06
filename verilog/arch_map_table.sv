@@ -39,7 +39,7 @@ module arch_map_table #(
     // =======================================================
     // Commit update
     // =======================================================
-    always_ff @(posedge clock or posedge reset)begin
+    always_ff @(posedge clock)begin
         if(reset)begin
             for(int i =0; i< ARCH_REGS; i++)begin
                     table_reg[i] <= i;

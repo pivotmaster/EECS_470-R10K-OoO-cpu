@@ -101,12 +101,12 @@ module map_table#(
     //   snapshot_data_o     : current table snapshot for saving
     //
     input logic [DISPATCH_WIDTH-1:0] is_branch_i,  //### 11/10 sychenn ###//
-    input  logic                                              flush_i,
+
     input  logic                                              snapshot_restore_valid_i, //valid bit
     input  map_entry_t      snapshot_data_i [ARCH_REGS-1:0],
     
     output map_entry_t       snapshot_data_o [ARCH_REGS-1:0],
-    output logic checkpoint_valid_o //### 11/10 sychenn ###//
+    output logic snapshot_valid_o //### 11/10 sychenn ###//
 );
 
     // =======================================================
@@ -120,14 +120,13 @@ module map_table#(
     map_entry_t table_reg [ARCH_REGS-1:0];
 
     //### 11/10 sychenn ###//
-    logic checkpoint_valid_next;
     always_comb begin 
-        checkpoint_valid_next = 1'b0;
+        snapshot_valid_o = 1'b0;
         for(int i =0 ; i < DISPATCH_WIDTH ; i++)begin
             if(is_branch_i[i])begin
-                checkpoint_valid_next = 1'b1;
+                snapshot_valid_o = 1'b1;
                 break;
-            end
+            end 
         end        
     end
 
@@ -160,26 +159,28 @@ module map_table#(
                 table_reg[i].valid <= 1'b1;
             end
 
-            checkpoint_valid_o <= 1'b0;
         end else begin
             // ===================================================
             //    Dispatch rename (speculative): for each dispatch slot,
             //    install new mapping and mark value as NOT ready (valid=0).
             // ===================================================
-            checkpoint_valid_o <= checkpoint_valid_next;
             if (snapshot_restore_valid_i) begin
                 for(int i =0 ; i < ARCH_REGS ; i++)begin
                     table_reg[i].phys <= snapshot_data_i[i].phys;
-                    // table_reg[i].valid <= snapshot_data_i[i].valid;
+                    table_reg[i].valid <= (snapshot_data_i[i].valid || ((snapshot_data_i[i].phys == table_reg[i].phys) && table_reg[i].valid));
                 end
             end else begin
                 for(int i =0 ; i < DISPATCH_WIDTH ; i++)begin
                     if(disp_valid_i[i])begin
                         //### 11/21 r0 should always be zero ###//
                         if (disp_arch_i[i] == `ZERO_REG) begin
+                            `ifndef SYNTHESIS
                             $display("disp_arch_i = %d is zero reg", disp_arch_i[i]);
+                            `endif
                         end else begin
+                            `ifndef SYNTHESIS
                             $display("disp_arch_i = %d | old_phys = %d | disp_old_phys_o = %d ", disp_arch_i[i],table_reg[disp_arch_i[i]].phys,disp_old_phys_o[i] );
+                            `endif
                             table_reg[disp_arch_i[i]].phys <= disp_new_phys_i[i];
                             table_reg[disp_arch_i[i]].valid <= 1'b0; 
                         end
@@ -254,15 +255,16 @@ module map_table#(
             end                    
         end
     endgenerate
-
-    // always_ff @(posedge clock) begin
-    //     if (!reset) begin
-    //         $display("MAP_TABLE: snapshot_restore_i=%b | is_branch_i=%b valid =%b ",snapshot_restore_valid_i,is_branch_i,checkpoint_valid_o);
-    //         for (int i = 0 ; i < ARCH_REGS ; i++)begin
-    //             $display("table_reg[%0d] value = %d (%d)| checkpoint[%0d] value = %d (%d)| snapshot_data_i[%0d] value = %d (%d)", i, table_reg[i].phys,table_reg[i].valid, i, snapshot_data_o[i].phys,snapshot_data_o[i].valid, i, snapshot_data_i[i].phys,snapshot_data_i[i].valid);
-    //         end
-    //     end
-    // end
+`ifndef SYNTHESIS
+    always_ff @(posedge clock) begin
+        if (!reset) begin
+            $display("MAP_TABLE: snapshot_restore_i=%b | is_branch_i=%b ",snapshot_restore_valid_i,is_branch_i);
+            for (int i = 0 ; i < ARCH_REGS ; i++)begin
+                $display("table_reg[%0d] value = %d (%d)| snapshot_data_o[%0d] value = %d (%d)| snapshot_data_i[%0d] value = %d (%d)", i, table_reg[i].phys,table_reg[i].valid, i, snapshot_data_o[i].phys,snapshot_data_o[i].valid, i, snapshot_data_i[i].phys,snapshot_data_i[i].valid);
+            end
+        end
+    end
+`endif
     // =======================================================
     // Snapshot output: provide current mapping (for ROB/CPU to save)
     // Drive it continuously from table_reg; CPU will latch on checkpoint_valid_o

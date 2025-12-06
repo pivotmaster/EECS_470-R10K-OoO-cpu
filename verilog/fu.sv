@@ -28,8 +28,10 @@ module alu_fu #(
             // here to prevent latches:
             default:  result = 32'hfacebeec;
         endcase
+    `ifndef SYNTHESIS
     $display("ALU op=%0d src1=%h src2=%h result=%h time=%0t",
              req_i.opcode, req_i.src1_val, req_i.src2_val, result, $time);
+    `endif
     end
 
 /*
@@ -188,6 +190,9 @@ module ls_fu #(
       resp_o.is_sw     = 1'b1;
       resp_o.dest_prf  = '0;
       resp_o.sw_data   = req_i.src2_val;
+      `ifndef SYNTHESIS
+      $display("ROB %0d:sw | src2_val=%h", req_i.rob_idx, req_i.src2_val);
+      `endif
 
     end else begin
       resp_o.is_lw     = 1'b0;
@@ -235,6 +240,7 @@ module branch_fu #(
               default: take = `FALSE;
           endcase
     end
+    $display(" un_br=%b | fun3=%b |src1/2=%d,%d |take =%b", req_i.disp_packet.uncond_branch, req_i.disp_packet.inst.b.funct3, signed'(req_i.src1_mux),signed'(req_i.src2_mux), take);
   end
 
   // assign ready_o = 1'b1;
@@ -287,8 +293,44 @@ module fu #(
     output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0][$clog2(PHYS_REGS)-1:0] fu_dest_prf_o,
     output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0][$clog2(ROB_DEPTH)-1:0] fu_rob_idx_o,
     output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0]                    fu_exception_o,
-    output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0]                    fu_mispred_o
+    output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0]                    fu_mispred_o,
+
+    //FU -> LSQ
+    output logic [LOAD_COUNT-1:0]                                               fu_ls_valid_o,
+    output logic [LOAD_COUNT-1:0]             [$clog2(ROB_DEPTH)-1:0]           fu_ls_rob_idx_o,
+    output ADDR [LOAD_COUNT-1:0]                                               fu_ls_addr_o,
+    output logic [LOAD_COUNT-1:0]       [XLEN-1:0]                                 fu_sw_data_o  //only for store instr.
+
 );
+
+  // For Store instruction (store data generation)
+  int idx;
+  always_comb begin 
+    idx = 0;
+    // clear zero
+    for (int j = 0; j < LOAD_COUNT; j++) begin
+        fu_ls_valid_o[j] = '0;
+        fu_ls_rob_idx_o[j] = '0;
+        fu_ls_addr_o[j] = '0;
+        fu_sw_data_o[j] = '0;
+    end
+
+    // route fu_resp_bus to output to lsq 
+    for (int i =0; i < (ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT); i++) begin
+      if (fu_resp_bus[i].is_sw || fu_resp_bus[i].is_lw) begin
+        fu_ls_valid_o[idx] = fu_resp_bus[i].valid;
+        fu_ls_rob_idx_o[idx] = fu_resp_bus[i].rob_idx;
+        `ifndef SYNTHESIS
+        $display("idx =%d | fu_resp_bus[i].rob_idx=%d", idx, fu_resp_bus[i].rob_idx);
+        $display("idx =%d | fu_ls_rob_idx_o[i].rob_idx=%d", idx, fu_ls_rob_idx_o[idx]);
+        `endif
+        fu_ls_addr_o[idx] = fu_resp_bus[i].value;
+        fu_sw_data_o[idx] = fu_resp_bus[i].sw_data;
+
+        idx ++;
+      end
+    end
+  end
 
   localparam int TOTAL_FU = ALU_COUNT + MUL_COUNT + LOAD_COUNT + BR_COUNT;
   // always_ff @(negedge clock)
@@ -346,10 +388,12 @@ module fu #(
   integer k;
   always_comb begin
     for (k = 0; k < TOTAL_FU; k++) begin
-      if (fu_resp_bus[k].rob_idx == 35 && fu_resp_bus[k].dest_prf ==110 ) begin
-        $display("value= aaa:%h",results[k]);
+      if (fu_resp_bus[k].is_sw || fu_resp_bus[k].is_lw) begin
+        fu_valid_o[k] = 0; // close load fu 
+      end else begin 
+        fu_valid_o[k] = fu_resp_bus[k].valid;
       end
-      fu_valid_o    [k] = fu_resp_bus[k].valid;
+
       fu_value_o    [k] = fu_resp_bus[k].value;
       fu_dest_prf_o [k] = fu_resp_bus[k].dest_prf;
       fu_rob_idx_o  [k] = fu_resp_bus[k].rob_idx;
@@ -359,7 +403,7 @@ module fu #(
 
   end
 
-
+`ifndef SYNTHESIS
         // =========================================================
     // For GUI Debugger (FU Trace)
     // =========================================================
@@ -372,6 +416,7 @@ module fu #(
     end
 
     task automatic dump_fu_state(int cycle);
+
         $fdisplay(fu_trace_fd, "FU TRACE DUMP TRIGGERED AT CYCLE %0d", cycle);
         $fwrite(fu_trace_fd, "{ \"cycle\": %0d, \"FU\": [", cycle);
         for (int i = 0; i < TOTAL_FU; i++) begin
@@ -413,10 +458,14 @@ module fu #(
         end else begin
             fu_cycle_count <= fu_cycle_count + 1;
             dump_fu_state(fu_cycle_count);
+            $display("fu_ls_valid_o=%b | fu_ls_rob_idx_o=%d|fu_sw_data_o=%h", fu_ls_valid_o,fu_ls_rob_idx_o[0],fu_sw_data_o);
+
+                        
+
         end
     end
 
-
+`endif
 
 
 endmodule
