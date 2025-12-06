@@ -37,13 +37,16 @@ module dcache (
     
     input  MEM_TAG   mem2proc_transaction_tag, //Tell you the tag for this to mem request (1 cycle after sending request)
     input  MEM_BLOCK mem2proc_data,
-    input  MEM_TAG   mem2proc_data_tag,
+    input  MEM_TAG   mem2proc_data_tag
 
     // Halt by WFI and write back to memory
-    input logic halt_by_wfi,
-    output logic finished_wb_to_mem
+    // input logic halt_by_wfi,
+    // output logic finished_wb_to_mem
 );
+logic halt_by_wfi;
+logic finished_wb_to_mem;
 
+assign halt_by_wfi = 0;
     // =========================================================
     // Cache configuration
     // =========================================================
@@ -350,9 +353,7 @@ module dcache (
             end
             
             WFI_DONE: begin
-                if (!halt_by_wfi) begin
-                    wfi_state_next = WFI_IDLE;
-                end
+                wfi_state_next = WFI_IDLE;
             end
         endcase
     end
@@ -364,13 +365,11 @@ module dcache (
             wfi_bank  <= '0;
             wfi_set   <= '0;
             wfi_way   <= '0;
-            wfi_mem_req_pending <= 1'b0;
         end else begin
             wfi_state <= wfi_state_next;
             wfi_bank <= wfi_bank_next;
             wfi_set <= wfi_set_next;
             wfi_way <= wfi_way_next;
-            cache_dirty[wfi_bank_next][wfi_set_next][wfi_way_next] <= (wfi_state == WFI_WRITING_BACK) ? 1'b0 : 1'b1;
             send_wfi_to_mem <= (wfi_state == WFI_WRITING_BACK && wfi_found_dirty);
         end
     end
@@ -802,29 +801,31 @@ module dcache (
             
             // UPDATE TAG/VALID/DIRTY => Read Miss, Write Hit, Write Miss
             //  Get Result from memory => update cache state
-            if (mem2proc_data_tag != 0 && refill_enable) begin
-                // update cache tags and clear mshr entry
-                cache_tags [mshr[refill_mshr_id].bank][mshr[refill_mshr_id].index][mshr[refill_mshr_id].way]  <= mshr[refill_mshr_id].tag;
-                cache_valid[mshr[refill_mshr_id].bank][mshr[refill_mshr_id].index][mshr[refill_mshr_id].way]  <= 1'b1;
-                // only store in cache not memory so dirty bit = 1
-                cache_dirty[mshr[refill_mshr_id].bank][mshr[refill_mshr_id].index][mshr[refill_mshr_id].way]  <= (mshr[refill_mshr_id].command == MEM_STORE);
-                mshr[refill_mshr_id].valid <= 1'b0; 
-
+            if (wfi_state == WFI_WRITING_BACK) begin
+                cache_dirty[wfi_bank_next][wfi_set_next][wfi_way_next] <= 1'b0;
             end else begin
-                // ---------- Write hit logic ---------- (store cache hit 0/1 is req )
-                if (store_cache_hit_0) begin
-                    cache_dirty[bank_0][index_0][hit_way_0] <= 1'b1;
-                    cache_valid[bank_0][index_0][hit_way_0] <= 1'b1;
-                    cache_tags [bank_0][index_0][hit_way_0] <= tag_0;
+                if (mem2proc_data_tag != 0 && refill_enable) begin
+                    // update cache tags and clear mshr entry
+                    cache_tags [mshr[refill_mshr_id].bank][mshr[refill_mshr_id].index][mshr[refill_mshr_id].way]  <= mshr[refill_mshr_id].tag;
+                    cache_valid[mshr[refill_mshr_id].bank][mshr[refill_mshr_id].index][mshr[refill_mshr_id].way]  <= 1'b1;
+                    // only store in cache not memory so dirty bit = 1
+                    cache_dirty[mshr[refill_mshr_id].bank][mshr[refill_mshr_id].index][mshr[refill_mshr_id].way]  <= (mshr[refill_mshr_id].command == MEM_STORE);
+                    mshr[refill_mshr_id].valid <= 1'b0; 
+
+                end else begin
+                    // ---------- Write hit logic ---------- (store cache hit 0/1 is req )
+                    if (store_cache_hit_0) begin
+                        cache_dirty[bank_0][index_0][hit_way_0] <= 1'b1;
+                        cache_valid[bank_0][index_0][hit_way_0] <= 1'b1;
+                        cache_tags [bank_0][index_0][hit_way_0] <= tag_0;
+                    end
+                    if (store_cache_hit_1) begin
+                        cache_dirty[bank_1][index_1][hit_way_1] <= 1'b1;
+                        cache_valid[bank_1][index_1][hit_way_1] <= 1'b1;
+                        cache_tags [bank_1][index_1][hit_way_1] <= tag_1;
+                    end                
                 end
-                if (store_cache_hit_1) begin
-                    cache_dirty[bank_1][index_1][hit_way_1] <= 1'b1;
-                    cache_valid[bank_1][index_1][hit_way_1] <= 1'b1;
-                    cache_tags [bank_1][index_1][hit_way_1] <= tag_1;
-                end                
             end
-
-
         end
     end
 
