@@ -460,8 +460,9 @@ module dcache (
                 DOUBLE:  Dcache_data_out_1.dbbl_level = (req_1_to_bank_0) ? line_data_0.dbbl_level : line_data_1.dbbl_level;
                 default: Dcache_data_out_1.dbbl_level = (req_1_to_bank_0) ? line_data_0.dbbl_level : line_data_1.dbbl_level;
             endcase
-        $display("[DCACHE] load_cache_hit_1=%h Dcache_req_rob_idx_1=%h mem2proc_data_tag=%h mshr[refill_mshr_id].mem_tag=%h mshr[refill_mshr_id].port_id=%h mshr[refill_mshr_id].rob_idx=%h", load_cache_hit_1, Dcache_req_rob_idx_1, mem2proc_data_tag, mshr[refill_mshr_id].mem_tag, mshr[refill_mshr_id].port_id, mshr[refill_mshr_id].rob_idx);
-
+            `ifndef SYNTHESIS
+            $display("[DCACHE] load_cache_hit_1=%h Dcache_req_rob_idx_1=%h mem2proc_data_tag=%h mshr[refill_mshr_id].mem_tag=%h mshr[refill_mshr_id].port_id=%h mshr[refill_mshr_id].rob_idx=%h", load_cache_hit_1, Dcache_req_rob_idx_1, mem2proc_data_tag, mshr[refill_mshr_id].mem_tag, mshr[refill_mshr_id].port_id, mshr[refill_mshr_id].rob_idx);
+            `endif
         // Data from memory refill_mshr_id
         end else if ((mem2proc_data_tag == mshr[refill_mshr_id].mem_tag) && mshr[refill_mshr_id].valid && mshr[refill_mshr_id].command == MEM_STORE) begin
             Dcache_data_rob_idx_0 = (mshr[refill_mshr_id].port_id == 0) ? mshr[refill_mshr_id].rob_idx: '0;
@@ -839,19 +840,23 @@ module dcache (
                     cache_valid[bank_1][index_1][hit_way_1] <= 1'b1;
                     cache_tags [bank_1][index_1][hit_way_1] <= tag_1;
                 end else if (send_miss_1) begin 
+                    `ifndef SYNTHESIS
                     $display("tag=%d | data = %d", tag_1, Dcache_store_data_1);
                     $display("bank_1=%d | index_1 = %d |replace_way_1=%d ", bank_1, index_1,replace_way_1);
+                    `endif
                     cache_dirty[bank_1][index_1][replace_way_1] <= 1'b1;
                     cache_valid[bank_1][index_1][replace_way_1] <= 1'b1;
                     cache_tags [bank_1][index_1][replace_way_1] <= tag_1;
                 end               
             end
         end
+        `ifndef SYNTHESIS
         for (int b = 0; b < BANKS; b++) begin
             for (int s = 0; s < SETS_PER_BANK; s++) begin
                 $display("dirty[%b][%d]=%b",b,s,cache_dirty[b][s]);
             end
         end
+        `endif
     end
 
     //  Get Result from memory => update cache data with received data

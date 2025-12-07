@@ -106,12 +106,15 @@ module complete_stage #(
                     3'b101:  is_unsigned = 1;  // LHU begin size = HALF;
                     default : is_unsigned = 0; 
                 endcase
+                `ifndef SYNTHESIS
                 $display("complete stage: funct3: %b , is_unsigned = %b, wb_size = %d" , funct3, is_unsigned , wb_size);
-
+                `endif
                 unique case (wb_size)
                     BYTE: begin
-                         b = wb_data[7:0];
+                        b = wb_data[7:0];
+                        `ifndef SYNTHESIS
                         $display("b: %h" , b);
+                        `endif
                         wb_ext = is_unsigned ? {24'b0, b} : {{24{b[7]}}, b};
                     end
                     HALF: begin
@@ -127,9 +130,10 @@ module complete_stage #(
                     end
                 endcase
                 
-
+                `ifndef SYNTHESIS
                 $display("wb_ext = %h" , wb_ext);
-
+                `endif
+                
                 prf_wr_en_o[i]   = wb_valid;
                 prf_waddr_o[i]   = wb_disp_rd_new_prf_i;
                 prf_wdata_o[i]   = wb_ext;
