@@ -61,11 +61,11 @@
 `define BTB_VALUE_BITS 11
 
 //RAS parameters
-`define RAS_SIZE 16
+`define RAS_SIZE 4
 
 
 //GSHARE parameters
-`define GSHARE_SIZE 128
+`define GSHARE_SIZE 4
 `define HISTORY_BITS $clog2(`GSHARE_SIZE)
 
 
@@ -503,7 +503,8 @@ typedef struct packed {
     logic                          is_lw;
     logic                          is_sw;
     logic [$clog2(`ROB_DEPTH)-1:0] rob_idx;
-    logic                         exception;
+    logic                         exception;    //is branch
+    logic                         cond_branch;
     logic                         mispred;
     logic                         taken;  
 } fu_resp_t;

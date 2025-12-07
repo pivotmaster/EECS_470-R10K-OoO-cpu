@@ -62,7 +62,7 @@ module gshare (
 
         // 3. Recovery Logic (Highest Priority)
         // If mispredict, we ignore the Fetch stage update and restore from Execute
-        if (mispredict_i[0]) begin
+        if (mispredict_i[0] && ex_is_branch_i[0]) begin
             // FIX: Correct shift syntax. Drop MSB, append Real Outcome.
             // Old Code: ex_history_i[i][`HISTORY_BITS-1:1] (WRONG - drops LSB)
             next_global_history = {ex_history_i[0][`HISTORY_BITS-2:0], ex_branch_taken_i[0]};

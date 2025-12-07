@@ -12,6 +12,7 @@ module branch_predictor (
 
     // Input from Execution stage
     input logic [`FETCH_WIDTH-1:0] ex_is_branch_i,
+    input logic [`FETCH_WIDTH-1:0] ex_is_cond_branch_i,
     input logic [`FETCH_WIDTH-1:0] ex_branch_taken_i,
     input ADDR [`FETCH_WIDTH-1:0] ex_branch_pc_i,
     input ADDR [`FETCH_WIDTH-1:0] ex_target_pc_i,
@@ -154,7 +155,7 @@ module branch_predictor (
         .reset(reset),
         .if_pc_i(if_pc_i),
         .if_is_branch_i(cond_branch),
-        .ex_is_branch_i(ex_is_branch_i),
+        .ex_is_branch_i(ex_is_cond_branch_i),
         .ex_branch_taken_i(ex_branch_taken_i),
         .ex_branch_pc_i(ex_branch_pc_i),
         .ex_history_i(ex_history_i),
@@ -169,7 +170,7 @@ module branch_predictor (
         .reset(reset),
         .if_pc_i(if_pc_i),
         .ex_branch_pc_i(ex_branch_pc_i),
-        .enable(ex_is_branch_i),
+        .enable(ex_is_cond_branch_i),
         .taken(ex_branch_taken_i),
         .prediction(bi_pred_taken)
     );
@@ -179,7 +180,7 @@ module branch_predictor (
         .reset(reset),
         .if_pc_i(if_pc_i),
         .ex_branch_pc_i(ex_branch_pc_i),
-        .enable(ex_is_branch_i),
+        .enable(ex_is_cond_branch_i),
         .p1_correct(gshare_correct), 
         .p2_correct(bimodal_correct),
         .use_p1(pred_mux)

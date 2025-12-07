@@ -56,6 +56,7 @@ module alu_fu #(
     resp_o.dest_prf  = req_i.dest_tag;
     resp_o.rob_idx   = req_i.rob_idx;
     resp_o.exception = 1'b0;
+    resp_o.cond_branch = 1'b0;
     resp_o.mispred   = 1'b0;
     resp_o.taken     = 1'b0;
     resp_o.is_lw     = 1'b0;
@@ -146,6 +147,7 @@ module mul_fu #(
         resp_o.dest_prf  = req_i_list[`MULT_STAGES-1].dest_tag;
         resp_o.rob_idx   = req_i_list[`MULT_STAGES-1].rob_idx;
         resp_o.exception = 1'b0;
+        resp_o.cond_branch = 1'b0;
         resp_o.mispred   = 1'b0;
         resp_o.taken     = 1'b0;
         resp_o.is_lw     = 1'b0;
@@ -177,6 +179,7 @@ module ls_fu #(
     resp_o.value     = addr;
     resp_o.rob_idx   = req_i.rob_idx;
     resp_o.exception = 1'b0;
+    resp_o.cond_branch = 1'b0;
     resp_o.mispred   = 1'b0;
     resp_o.taken     = 1'b0;
 
@@ -247,8 +250,13 @@ module branch_fu #(
     resp_o.value     = resp_local_o.value; // alu value //target_pc
     resp_o.dest_prf  = req_i.dest_tag;
     resp_o.rob_idx   = req_i.rob_idx;
-    resp_o.exception = 1'b1; // TODO: is branch
-    resp_o.mispred   = ((take == req_i.disp_packet.pred) && (req_i.disp_packet.PRED_PC == resp_local_o.value)) ? 1'b0: 1'b1;
+    resp_o.exception = 1'b1; // TODO: is branch //uncond case
+    resp_o.cond_branch = req_i.disp_packet.cond_branch;
+    if (take) begin
+      resp_o.mispred   = ((take == req_i.disp_packet.pred) && (req_i.disp_packet.PRED_PC == resp_local_o.value)) ? 1'b0: 1'b1;
+    end else begin
+      resp_o.mispred   = (take == req_i.disp_packet.pred) ? 1'b0: 1'b1;
+    end
     resp_o.taken     = take;
     resp_o.is_lw     = 1'b0;
     resp_o.is_sw     = 1'b0;
@@ -291,6 +299,7 @@ module fu #(
     output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0][$clog2(PHYS_REGS)-1:0] fu_dest_prf_o,
     output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0][$clog2(ROB_DEPTH)-1:0] fu_rob_idx_o,
     output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0]                    fu_exception_o,
+    output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0]                    fu_cond_branch_o,
     output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0]                    fu_mispred_o,
     output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0]                    fu_taken_o,
     output ADDR [BR_COUNT-1:0] br_pc_o,
@@ -372,6 +381,7 @@ module fu #(
       fu_dest_prf_o [k] = fu_resp_bus[k].dest_prf;
       fu_rob_idx_o  [k] = fu_resp_bus[k].rob_idx;
       fu_exception_o[k] = fu_resp_bus[k].exception;
+      fu_cond_branch_o[k] = fu_resp_bus[k].cond_branch;
       fu_mispred_o  [k] = fu_resp_bus[k].mispred;
       fu_taken_o    [k] = fu_resp_bus[k].taken;
     end

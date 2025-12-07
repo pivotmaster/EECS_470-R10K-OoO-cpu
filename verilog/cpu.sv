@@ -247,6 +247,7 @@ module cpu #(
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0][$clog2(`PHYS_REGS)-1:0] fu_dest_prf;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0][$clog2(`ROB_DEPTH)-1:0] fu_rob_idx;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_exception;
+    logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_cond_branch;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_mispred;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_taken;
     ADDR [`BR_COUNT-1:0] br_pc;
@@ -260,6 +261,7 @@ module cpu #(
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0][$clog2(`PHYS_REGS)-1:0] fu_dest_prf_reg;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0][$clog2(`ROB_DEPTH)-1:0] fu_rob_idx_reg;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_exception_reg;
+    logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_cond_branch_reg;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_mispred_reg;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_taken_reg;
     ADDR [`BR_COUNT-1:0] br_pc_reg;
@@ -424,9 +426,10 @@ module cpu #(
     // assign if_valid = 1'b1;
     //###TODO just predict first branch now
     logic [`FETCH_WIDTH-1:0] [`HISTORY_BITS-1:0] if_history;
-    logic ex_is_branch, ex_branch_taken;
+    logic ex_is_branch, ex_is_cond_branch, ex_branch_taken;
 
-    assign ex_is_branch = wb_valid[`FU_NUM - `FU_BRANCH];
+    assign ex_is_branch = (wb_valid[`FU_NUM - `FU_BRANCH] & wb_exception[`FU_NUM - `FU_BRANCH]);
+    assign ex_is_cond_branch = (wb_valid[`FU_NUM - `FU_BRANCH] & fu_cond_branch_reg[`FU_NUM - `FU_BRANCH]);
     assign ex_branch_taken = (wb_valid[`FU_NUM - `FU_BRANCH] & fu_taken_reg[`FU_NUM - `FU_BRANCH]);
 
     assign correct_pc_target = (wb_valid[`FU_NUM - `FU_BRANCH] & fu_taken_reg[`FU_NUM - `FU_BRANCH]) ? fu_value_reg[`FU_NUM - `FU_BRANCH] : br_pc_reg+4 ;
@@ -587,6 +590,7 @@ module cpu #(
         .if_valid_i(if_valids),
 
         .ex_is_branch_i(ex_is_branch),
+        .ex_is_cond_branch_i(ex_is_cond_branch),
         .ex_branch_taken_i(ex_branch_taken),
         .ex_branch_pc_i(br_pc_reg),
         .ex_target_pc_i(correct_pc_target),
@@ -1298,6 +1302,7 @@ module cpu #(
         .fu_dest_prf_o(fu_dest_prf),
         .fu_rob_idx_o(fu_rob_idx),
         .fu_exception_o(fu_exception),
+        .fu_cond_branch_o(fu_cond_branch),
         .fu_mispred_o(fu_mispred),
         .fu_taken_o(fu_taken),
         .br_pc_o(br_pc),
@@ -1327,6 +1332,7 @@ module cpu #(
             fu_dest_prf_reg <= '0;
             fu_rob_idx_reg <= '0;
             fu_exception_reg <= '0;
+            fu_cond_branch_reg <= '0;
             fu_mispred_reg <= '0;
             fu_taken_reg <= '0;
             br_pc_reg <= '0;
@@ -1339,6 +1345,7 @@ module cpu #(
             fu_dest_prf_reg <= fu_dest_prf;
             fu_rob_idx_reg <= fu_rob_idx;
             fu_exception_reg <= fu_exception;
+            fu_cond_branch_reg <= fu_cond_branch;
             fu_mispred_reg <= fu_mispred;
             fu_taken_reg <= fu_taken;
             br_pc_reg <= br_pc;
