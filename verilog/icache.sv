@@ -141,13 +141,12 @@ module icache (
             end
         end
     end
-    `ifndef SYNTHESIS
+
     always_ff @(posedge clock) begin
             if(!reset) begin
                 $display("current_mem_tag=%h | Imem2proc_data_tag=%h |Imem2proc_transaction_tag=%h", current_mem_tag, Imem2proc_data_tag, Imem2proc_transaction_tag);
                 $display("proc2Icache_addr=%h | Imem2proc_data=%h | icache_we=%b | Icache_data_out=%h valid=%b | current_index=%d ", proc2Icache_addr, Imem2proc_data,icache_we, Icache_data_out, Icache_valid_out, current_index);
         end
     end
-    `endif
 
 endmodule // icache

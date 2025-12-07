@@ -194,9 +194,9 @@ module ls_fu #(
       resp_o.dest_prf  = req_i.dest_tag;
       resp_o.sw_data   = '0;
       resp_o.funct3 = req_i.disp_packet.inst.i.funct3;
-      `ifndef SYNTHESIS
+
       $display("resp_o.funct3=%b", resp_o.funct3);
-      `endif
+
     end else if (req_i.disp_packet.wr_mem) begin
       resp_o.is_lw     = 1'b0;
       resp_o.is_sw     = 1'b1;
@@ -257,9 +257,7 @@ module branch_fu #(
               default: take = `FALSE;
           endcase
     end
-    `ifndef SYNTHESIS
     $display(" un_br=%b | fun3=%b |src1/2=%d,%d |take =%b", req_i.disp_packet.uncond_branch, req_i.disp_packet.inst.b.funct3, signed'(req_i.src1_mux),signed'(req_i.src2_mux), take);
-    `endif
   end
 
   // assign ready_o = 1'b1;
@@ -355,9 +353,7 @@ module fu #(
         fu_ls_addr_o[idx] = fu_resp_bus[i].value;
         fu_sw_data_o[idx] = fu_resp_bus[i].sw_data;
         fu_sw_funct3_o[idx] = fu_resp_bus[i].funct3;
-        `ifndef SYNTHESIS
         $display("fu_sw_funct3_o[%0d]=%b", idx, fu_sw_funct3_o[idx]);
-        `endif
         idx ++;
       end
     end
@@ -434,9 +430,7 @@ module fu #(
       fu_is_jtype_o[k]    = fu_resp_bus[k].is_jtype;
       fu_funct3_o[k]    = fu_resp_bus[k].funct3;
       fu_is_lw_o[k]    = fu_resp_bus[k].is_lw;
-      `ifndef SYNTHESIS
       $display("fu_funct3_o[k]=%b", fu_funct3_o[k]);
-      `endif
     end
 
   end

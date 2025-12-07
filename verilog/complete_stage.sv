@@ -12,7 +12,7 @@ module complete_stage #(
     // LSQ (only load instruction)
     input logic       wb_valid,
     input ROB_IDX     wb_rob_idx,
-    input DATA        wb_data, 
+    input logic [31:0]   wb_data, 
     input logic         wb_is_lw,
     input MEM_SIZE      wb_size,
     input logic [2:0]   funct3,
@@ -90,7 +90,7 @@ module complete_stage #(
                 cdb_o[i].dest_arch = '0; //todo: why is zero?
                 cdb_o[i].phys_tag  = fu_dest_prf_i[i];
                 cdb_o[i].value     = fu_value_i[i];          
-            end else if (wb_valid) begin 
+            end else if (wb_valid && (i==2)) begin 
                 // todo: lsq wb is valid
                 `ifndef SYNTHESIS
                 $display("complete stage: wb_valid=%b | wb_rob_idx=%d | wb_data=%h | wb_disp_rd_new_prf_i=%d ",wb_valid, wb_rob_idx, wb_data, wb_disp_rd_new_prf_i);
@@ -106,15 +106,12 @@ module complete_stage #(
                     3'b101:  is_unsigned = 1;  // LHU begin size = HALF;
                     default : is_unsigned = 0; 
                 endcase
-                `ifndef SYNTHESIS
                 $display("complete stage: funct3: %b , is_unsigned = %b, wb_size = %d" , funct3, is_unsigned , wb_size);
-                `endif
+
                 unique case (wb_size)
                     BYTE: begin
-                        b = wb_data[7:0];
-                        `ifndef SYNTHESIS
+                         b = wb_data[7:0];
                         $display("b: %h" , b);
-                        `endif
                         wb_ext = is_unsigned ? {24'b0, b} : {{24{b[7]}}, b};
                     end
                     HALF: begin
@@ -130,10 +127,9 @@ module complete_stage #(
                     end
                 endcase
                 
-                `ifndef SYNTHESIS
+
                 $display("wb_ext = %h" , wb_ext);
-                `endif
-                
+
                 prf_wr_en_o[i]   = wb_valid;
                 prf_waddr_o[i]   = wb_disp_rd_new_prf_i;
                 prf_wdata_o[i]   = wb_ext;

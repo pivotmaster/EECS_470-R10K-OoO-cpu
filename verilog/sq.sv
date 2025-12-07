@@ -140,13 +140,13 @@ module sq #(
     // assign dc_req_cmd   = MEM_STORE;
     // assign dc_req_data  = sq[head].data;
 
+  assign count = (head > tail) ? (SQ_SIZE - head + tail) : (tail - head);
 
   always_ff @(posedge clock)begin
     logic do_enq, do_deq;
     if(reset)begin
       head <= '0;
       tail <= '0;
-      count <= '0;
       rob_store_ready_idx <= '0;
       rob_store_ready_valid <= '0;
       for(int i = 0 ; i < SQ_SIZE ; i++)begin
@@ -163,25 +163,12 @@ module sq #(
       do_enq = enq_valid && !full;
       do_deq = dc_req_valid && dc_req_accept;
 
-      // 1. 處理 Count (優先級邏輯)
-      if (do_enq && !do_deq)      
-          count <= count + 1'b1;
-      else if (!do_enq && do_deq) 
-          count <= count - 1'b1;
-      // else if (do_enq && do_deq) count <= count; // 不變
-
       if (snapshot_restore_valid_i) begin
         `ifndef SYNTHESIS
         $display("[SQ mispredict snapshot restore!!]");
         `endif
         tail <= snapshot_tail_i;
 
-        if(snapshot_tail_i >= head)begin
-              count <= snapshot_tail_i - head;
-          end else begin
-              count <= snapshot_tail_i - head + SQ_SIZE;
-          end
-        
         if (head == snapshot_tail_i) begin
           sq[head].valid <= 1'b0;
           sq[head].data_valid <= 1'b0;
@@ -199,9 +186,7 @@ module sq #(
           sq[tail].data <= '0; //### sychen have not get data when dispatch
           sq[tail].commited <= 1'b0;
           sq[tail].rob_idx <= enq_rob_idx;
-          // tail <= tail + 1'b1;
           tail <= next_ptr(tail);
-          // count <= count + 1'b1; 
         end 
 
         // store data arrived(match by rob_idx)
