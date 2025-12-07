@@ -87,7 +87,7 @@ module issue_logic #(
     issue_packet_t [ISSUE_WIDTH-1:0]   issue_pkts    ;    // packets to FIFOs
     int issue_slot;
     logic [XLEN-1:0] src1_mux, src2_mux;
-    logic src2_valid;
+    logic src2_valid, src1_valid;
 
     // Generate Issue Packets
     //TODO issue pkts reg exist latch
@@ -102,6 +102,7 @@ module issue_logic #(
         src1_mux ='0;
         src2_mux ='0;
         src2_valid = 0;
+        src1_valid = 0;
 
         for (int j = 0; j < ISSUE_WIDTH; j++) begin
             issue_pkts[j] = '0;
@@ -129,13 +130,19 @@ module issue_logic #(
                     OPB_IS_J_IMM: src2_mux = `RV32_signext_Jimm(rs_entries_i[i].disp_packet.inst);
                     default:      src2_mux = 32'hfacefeed; // face feed
                 endcase
-
+                case (rs_entries_i[i].disp_packet.opa_select)
+                    OPA_IS_RS1:  src1_valid =  1;
+                    OPA_IS_NPC:  src1_valid =  0;
+                    OPA_IS_PC:   src1_valid =  0;
+                    OPA_IS_ZERO: src1_valid =  0;
+                    default:     src1_valid =  1; // dead face
+                endcase
                 // src2 valid
                 case (rs_entries_i[i].disp_packet.opb_select)
                     OPB_IS_RS2:   src2_valid =  1;
                     OPB_IS_I_IMM: src2_valid = 0;
                     OPB_IS_S_IMM: src2_valid = 0;
-                    OPB_IS_B_IMM: src2_valid = 0;
+                    OPB_IS_B_IMM: src2_valid = 0;//1
                     OPB_IS_U_IMM: src2_valid = 0;
                     OPB_IS_J_IMM: src2_valid = 0;
                     default:      src2_valid = 1; // face feed
@@ -151,7 +158,9 @@ module issue_logic #(
                 issue_pkts[issue_slot].src2_mux  = rs_entries_i[i].src2_tag;
 
                 issue_pkts[issue_slot].imm       = src2_mux;
+                issue_pkts[issue_slot].src1_valid  = src1_valid;
                 issue_pkts[issue_slot].src2_valid  = src2_valid;
+
 
                 issue_pkts[issue_slot].valid     = 1;
                 issue_pkts[issue_slot].rob_idx   = rs_entries_i[i].rob_idx;

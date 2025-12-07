@@ -163,6 +163,7 @@ module cpu #(
     logic [`DISPATCH_WIDTH-1:0][$clog2(`ROB_DEPTH)-1:0] disp_rob_idx;
     logic [`DISPATCH_WIDTH-1:0][$clog2(`ROB_DEPTH)-1:0] disp_rob_idx_o;
     logic [$clog2(`ROB_DEPTH+1)-1:0] free_rob_slots;
+    logic [`DISPATCH_WIDTH-1:0][2:0] disp_ld_funct3_o;
     // Commit
     logic [`COMMIT_WIDTH-1:0] commit_valid;
     logic [`COMMIT_WIDTH-1:0] commit_rd_wen;
@@ -215,6 +216,9 @@ module cpu #(
     logic lsq_wb_valid;
     ROB_IDX lsq_wb_rob_idx;
     DATA wb_data;
+    logic wb_is_lw;
+    MEM_SIZE wb_size;
+    logic [2:0] funct3_o;
     lq_entry_t  lq_snapshot_reg [`LQ_SIZE-1:0];
     lq_entry_t  lq_snapshot_data_i [`LQ_SIZE-1:0];
     lq_entry_t  lq_snapshot_data_o [`LQ_SIZE-1:0];
@@ -304,6 +308,7 @@ module cpu #(
 
     assign rd_en = '1;
     always_ff @(posedge clock) begin //###
+
         if(reset) begin
             raddr <= '0;
         end else begin
@@ -347,12 +352,17 @@ module cpu #(
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0][$clog2(`ROB_DEPTH)-1:0] fu_rob_idx;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_exception;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_mispred; 
+    ADDR [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0]  fu_jtype_value;
+    logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_is_jtype;
+    logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0][2:0] fu_funct3;
+    logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_is_lw;    
 
     //FU -> LSQ
     logic [`LOAD_COUNT-1:0] fu_ls_valid_o; 
     logic [`LOAD_COUNT-1:0] [$clog2(`ROB_DEPTH)-1:0]   fu_ls_rob_idx_o; 
     ADDR [`LOAD_COUNT-1:0] fu_ls_addr_o; 
     logic [`LOAD_COUNT-1:0][`XLEN-1:0]      fu_sw_data_o; 
+    logic [`LOAD_COUNT-1:0][2:0]            fu_sw_funct3_o;
 
 //EX_C_REG
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_valid_reg;
@@ -361,7 +371,13 @@ module cpu #(
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0][$clog2(`ROB_DEPTH)-1:0] fu_rob_idx_reg;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_exception_reg;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_mispred_reg;
+    ADDR [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0]  fu_jtype_value_reg;
+    logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_is_jtype_reg;
+    logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0][2:0] fu_funct3_reg;
+    logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_is_lw_reg;  
+
     logic [`LOAD_COUNT-1:0] [`XLEN-1:0] fu_sw_data_o_reg; 
+    logic [`LOAD_COUNT-1:0][2:0]        fu_sw_funct3_o_reg;
     logic [`LOAD_COUNT-1:0] fu_ls_valid_o_reg; 
     logic [`LOAD_COUNT-1:0] [$clog2(`ROB_DEPTH)-1:0] fu_ls_rob_idx_o_reg; 
     ADDR [`LOAD_COUNT-1:0] fu_ls_addr_o_reg; 
@@ -779,7 +795,7 @@ module cpu #(
         .dispatch_is_store       (dispatch_is_store[0]),
         .dispatch_size           (dispatch_size[0]),
         .disp_rob_idx_o        (disp_rob_idx_o[0]),
-
+        .disp_ld_funct3_o       (disp_ld_funct3_o[0]),
         // lsq -> dispatch
         .lq_count(lq_count),
         .st_count(st_count)
@@ -1236,6 +1252,7 @@ module cpu #(
                 alu_req_reg[i].fu_type     <= '0;
                 alu_req_reg[i].opcode      <= '0;
                 alu_req_reg[i].dest_tag    <= '0;
+                alu_req_reg[i].src1_valid  <= '0;
                 alu_req_reg[i].src2_valid  <= '0;
                 alu_req_reg[i].disp_packet <= '0;
 
@@ -1245,6 +1262,7 @@ module cpu #(
                 mul_req_reg[i].fu_type     <= '0;
                 mul_req_reg[i].opcode      <= '0;
                 mul_req_reg[i].dest_tag    <= '0;
+                mul_req_reg[i].src1_valid  <= '0;
                 mul_req_reg[i].src2_valid  <= '0;
                 mul_req_reg[i].disp_packet <= '0;
 
@@ -1254,6 +1272,7 @@ module cpu #(
                 load_req_reg[i].fu_type     <= '0;
                 load_req_reg[i].opcode      <= '0;
                 load_req_reg[i].dest_tag    <= '0;
+                load_req_reg[i].src1_valid  <= '0;
                 load_req_reg[i].src2_valid  <= '0;
                 load_req_reg[i].disp_packet <= '0;
 
@@ -1263,6 +1282,7 @@ module cpu #(
                 br_req_reg[i].fu_type     <= '0;
                 br_req_reg[i].opcode      <= '0;
                 br_req_reg[i].dest_tag    <= '0;
+                br_req_reg[i].src1_valid  <= '0;
                 br_req_reg[i].src2_valid  <= '0;
                 br_req_reg[i].disp_packet <= '0;
             end
@@ -1288,6 +1308,7 @@ module cpu #(
                 alu_req_reg[i].opcode <= alu_req[i].opcode;
                 alu_req_reg[i].dest_tag <= alu_req[i].dest_tag;
                 alu_req_reg[i].src2_valid <= alu_req[i].src2_valid;
+                alu_req_reg[i].src1_valid <= alu_req[i].src1_valid;
                 alu_req_reg[i].disp_packet <= alu_req[i].disp_packet;
                 
                 mul_req_reg[i].valid <= mul_req[i].valid;
@@ -1297,6 +1318,7 @@ module cpu #(
                 mul_req_reg[i].opcode <= mul_req[i].opcode;
                 mul_req_reg[i].dest_tag <= mul_req[i].dest_tag;
                 mul_req_reg[i].src2_valid <= mul_req[i].src2_valid;
+                mul_req_reg[i].src1_valid <= mul_req[i].src1_valid;
                 mul_req_reg[i].disp_packet <= mul_req[i].disp_packet;
 
                 load_req_reg[i].valid <= load_req[i].valid;
@@ -1306,6 +1328,7 @@ module cpu #(
                 load_req_reg[i].opcode <= load_req[i].opcode;
                 load_req_reg[i].dest_tag <= load_req[i].dest_tag;
                 load_req_reg[i].src2_valid <= load_req[i].src2_valid;
+                load_req_reg[i].src1_valid <= load_req[i].src1_valid;
                 load_req_reg[i].disp_packet <= load_req[i].disp_packet;
 
                 br_req_reg[i].valid <= br_req[i].valid; 
@@ -1315,9 +1338,10 @@ module cpu #(
                 br_req_reg[i].opcode <= br_req[i].opcode;
                 br_req_reg[i].dest_tag <= br_req[i].dest_tag;
                 br_req_reg[i].src2_valid <= br_req[i].src2_valid;
+                br_req_reg[i].src1_valid <= br_req[i].src1_valid;
                 br_req_reg[i].disp_packet <= br_req[i].disp_packet;
-                br_req_reg[i].src1_val <= br_req[i].src1_val;
-                br_req_reg[i].src2_val <= br_req[i].src2_val;
+                //br_req_reg[i].src1_val <= br_req[i].src1_val;
+                //br_req_reg[i].src2_val <= br_req[i].src2_val;
             end
         end
     end
@@ -1343,14 +1367,17 @@ module cpu #(
     
     always_comb begin
         for(int i = 0; i < `SINGLE_FU_NUM; i++) begin
-            alu_req_reg[i].src1_val = rdata[0 + i*8];
+            alu_req_reg[i].src1_val = alu_req_reg_org[i].src1_valid ? rdata[0 + i*8]: alu_req_reg_org[i].src1_val;
             alu_req_reg[i].src2_val = alu_req_reg_org[i].src2_valid ? rdata[1 + i*8] : alu_req_reg_org[i].src2_val; 
-            mul_req_reg[i].src1_val = rdata[2 + i*8];
+            mul_req_reg[i].src1_val = mul_req_reg_org[i].src1_valid ? rdata[2 + i*8] : mul_req_reg_org[i].src1_val;
             mul_req_reg[i].src2_val = mul_req_reg_org[i].src2_valid ? rdata[3 + i*8] : mul_req_reg_org[i].src2_val;
-            load_req_reg[i].src1_val = rdata[4 + i*8];
+            load_req_reg[i].src1_val = load_req_reg_org[i].src1_valid ? rdata[4 + i*8] : '1;
             load_req_reg[i].src2_val = load_req_reg_org[i].src2_valid ? rdata[5 + i*8] : '1;
+            br_req_reg[i].src1_val = br_req_reg_org[i].src1_valid ? rdata[6 + i*8]: br_req_reg_org[i].src1_val;
+            br_req_reg[i].src2_val =  br_req_reg_org[i].src2_valid ? rdata[7 + i*8]: br_req_reg_org[i].src2_val;
             br_req_reg[i].src1_mux = rdata[6 + i*8];
-            br_req_reg[i].src2_mux = br_req_reg_org[i].src2_valid ? rdata[7 + i*8] : br_req_reg_org[i].src2_mux;
+            br_req_reg[i].src2_mux = rdata[7 + i*8];
+            $display("[Real Value @ %t]br_req_reg_org[i].src2_valid = %b,br_req_reg[i].src1_mux=%d, br_req_reg[i].src2_mux= %d" ,$time, br_req_reg_org[i].src2_valid, br_req_reg[i].src1_mux,br_req_reg[i].src2_mux);
         end
     end
     
@@ -1386,11 +1413,16 @@ module cpu #(
         .fu_rob_idx_o(fu_rob_idx),
         .fu_exception_o(fu_exception),
         .fu_mispred_o(fu_mispred),
+        .fu_jtype_value_o(fu_jtype_value),
+        .fu_is_jtype_o(fu_is_jtype),
+        .fu_funct3_o(fu_funct3),
+        .fu_is_lw_o(fu_is_lw),
 
         .fu_ls_valid_o(fu_ls_valid_o),
         .fu_ls_rob_idx_o(fu_ls_rob_idx_o),
         .fu_ls_addr_o(fu_ls_addr_o),
-        .fu_sw_data_o(fu_sw_data_o)
+        .fu_sw_data_o(fu_sw_data_o),
+        .fu_sw_funct3_o(fu_sw_funct3_o)
     );
 
     // always_ff @(negedge clock) begin
@@ -1413,6 +1445,7 @@ module cpu #(
             fu_ls_rob_idx_o_reg <= '0;
             fu_ls_addr_o_reg <= '0;            
             fu_sw_data_o_reg <= '0; // for store instr
+            fu_sw_funct3_o_reg <= '0;
 
             fu_valid_reg <= '0;
             fu_value_reg <= '0;
@@ -1420,20 +1453,27 @@ module cpu #(
             fu_rob_idx_reg <= '0;
             fu_exception_reg <= '0;
             fu_mispred_reg <= '0;
+            fu_jtype_value_reg <= '0;
+            fu_is_jtype_reg <= '0;
+            fu_funct3_reg <= '0;
+            fu_is_lw_reg <= '0;  
         end else begin
             fu_ls_valid_o_reg <= fu_ls_valid_o;
             fu_ls_rob_idx_o_reg <= fu_ls_rob_idx_o;
             fu_ls_addr_o_reg <= fu_ls_addr_o;
             fu_sw_data_o_reg <= fu_sw_data_o; // for store instr
-
+            fu_sw_funct3_o_reg <= fu_sw_funct3_o;
+            $display("fu_sw_funct3_o_reg=%b",fu_sw_funct3_o_reg);
             fu_valid_reg <= fu_valid;
             fu_value_reg <= fu_value;
             fu_dest_prf_reg <= fu_dest_prf;
             fu_rob_idx_reg <= fu_rob_idx;
             fu_exception_reg <= fu_exception;
             fu_mispred_reg <= fu_mispred;
-
-
+            fu_jtype_value_reg <= fu_jtype_value;
+            fu_is_jtype_reg <= fu_is_jtype;
+            fu_funct3_reg <= fu_funct3;
+            fu_is_lw_reg <= fu_is_lw;
             for(int i=0;i<`DISPATCH_WIDTH;i++) begin
                 ex_c_inst_dbg[i] <= s_ex_inst_dbg[i]; // debug output, just forwarded from ID
                 ex_c_reg[i] <= ex_packet[i];
@@ -1475,7 +1515,8 @@ lsq_top #(
     .sq_data                 (fu_sw_data_o_reg),
     .sq_data_rob_idx         (fu_ls_rob_idx_o_reg),
     .sq_data_addr           (fu_ls_addr_o_reg),
-
+    .sq_data_funct3         (disp_ld_funct3_o[0]),
+    // .disp_ld_funct3         (disp_ld_funct3_o[0]),
     // =====================================================
     // 3. Commit Stage (from ROB) (OK)
     // =====================================================
@@ -1491,7 +1532,9 @@ lsq_top #(
     .wb_valid                (lsq_wb_valid),
     .wb_rob_idx              (lsq_wb_rob_idx),
     .wb_data                 (wb_data),
-
+    .wb_is_lw                 (wb_is_lw),
+    .wb_size                   (wb_size),
+    .funct3_o                     (funct3_o),
     // 5. Dual Port D-Cache Interface (ok)
 
     // --- Port 0: Load ---
@@ -1677,7 +1720,10 @@ dcache dcache_0 (
         .fu_rob_idx_i(fu_rob_idx_reg),
         .fu_exception_i(fu_exception_reg),
         .fu_mispred_i(fu_mispred_reg),
-
+        .fu_jtype_value_i(fu_jtype_value_reg),
+        .fu_is_jtype(fu_is_jtype_reg),
+        .fu_funct3_i(fu_funct3_reg),
+        .fu_is_lw_i(fu_is_lw_reg),
         // PR
         .prf_wr_en_o(prf_wr_en),
         .prf_waddr_o(prf_waddr),
@@ -1698,6 +1744,9 @@ dcache dcache_0 (
         .wb_valid(lsq_wb_valid),
         .wb_rob_idx(lsq_wb_rob_idx),
         .wb_data(wb_data),
+        .wb_is_lw(wb_is_lw),
+        .wb_size(wb_size),
+        .funct3(funct3_o),
         .wb_disp_rd_new_prf_i(wb_disp_rd_new_prf)
 
     );
