@@ -425,7 +425,6 @@ module dcache (
         Dcache_data_out_0 = '0; //8 byte per line = 64 bits
         Dcache_data_out_1 = '0;
         Dcache_data_rob_idx_0 = '0;
-        Dcache_data_rob_idx_1 = '0;
         line_data_0 = '0;
         line_data_1 = '0;
 
@@ -439,13 +438,13 @@ module dcache (
             else if (req_1_to_bank_1) line_data_1 = cache_data_read_1[hit_way_1];
         end 
 
+
         // Choose the data to cpu by data size and offset
         // TODO: NEED TO HANDLE THE SAME CYCLE CACHE HIT/MSHR RESPONSE
         if ((load_cache_hit_0 && Dcache_req_0_accept) || (load_cache_hit_1 && Dcache_req_1_accept)) begin
             Dcache_valid_out_0 = load_cache_hit_0;
             Dcache_valid_out_1 = load_cache_hit_1;
             Dcache_data_rob_idx_0 = (load_cache_hit_0) ? Dcache_req_rob_idx_0 : '0;
-            Dcache_data_rob_idx_1 = (load_cache_hit_1) ? Dcache_req_rob_idx_1 : '0;
             unique case (Dcache_size_0)
                 BYTE:    Dcache_data_out_0.byte_level[0] = (req_0_to_bank_0) ? line_data_0.byte_level[offset_0] : line_data_1.byte_level[offset_0];
                 HALF:    Dcache_data_out_0.half_level[0] = (req_0_to_bank_0) ? line_data_0.half_level[offset_0[OFFSET_BITS-1:1]] : line_data_1.half_level[offset_0[OFFSET_BITS-1:1]];
@@ -460,11 +459,11 @@ module dcache (
                 DOUBLE:  Dcache_data_out_1.dbbl_level = (req_1_to_bank_0) ? line_data_0.dbbl_level : line_data_1.dbbl_level;
                 default: Dcache_data_out_1.dbbl_level = (req_1_to_bank_0) ? line_data_0.dbbl_level : line_data_1.dbbl_level;
             endcase
+        $display("[DCACHE] load_cache_hit_1=%h Dcache_req_rob_idx_1=%h mem2proc_data_tag=%h mshr[refill_mshr_id].mem_tag=%h mshr[refill_mshr_id].port_id=%h mshr[refill_mshr_id].rob_idx=%h", load_cache_hit_1, Dcache_req_rob_idx_1, mem2proc_data_tag, mshr[refill_mshr_id].mem_tag, mshr[refill_mshr_id].port_id, mshr[refill_mshr_id].rob_idx);
 
         // Data from memory refill_mshr_id
         end else if ((mem2proc_data_tag == mshr[refill_mshr_id].mem_tag) && mshr[refill_mshr_id].valid && mshr[refill_mshr_id].command == MEM_STORE) begin
             Dcache_data_rob_idx_0 = (mshr[refill_mshr_id].port_id == 0) ? mshr[refill_mshr_id].rob_idx: '0;
-            Dcache_data_rob_idx_1 = (mshr[refill_mshr_id].port_id == 1) ? mshr[refill_mshr_id].rob_idx : '0;          
             unique case (Dcache_size_0)
                 BYTE:    Dcache_data_out_0.byte_level[0] = mem2proc_data.byte_level[offset_0];
                 HALF:    Dcache_data_out_0.half_level[0] = mem2proc_data.half_level[offset_0[OFFSET_BITS-1:1]];
@@ -891,6 +890,8 @@ module dcache (
         end
     end
 
+
+    // only port 1 support store
     always_comb begin
         if (store_cache_hit_0)  begin
             Dcache_store_valid_0 = 1'b1;
@@ -902,12 +903,16 @@ module dcache (
 
         if (store_cache_hit_1)  begin
             Dcache_store_valid_1 = 1'b1;
+            Dcache_data_rob_idx_1 = Dcache_req_rob_idx_1;
         end else if ((mem2proc_data_tag == mshr[refill_mshr_id].mem_tag || transaction_data_tag_the_same_time) && mshr[refill_mshr_id].valid && mshr[refill_mshr_id].command == MEM_STORE && mshr[refill_mshr_id].port_id == 1'b1) begin
             Dcache_store_valid_1 = 1'b1;
+            Dcache_data_rob_idx_1 = mshr[refill_mshr_id].rob_idx;
         end else begin
             Dcache_store_valid_1 = 1'b0;
+            Dcache_data_rob_idx_1 = '0;
         end
     end
+    
 
     // ----------Write Back to the memory ------------------
     // cycle k: cache miss-> send mem_load to mem (READ Target)
