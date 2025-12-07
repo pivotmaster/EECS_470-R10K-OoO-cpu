@@ -21,7 +21,7 @@ module lq #(
     input  DATA        data,  //todo: unused (data should not come from FU)
     input  ROB_IDX     addr_rob_idx, //todo: this is addr rob_idx
     input ADDR          enq_addr, // this is addr from FU
-
+    input logic [2:0]         funct3,
     // 2. SQ Forwarding (Query & Response)
     // input  logic       sq_forward_valid,
     // input  MEM_BLOCK   sq_forward_data,
@@ -51,6 +51,9 @@ module lq #(
     output logic       wb_valid,
     output ROB_IDX     wb_rob_idx,
     output MEM_BLOCK   wb_data, //TODO: only WORD level now
+    output logic [2:0]       funct3_o,
+    output logic       wb_is_lw,
+    output MEM_SIZE     wb_size,
     output logic [$clog2(`PHYS_REGS)-1:0] wb_disp_rd_new_prf_o,
 
     // 6. Commit (From ROB - Free Entry)
@@ -352,6 +355,8 @@ module lq #(
             wb_valid <= 1'b0;
             wb_rob_idx <= '0;
             wb_data <= '0;
+            wb_is_lw <= '0;
+            wb_size <= '0;
             wb_disp_rd_new_prf_o <= '0;
             for(int i = 0; i < LQ_SIZE; i++) begin
                 lq[i].valid <= '0;
@@ -368,6 +373,8 @@ module lq #(
             checkpoint_valid_o <= checkpoint_valid_next;
             wb_valid <= 1'b0; 
             wb_data <= '0;
+            wb_is_lw <= '0;
+            wb_size <= '0;
 
             if (do_enq && !do_commit)      count <= count + 1'b1;
             else if (!do_enq && do_commit) count <= count - 1'b1;
@@ -438,6 +445,7 @@ module lq #(
                     lq[tail].issued <= 1'b0;
                     lq[tail].data <= '0;
                     lq[tail].disp_rd_new_prf <= disp_rd_new_prf_i;
+                    lq[tail].funct3 <= funct3;
                     tail <= next_ptr(tail);
                 end        
                 //### sychenn
@@ -461,7 +469,10 @@ module lq #(
                             lq[j].data       <= dc_load_data;
                             lq[j].data_valid <= 1'b1;
                             wb_rob_idx <= lq[j].rob_idx;
+                            wb_size <= lq[j].size;
+                            funct3_o <= lq[j].funct3;
                             wb_data    <= dc_load_data.word_level[0];
+                            wb_is_lw   <= 1'b1;
                             wb_valid   <= 1'b1;
                             wb_disp_rd_new_prf_o <= lq[j].disp_rd_new_prf;
                             // $display("wb_data=%h|%h",dc_load_data.word_level, dc_load_data.word_level[0]);
@@ -489,6 +500,9 @@ module lq #(
                     wb_valid   <= 1'b1;
                     wb_rob_idx <= lq[query_idx].rob_idx;
                     wb_data    <= fwd_data.word_level[0]; //TODO: Only consider WORD Data now
+                    wb_size <= lq[query_idx].size;
+                    funct3_o <= lq[query_idx].funct3;
+                    wb_is_lw <= 1'b1;
                     wb_disp_rd_new_prf_o <= lq[query_idx].disp_rd_new_prf;
                 end
                 // $display("wb_valid=%b | wb_rob_idx=%d | wb_data=%h",wb_valid, wb_rob_idx, wb_data);
@@ -611,6 +625,7 @@ module lq #(
             assign snapshot_data_o[i].data = lq[i].data;
             assign snapshot_data_o[i].issued = lq[i].issued;
             assign snapshot_data_o[i].disp_rd_new_prf = lq[i].disp_rd_new_prf;
+            assign snapshot_data_o[i].funct3 = lq[i].funct3;
         end
     endgenerate
     assign snapshot_head_o = head;

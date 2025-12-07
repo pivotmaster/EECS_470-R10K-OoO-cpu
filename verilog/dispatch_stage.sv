@@ -107,7 +107,7 @@ module dispatch_stage #(
     output  logic      [DISPATCH_WIDTH-1:0] dispatch_is_store, // 1=Store, 0=Load
     output  MEM_SIZE   [DISPATCH_WIDTH-1:0] dispatch_size,
     output  ROB_IDX    [DISPATCH_WIDTH-1:0] disp_rob_idx_o,
-
+    output  logic     [DISPATCH_WIDTH-1:0][2:0] disp_ld_funct3_o,
     input   logic   [$clog2(`LQ_SIZE+1)-1:0]    lq_count,         
     input   logic    [$clog2(`LQ_SIZE+1)-1:0]   st_count          
 
@@ -217,7 +217,7 @@ logic [$clog2(DISPATCH_WIDTH+1)-1:0] total_valid_instr;
         dispatch_is_store = '0;
         dispatch_size = '0;
         disp_rob_idx_o = '0;
-
+        disp_ld_funct3_o = '0;
         if (!branch_stall && !stall) begin
           for (int i = 0; i < DISPATCH_WIDTH; i++) begin
               if (if_packet_i[i].valid) begin //### Account for icache miss (valid = 0)
@@ -265,6 +265,7 @@ logic [$clog2(DISPATCH_WIDTH+1)-1:0] total_valid_instr;
                       dispatch_is_store[i] = disp_packet_o[i].wr_mem; // store = 1
                       dispatch_size[i] = MEM_SIZE'(if_packet_i[i].inst.r.funct3[1:0]);
                       disp_rob_idx_o[i] = disp_rob_idx_i[i];
+                      disp_ld_funct3_o[i] = if_packet_i[i].inst.i.funct3;
                     end else begin
                       dispatch_valid[i] = 0;
                       dispatch_is_store[i] = disp_packet_o[i].wr_mem; // store = 1

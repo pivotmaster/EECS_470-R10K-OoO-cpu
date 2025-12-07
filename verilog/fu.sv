@@ -64,6 +64,7 @@ module alu_fu #(
     resp_o.sw_data   = '0;
     resp_o.j_type_value = '0;
     resp_o.is_jtype = '0;
+    resp_o.funct3 = '0;
   end
 endmodule
 
@@ -155,6 +156,7 @@ module mul_fu #(
         resp_o.sw_data   = '0;
         resp_o.j_type_value = '0;
         resp_o.is_jtype = '0;
+        resp_o.funct3 = '0;
       end
     end
 
@@ -184,18 +186,23 @@ module ls_fu #(
     resp_o.mispred   = 1'b0;
     resp_o.j_type_value = '0;
     resp_o.is_jtype = '0;
+    resp_o.funct3 = '0; // unsigned or signed
 
     if (req_i.disp_packet.rd_mem) begin
       resp_o.is_lw     = 1'b1;
       resp_o.is_sw     = 1'b0;
       resp_o.dest_prf  = req_i.dest_tag;
       resp_o.sw_data   = '0;
+      resp_o.funct3 = req_i.disp_packet.inst.i.funct3;
+
+      $display("resp_o.funct3=%b", resp_o.funct3);
 
     end else if (req_i.disp_packet.wr_mem) begin
       resp_o.is_lw     = 1'b0;
       resp_o.is_sw     = 1'b1;
       resp_o.dest_prf  = '0;
       resp_o.sw_data   = req_i.src2_val;
+      resp_o.funct3 = '0;
       `ifndef SYNTHESIS
       $display("ROB %0d:sw | src2_val=%h", req_i.rob_idx, req_i.src2_val);
       `endif
@@ -205,6 +212,7 @@ module ls_fu #(
       resp_o.is_sw     = 1'b0;
       resp_o.dest_prf  = '0;
       resp_o.sw_data   = '0;
+      resp_o.funct3 = '0;
     end
   end
 endmodule
@@ -266,6 +274,7 @@ module branch_fu #(
     resp_o.sw_data   = '0;
     resp_o.j_type_value = req_i.disp_packet.NPC;
     resp_o.is_jtype = is_jtype;
+    resp_o.funct3 = '0;
   end
 endmodule
 
@@ -307,11 +316,14 @@ module fu #(
     output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0]                    fu_mispred_o,
     output ADDR  [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0]                    fu_jtype_value_o,               
     output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0]                    fu_is_jtype_o,
+    output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0][2:0]               fu_funct3_o, //signed or unsigned
+    output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0]                    fu_is_lw_o,
     //FU -> LSQ
     output logic [LOAD_COUNT-1:0]                                               fu_ls_valid_o,
     output logic [LOAD_COUNT-1:0]             [$clog2(ROB_DEPTH)-1:0]           fu_ls_rob_idx_o,
     output ADDR [LOAD_COUNT-1:0]                                               fu_ls_addr_o,
-    output logic [LOAD_COUNT-1:0]       [XLEN-1:0]                                 fu_sw_data_o  //only for store instr.
+    output logic [LOAD_COUNT-1:0]       [XLEN-1:0]                                 fu_sw_data_o,  //only for store instr.
+    output logic [LOAD_COUNT-1:0][2:0]                                            fu_sw_funct3_o
 
 );
 
@@ -326,6 +338,7 @@ module fu #(
         fu_ls_rob_idx_o[j] = '0;
         fu_ls_addr_o[j] = '0;
         fu_sw_data_o[j] = '0;
+        fu_sw_funct3_o[j] = '0;
     end
 
     // route fu_resp_bus to output to lsq 
@@ -339,7 +352,8 @@ module fu #(
         `endif
         fu_ls_addr_o[idx] = fu_resp_bus[i].value;
         fu_sw_data_o[idx] = fu_resp_bus[i].sw_data;
-
+        fu_sw_funct3_o[idx] = fu_resp_bus[i].funct3;
+        $display("fu_sw_funct3_o[%0d]=%b", idx, fu_sw_funct3_o[idx]);
         idx ++;
       end
     end
@@ -414,6 +428,9 @@ module fu #(
       fu_mispred_o  [k] = fu_resp_bus[k].mispred;
       fu_jtype_value_o[k] = fu_resp_bus[k].j_type_value; //addr
       fu_is_jtype_o[k]    = fu_resp_bus[k].is_jtype;
+      fu_funct3_o[k]    = fu_resp_bus[k].funct3;
+      fu_is_lw_o[k]    = fu_resp_bus[k].is_lw;
+      $display("fu_funct3_o[k]=%b", fu_funct3_o[k]);
     end
 
   end

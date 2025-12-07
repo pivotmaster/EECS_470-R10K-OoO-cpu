@@ -28,6 +28,7 @@ module lsq_top #(
     input  DATA        sq_data, //resp_o.sw_data
     input  ROB_IDX     sq_data_rob_idx, // resp_o.rob_idx
     input  ADDR        sq_data_addr,  //resp_o.value 
+    input  logic [2:0]        sq_data_funct3, 
 
     // =====================================================
     // 3. Commit Stage (來自 ROB)
@@ -42,7 +43,9 @@ module lsq_top #(
     output logic       wb_valid,
     output ROB_IDX     wb_rob_idx,
     output logic [31:0]   wb_data, //TODO: only WORD level now
- 
+    output logic [2:0] funct3_o,
+    output logic       wb_is_lw,
+    output MEM_SIZE    wb_size,
     // =====================================================
     // 5. Dual Port D-Cache Interface
     // =====================================================
@@ -220,6 +223,7 @@ module lsq_top #(
         .data(sq_data),
         .data_rob_idx(sq_data_rob_idx),
         .enq_addr(sq_data_addr), 
+        
 
         // Forwarding Logic (Service LQ query)
         // .load_addr(fwd_query_addr),
@@ -286,6 +290,7 @@ module lsq_top #(
         .data(sq_data), //not use for load
         .addr_rob_idx(sq_data_rob_idx), 
         .enq_addr(sq_data_addr), 
+        .funct3(sq_data_funct3),
 
         // Forwarding Logic (Ask SQ)
         // .sq_forward_valid(fwd_valid),
@@ -320,6 +325,9 @@ module lsq_top #(
         .wb_valid(wb_valid),
         .wb_rob_idx(wb_rob_idx),
         .wb_data(wb_data),
+        .wb_is_lw(wb_is_lw),
+        .wb_size(wb_size),
+        .funct3_o(funct3_o),
         .empty(), 
 
         // Snapshot
@@ -387,7 +395,7 @@ module lsq_top #(
         
         // LSQ Status
         $display("LSQ Dispatch");
-        $display("LQ Status: lq_enq_valid=%b, dispatch_size=%p, dispatch_rob_idx=%d", lq_enq_valid, dispatch_size, dispatch_rob_idx);
+        $display("LQ Status: lq_enq_valid=%b, dispatch_size=%p, dispatch_rob_idx=%d , sq_data_funct3 = %b", lq_enq_valid, dispatch_size, dispatch_rob_idx,sq_data_funct3);
         $display("SQ Status: sq_enq_valid=%b,  dispatch_size=%p, dispatch_rob_idx=%d", sq_enq_valid,dispatch_size, dispatch_rob_idx); 
 
         $display("LSQ Get DATA/ADDR");
