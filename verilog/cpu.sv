@@ -109,6 +109,7 @@ module cpu #(
     logic [`DISPATCH_WIDTH-1:0][$clog2(`ARCH_REGS)-1:0] src2_arch;
     logic [`DISPATCH_WIDTH-1:0][$clog2(`PHYS_REGS)-1:0] dest_new_prf; //T_new
     logic [`DISPATCH_WIDTH-1:0] is_branch; //### 11/10 sychenn ###//
+    logic [`DISPATCH_WIDTH-1:0] is_branch_early; /// only for branch stall 
     logic [`DISPATCH_WIDTH-1:0][$clog2(`PHYS_REGS)-1:0] disp_old_phys_disp;
     
     // RS
@@ -440,6 +441,9 @@ module cpu #(
 
     logic system_stop, system_stop_next, finished_wb_to_mem;
     // COMMIT_PACKET wfi;
+
+    DISP_PACKET [`DISPATCH_WIDTH-1:0] pre_disp_packet;
+    logic [`DISPATCH_WIDTH-1:0] not_use_has_dest;
     
     //////////////////////////////////////////////////
     //                                              //
@@ -451,6 +455,33 @@ module cpu #(
     // we give precedence to the mem stage over instruction fetch
     // note that there is no latency in project 3
     // but there will be a 100ns latency in project 4
+
+    for (genvar i = 0; i < `DISPATCH_WIDTH; i++) begin : gen_decoders
+        decoder decoder_0 (
+            .inst  (if_packet[i].inst),
+            .valid (if_packet[i].valid),
+
+            .opa_select    (pre_disp_packet[i].opa_select),
+            .opb_select    (pre_disp_packet[i].opb_select),
+            .has_dest      (not_use_has_dest[i]),
+            .alu_func      (pre_disp_packet[i].alu_func),
+            .mult          (pre_disp_packet[i].mult),
+            .rd_mem        (pre_disp_packet[i].rd_mem),
+            .wr_mem        (pre_disp_packet[i].wr_mem),
+            .cond_branch   (pre_disp_packet[i].cond_branch),
+            .uncond_branch (pre_disp_packet[i].uncond_branch),
+            .csr_op        (pre_disp_packet[i].csr_op),
+            .halt          (pre_disp_packet[i].halt),
+            .illegal       (pre_disp_packet[i].illegal),
+            .fu_type       (pre_disp_packet[i].fu_type)
+        );
+    end
+
+    always_comb begin
+        for (int i = 0; i < `DISPATCH_WIDTH; i++) begin
+            is_branch_early[i] = (pre_disp_packet[i].cond_branch || pre_disp_packet[i].uncond_branch) && pre_disp_packet[i].valid;
+        end
+    end
 
     always_comb begin
         // TODO: now only has icache
@@ -521,6 +552,9 @@ module cpu #(
 `ifndef SYNTHESIS
     always_ff @(posedge clock) begin
         if(!reset) begin
+            $display("wb_valid=%b", wb_valid);
+            $display("rob_store_ready_valid=%b | rob_store_ready_idx=%d", rob_store_ready_valid, rob_store_ready_idx);
+            $display("is_branch_early=%b | branch_resolve=%b", |is_branch_early, branch_resolve);
             $display("|is_branch=%b | has_branch_in_pipline=%b | branch_stall=%b | branch_resolve=%b", |is_branch, has_branch_in_pipline, branch_stall, branch_resolve);
             $display("branch_stall_reg=%b |branch_stall_next=%b",branch_stall_reg,branch_stall_next);
             $display("stall_disp=%b",stall_dispatch);
@@ -945,7 +979,9 @@ module cpu #(
         .snapshot_data_i(snapshot_data_i),
 
         .snapshot_data_o(snapshot_data_o),
-        .snapshot_valid_o(snapshot_valid)
+        .snapshot_valid_o(snapshot_valid),
+
+        .branch_stall_i(branch_stall)
     );
 
 
@@ -970,8 +1006,8 @@ module cpu #(
             end else if (has_snapshot) begin
                 for(int i =0 ; i < `ARCH_REGS ; i++)begin
                     // wb ready for the same phy reg in snapshot
-                    if (snapshot_reg[i].phys == snapshot_data_o[i].phys) begin
-                        snapshot_reg[i].valid <= snapshot_data_o[i].valid;
+                    if ((snapshot_reg[i].phys == prf_waddr) && (prf_wr_en))begin
+                        snapshot_reg[i].valid <= 1'b1;
                     end
                 end           
             end

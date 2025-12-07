@@ -129,7 +129,7 @@ output logic [$clog2(PHYS_REGS+1)-1:0]                       free_count_o, // nu
         end
         // dispatch (free the instruction that stole the free reg)
         for (int j2 = 0; j2 < DISPATCH_WIDTH; j2++) begin
-            if (flush2free_list_valid_i[j2]) begin
+            if (flush2free_list_valid_i[j2] && (flush2free_list_new_prf_i[j2] != 0)) begin
                 N_free++;
             end
         end
@@ -214,7 +214,7 @@ output logic [$clog2(PHYS_REGS+1)-1:0]                       free_count_o, // nu
             end
             // flush
             for (int j2 = 0; j2 < DISPATCH_WIDTH; j2++) begin
-                if (flush2free_list_valid_i[j2]) begin
+                if (flush2free_list_valid_i[j2] && (flush2free_list_new_prf_i[j2] != 0)) begin
                     total_free_valid[id]   = 1;
                     total_free_reg_idx[id] = flush2free_list_new_prf_i[j2];
                     id ++;

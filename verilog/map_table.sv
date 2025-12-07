@@ -100,6 +100,7 @@ module map_table#(
     // Output:
     //   snapshot_data_o     : current table snapshot for saving
     //
+    input logic branch_stall_i,
     input logic [DISPATCH_WIDTH-1:0] is_branch_i,  //### 11/10 sychenn ###//
 
     input  logic                                              snapshot_restore_valid_i, //valid bit
@@ -125,12 +126,14 @@ module map_table#(
     //### 11/10 sychenn ###//
     always_comb begin 
         snapshot_valid_o = 1'b0;
-        for(int i =0 ; i < DISPATCH_WIDTH ; i++)begin
-            if(is_branch_i[i])begin
-                snapshot_valid_o = 1'b1;
-                break;
-            end 
-        end        
+        if (!branch_stall_i)begin
+            for(int i =0 ; i < DISPATCH_WIDTH ; i++)begin
+                if(is_branch_i[i])begin
+                    snapshot_valid_o = 1'b1;
+                    break;
+                end 
+            end        
+        end
     end
 
     //### 11/15  sychenn ####################################################################//
@@ -242,19 +245,19 @@ module map_table#(
         //  Writeback(aka complete stage): any WB that writes a physical tag should mark 
         //  every architectural mapping that references that physical tag as valid.
         // ===================================================
-        for (int i = 0 ; i < WB_WIDTH; i ++)begin
-            if(wb_valid_i[i])begin
-                // table_reg[wb_phys_i[i]].valid <= 1'b1;
-                for(int j = 0 ; j < ARCH_REGS ; j++)begin
-                    //###11/15 sychenn prevent wb and dispatch write to the same reg at the same cycle###//
-                    for(int k =0 ; k < DISPATCH_WIDTH ; k++)begin
-                        if ((table_reg[j].phys == wb_phys_i[i]) && (disp_arch_i[k] != j))begin 
-                            table_reg[j].valid <= 1'b1;
-                        end
-                    end
-                end
-            end
-        end
+        // for (int i = 0 ; i < WB_WIDTH; i ++)begin
+        //     if(wb_valid_i[i])begin
+        //         // table_reg[wb_phys_i[i]].valid <= 1'b1;
+        //         for(int j = 0 ; j < ARCH_REGS ; j++)begin
+        //             //###11/15 sychenn prevent wb and dispatch write to the same reg at the same cycle###//
+        //             for(int k =0 ; k < DISPATCH_WIDTH ; k++)begin
+        //                 if ((table_reg[j].phys == wb_phys_i[i]) && (disp_arch_i[k] != j))begin 
+        //                     table_reg[j].valid <= 1'b1;
+        //                 end
+        //             end
+        //         end
+        //     end
+        // end
 
         // ===================================================
         // Snapshot restore takes highest priority:
@@ -334,29 +337,37 @@ module map_table#(
             snapshot_data_o[disp_arch_i[0]].phys = disp_new_phys_i[0];
             snapshot_data_o[disp_arch_i[0]].valid = 1'b0;
         end
+
+        for (int i = 0 ; i < WB_WIDTH; i ++)begin
+            if(wb_valid_i[i])begin
+                for(int j = 0 ; j < ARCH_REGS ; j++)begin
+                    for(int k =0 ; k < DISPATCH_WIDTH ; k++)begin
+                        if ((table_reg[j].phys == wb_phys_i[i]) && (disp_arch_i[k] != j))begin 
+                            snapshot_data_o[j].valid = 1'b1;
+                        end
+                    end
+                end
+            end
+        end
+
+
         table_reg_next = table_reg;
         if (snapshot_restore_valid_i) begin
             for(int i =0 ; i < ARCH_REGS ; i++)begin
+                logic wb_match;
+                wb_match = 1'b0;
+                // Check if any writeback this cycle matches the snapshot's physical register
+                for(int w = 0; w < WB_WIDTH; w++)begin
+                    if(wb_valid_i[w] && (wb_phys_i[w] == snapshot_data_i[i].phys))begin
+                        wb_match = 1'b1;
+                    end
+                end
                 table_reg_next[i].phys = snapshot_data_i[i].phys;
-                table_reg_next[i].valid = (snapshot_data_i[i].valid || ((snapshot_data_i[i].phys == table_reg[i].phys) && table_reg[i].valid));
-                
+                table_reg_next[i].valid = (snapshot_data_i[i].valid || 
+                                          ((snapshot_data_i[i].phys == table_reg[i].phys) && table_reg[i].valid) ||
+                                          wb_match);
             end
-            
-            // if(j_type_wb)begin
-            //     for (int i = 0 ; i < WB_WIDTH; i ++)begin
-            //         if(wb_valid_i[i])begin
-            //             // table_reg[wb_phys_i[i]].valid <= 1'b1;
-            //             for(int j = 0 ; j < ARCH_REGS ; j++)begin
-            //                 //###11/15 sychenn prevent wb and dispatch write to the same reg at the same cycle###//
-            //                 for(int k =0 ; k < DISPATCH_WIDTH ; k++)begin
-            //                     if ((table_reg[j].phys == wb_phys_i[i]) && (disp_arch_i[k] != j))begin 
-            //                         table_reg[j].valid <= 1'b1;
-            //                     end
-            //                 end
-            //             end
-            //         end
-            //     end
-            // end
+
         end else begin
             for(int i =0 ; i < DISPATCH_WIDTH ; i++)begin
                 if(disp_valid_i[i])begin
@@ -380,11 +391,9 @@ module map_table#(
         
         for (int i = 0 ; i < WB_WIDTH; i ++)begin
             if(wb_valid_i[i])begin
-                // table_reg[wb_phys_i[i]].valid <= 1'b1;
                 for(int j = 0 ; j < ARCH_REGS ; j++)begin
-                    //###11/15 sychenn prevent wb and dispatch write to the same reg at the same cycle###//
                     for(int k = 0 ; k < DISPATCH_WIDTH ; k++)begin
-                        if ((table_reg[j].phys == wb_phys_i[i]) && (disp_arch_i[k] != j))begin 
+                        if ((table_reg_next[j].phys == wb_phys_i[i]) && (disp_arch_i[k] != j))begin 
                             table_reg_next[j].valid = 1'b1;
                         end
                     end
