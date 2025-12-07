@@ -462,7 +462,7 @@ module dcache (
             endcase
 
         // Data from memory refill_mshr_id
-        end else if ((mem2proc_data_tag == mshr[refill_mshr_id].mem_tag || transaction_data_tag_the_same_time) && mshr[refill_mshr_id].valid && mshr[refill_mshr_id].command == MEM_STORE) begin
+        end else if ((mem2proc_data_tag == mshr[refill_mshr_id].mem_tag) && mshr[refill_mshr_id].valid && mshr[refill_mshr_id].command == MEM_STORE) begin
             Dcache_data_rob_idx_0 = (mshr[refill_mshr_id].port_id == 0) ? mshr[refill_mshr_id].rob_idx: '0;
             Dcache_data_rob_idx_1 = (mshr[refill_mshr_id].port_id == 1) ? mshr[refill_mshr_id].rob_idx : '0;          
             unique case (Dcache_size_0)
@@ -935,7 +935,7 @@ module dcache (
                 victim_tag   = cache_tags[bank_0][index_0][replace_way_0];
             end else if (send_miss_1) begin
                 victim_index = index_1;
-                victim_bank  = bank_1;
+                victim_bank  = bank_1; 
                 victim_way   = replace_way_1;
                 victim_tag   = cache_tags[bank_1][index_1][replace_way_1];
             end

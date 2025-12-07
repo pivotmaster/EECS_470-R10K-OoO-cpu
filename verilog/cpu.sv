@@ -265,6 +265,7 @@ module cpu #(
     ROB_IDX     Dcache_data_rob_idx_0;
     ROB_IDX     Dcache_req_rob_idx_1;
     ROB_IDX     Dcache_data_rob_idx_1;
+    logic       Dcache_store_valid_1;
 
     // Port 1: usually Store port from LSQ
     ADDR        Dcache_addr_1;
@@ -1516,6 +1517,7 @@ lsq_top #(
     .Dcache_data_out_1       (Dcache_data_out_1),
     .Dcache_valid_out_1      (Dcache_valid_out_1),
     .Dcache_data_rob_idx_1         (Dcache_data_rob_idx_1),
+    .Dcache_store_valid_1      (Dcache_store_valid_1),
 
     // =====================================================
     // 6. Snapshot / Recovery Interface
@@ -1635,6 +1637,7 @@ dcache dcache_0 (
     .Dcache_data_out_1         (Dcache_data_out_1),
     .Dcache_valid_out_1        (Dcache_valid_out_1),
     .Dcache_data_rob_idx_1           (Dcache_data_rob_idx_1),
+    .Dcache_store_valid_1      (Dcache_store_valid_1),
 
     // Memory interface
     .Dcache2mem_command        (Dmem_command),

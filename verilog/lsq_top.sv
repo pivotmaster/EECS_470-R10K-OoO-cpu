@@ -71,6 +71,7 @@ module lsq_top #(
     input  MEM_BLOCK   Dcache_data_out_1,   
     input  logic       Dcache_valid_out_1,
     input  ROB_IDX    Dcache_data_rob_idx_1,
+    input  logic       Dcache_store_valid_1,
 
     // =====================================================
     // 6. Snapshot / Recovery Interface
@@ -241,6 +242,10 @@ module lsq_top #(
         .dc_store_data(sq_req_data), // 修正名稱對應
         .dc_req_accept(sq_req_accept),
         .dc_rob_idx(sq_req_rob_idx),
+
+        // Store Valid
+        .dc_store_valid(Dcache_store_valid_1),
+        .dc_store_rob_idx(Dcache_data_rob_idx_1),
 
         // Snapshot
         .is_branch_i(is_branch_i),
