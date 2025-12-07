@@ -303,7 +303,11 @@ module dcache (
 
     logic wfi_found_dirty;
     logic send_wfi_to_mem;
-    
+
+    logic [$clog2(`MEM_LATENCY_IN_CYCLES+1)-1:0] latency;
+    logic [$clog2(`MEM_LATENCY_IN_CYCLES+1)-1:0] latency_counter, latency_counter_next;
+    assign latency = `MEM_LATENCY_IN_CYCLES;
+
     // Scan for dirty cache lines
     always_comb begin
         wfi_found_dirty = 1'b0;
@@ -332,11 +336,15 @@ module dcache (
 
     always_comb begin
         wfi_state_next = wfi_state;
+        latency_counter_next = latency_counter;
         
         case (wfi_state)
             WFI_IDLE: begin
                 if (halt_by_wfi) begin
-                    wfi_state_next = WFI_WRITING_BACK;
+                    latency_counter_next ++;
+                    if (latency_counter == latency) begin
+                        wfi_state_next = WFI_WRITING_BACK;
+                    end
                 end
             end
             
@@ -364,11 +372,13 @@ module dcache (
             wfi_bank  <= '0;
             wfi_set   <= '0;
             wfi_way   <= '0;
+            latency_counter <= '0;
         end else begin
             wfi_state <= wfi_state_next;
             wfi_bank <= wfi_bank_next;
             wfi_set <= wfi_set_next;
             wfi_way <= wfi_way_next;
+            latency_counter <= latency_counter_next;
             send_wfi_to_mem <= (wfi_state == WFI_WRITING_BACK && wfi_found_dirty);
         end
     end
@@ -387,12 +397,18 @@ module dcache (
     // =========================================================  
     // ----------  Read enable signals ----------    
     logic wfi_read_en;
+    logic wb_mem_read_en;
+    // wb address ( the one that were replaced )
+    logic [TAG_BITS-1:0]   victim_tag;
+    logic [INDEX_BITS-1:0] victim_index;
+    logic [BANK_BITS-1:0]  victim_bank;
+    logic [$clog2(CACHE_WAYS)-1:0] victim_way;
     assign wfi_read_en = (wfi_state == WFI_WRITING_BACK && send_wfi_to_mem);
     
     assign cache_read_en_0 = (req_0_to_bank_0 && Dcache_req_0_accept) || (req_1_to_bank_0 && Dcache_req_1_accept) || 
-                             (wfi_read_en && wfi_bank == 1'b0);
+                             (wfi_read_en && wfi_bank == 1'b0) || (wb_mem_read_en && victim_bank == 1'b0);
     assign cache_read_en_1 = (req_0_to_bank_1 && Dcache_req_0_accept) || (req_1_to_bank_1 && Dcache_req_1_accept) || 
-                             (wfi_read_en && wfi_bank == 1'b1);
+                             (wfi_read_en && wfi_bank == 1'b1) || (wb_mem_read_en && victim_bank == 1'b1);
 
     // ----------  Assign Read address ----------    
     // Only need index to determine which set 
@@ -415,11 +431,11 @@ module dcache (
 
         if (cache_hit_0) begin
             if (req_0_to_bank_0) line_data_0 = cache_data_read_0[hit_way_0];
-            else if (req_0_to_bank_1) line_data_0 = cache_data_read_1[hit_way_0];
+            else if (req_0_to_bank_1) line_data_1 = cache_data_read_1[hit_way_0];
         end 
 
         if (cache_hit_1) begin
-            if (req_1_to_bank_0) line_data_1 = cache_data_read_0[hit_way_1];
+            if (req_1_to_bank_0) line_data_0 = cache_data_read_0[hit_way_1];
             else if (req_1_to_bank_1) line_data_1 = cache_data_read_1[hit_way_1];
         end 
 
@@ -431,18 +447,18 @@ module dcache (
             Dcache_data_rob_idx_0 = (load_cache_hit_0) ? Dcache_req_rob_idx_0 : '0;
             Dcache_data_rob_idx_1 = (load_cache_hit_1) ? Dcache_req_rob_idx_1 : '0;
             unique case (Dcache_size_0)
-                BYTE:    Dcache_data_out_0.byte_level[0] = line_data_0.byte_level[offset_0];
-                HALF:    Dcache_data_out_0.half_level[0] = line_data_0.half_level[offset_0[OFFSET_BITS-1:1]];
-                WORD:    Dcache_data_out_0.word_level[0] = line_data_0.word_level[offset_0[OFFSET_BITS-1:2]];
-                DOUBLE:  Dcache_data_out_0.dbbl_level = line_data_0.dbbl_level;
-                default: Dcache_data_out_0.dbbl_level = line_data_0.dbbl_level;
+                BYTE:    Dcache_data_out_0.byte_level[0] = (req_0_to_bank_0) ? line_data_0.byte_level[offset_0] : line_data_1.byte_level[offset_0];
+                HALF:    Dcache_data_out_0.half_level[0] = (req_0_to_bank_0) ? line_data_0.half_level[offset_0[OFFSET_BITS-1:1]] : line_data_1.half_level[offset_0[OFFSET_BITS-1:1]];
+                WORD:    Dcache_data_out_0.word_level[0] = (req_0_to_bank_0) ? line_data_0.word_level[offset_0[OFFSET_BITS-1:2]] : line_data_1.word_level[offset_0[OFFSET_BITS-1:2]];
+                DOUBLE:  Dcache_data_out_0.dbbl_level = (req_0_to_bank_0) ? line_data_0.dbbl_level : line_data_1.dbbl_level;
+                default: Dcache_data_out_0.dbbl_level = (req_0_to_bank_0) ? line_data_0.dbbl_level : line_data_1.dbbl_level;
             endcase
             unique case (Dcache_size_1)
-                BYTE:    Dcache_data_out_1.byte_level[0] = line_data_1.byte_level[offset_1];
-                HALF:    Dcache_data_out_1.half_level[0] = line_data_1.half_level[offset_1[OFFSET_BITS-1:1]];
-                WORD:    Dcache_data_out_1.word_level[0] = line_data_1.word_level[offset_1[OFFSET_BITS-1:2]];
-                DOUBLE:  Dcache_data_out_1.dbbl_level = line_data_1.dbbl_level;
-                default: Dcache_data_out_1.dbbl_level = line_data_1.dbbl_level;
+                BYTE:    Dcache_data_out_1.byte_level[0] = (req_1_to_bank_0) ? line_data_0.byte_level[offset_1] : line_data_1.byte_level[offset_1];
+                HALF:    Dcache_data_out_1.half_level[0] = (req_1_to_bank_0) ? line_data_0.half_level[offset_1[OFFSET_BITS-1:1]] : line_data_1.half_level[offset_1[OFFSET_BITS-1:1]];
+                WORD:    Dcache_data_out_1.word_level[0] = (req_1_to_bank_0) ? line_data_0.word_level[offset_1[OFFSET_BITS-1:2]] : line_data_1.word_level[offset_1[OFFSET_BITS-1:2]];
+                DOUBLE:  Dcache_data_out_1.dbbl_level = (req_1_to_bank_0) ? line_data_0.dbbl_level : line_data_1.dbbl_level;
+                default: Dcache_data_out_1.dbbl_level = (req_1_to_bank_0) ? line_data_0.dbbl_level : line_data_1.dbbl_level;
             endcase
 
         // Data from memory refill_mshr_id
@@ -514,9 +530,9 @@ module dcache (
                 endcase
             end else if (req_0_to_bank_1) begin
                 unique case (Dcache_size_0)
-                    BYTE:    updated_line_1.byte_level[offset_1] = Dcache_store_data_0.byte_level[0];
-                    HALF:    updated_line_1.half_level[offset_1[OFFSET_BITS-1:1]] = Dcache_store_data_0.half_level[0];
-                    WORD:    updated_line_1.word_level[offset_1[OFFSET_BITS-1:2]] = Dcache_store_data_0.word_level[0];
+                    BYTE:    updated_line_1.byte_level[offset_0] = Dcache_store_data_0.byte_level[0];
+                    HALF:    updated_line_1.half_level[offset_0[OFFSET_BITS-1:1]] = Dcache_store_data_0.half_level[0];
+                    WORD:    updated_line_1.word_level[offset_0[OFFSET_BITS-1:2]] = Dcache_store_data_0.word_level[0];
                     DOUBLE:  updated_line_1.dbbl_level = Dcache_store_data_0.dbbl_level;
                     default: updated_line_1.dbbl_level = Dcache_store_data_0.dbbl_level;
                 endcase
@@ -526,9 +542,9 @@ module dcache (
         if (store_cache_hit_1) begin // req 0/1
             if (req_1_to_bank_0) begin
                 unique case (Dcache_size_1)
-                    BYTE:    updated_line_0.byte_level[offset_0] = Dcache_store_data_1.byte_level[0];
-                    HALF:    updated_line_0.half_level[offset_0[OFFSET_BITS-1:1]] = Dcache_store_data_1.half_level[0];
-                    WORD:    updated_line_0.word_level[offset_0[OFFSET_BITS-1:2]] = Dcache_store_data_1.word_level[0];
+                    BYTE:    updated_line_0.byte_level[offset_1] = Dcache_store_data_1.byte_level[0];
+                    HALF:    updated_line_0.half_level[offset_1[OFFSET_BITS-1:1]] = Dcache_store_data_1.half_level[0];
+                    WORD:    updated_line_0.word_level[offset_1[OFFSET_BITS-1:2]] = Dcache_store_data_1.word_level[0];
                     DOUBLE:  updated_line_0.dbbl_level = Dcache_store_data_1.dbbl_level;
                     default: updated_line_0.dbbl_level = Dcache_store_data_1.dbbl_level;
                 endcase
@@ -903,18 +919,15 @@ module dcache (
     ADDR wb_mem_addr;
     MEM_SIZE wb_mem_size;
 
-    // wb address ( the one that were replaced )
-    logic [TAG_BITS-1:0]   victim_tag;
-    logic [INDEX_BITS-1:0] victim_index;
-    logic [BANK_BITS-1:0]  victim_bank;
-    logic [$clog2(CACHE_WAYS)-1:0] victim_way;
     always_comb begin
         victim_tag   = '0;
         victim_index = '0;
         victim_bank  = '0;
         victim_way   = '0;
+        wb_mem_read_en = '0;
 
         if (send_new_mem_req) begin
+            wb_mem_read_en = 1'b1;
             if (send_miss_0) begin
                 victim_index = index_0;
                 victim_bank  = bank_0;
@@ -941,7 +954,7 @@ module dcache (
 
             if (send_miss_0 && cache_dirty[victim_bank][victim_index][victim_way] && cache_valid[victim_bank][victim_index][victim_way]) begin // cache_miss_0 and replace_way_0 here is req 0/1
                 wb_mem_valid <= 1'b1;
-                wb_mem_data <=  (bank_1) ? cache_data_read_1[replace_way_0] : cache_data_read_0[replace_way_0];
+                wb_mem_data <=  (bank_0) ? cache_data_read_1[replace_way_0] : cache_data_read_0[replace_way_0];
             end else if (send_miss_1 && cache_dirty[victim_bank][victim_index][victim_way] && cache_valid[victim_bank][victim_index][victim_way]) begin // cache_miss_1
                 wb_mem_valid <= 1'b1;
                 wb_mem_data <=  (bank_1) ? cache_data_read_1[replace_way_1] : cache_data_read_0[replace_way_1];
@@ -964,7 +977,7 @@ module dcache (
         Dcache2mem_data    = '0;
 
         // WFI flush has highest priority - write dirty cache lines back to memory
-        if (wfi_state == WFI_WRITING_BACK && wfi_found_dirty) begin
+        if (wfi_state == WFI_WRITING_BACK && send_wfi_to_mem) begin
             Dcache2mem_command = MEM_STORE;
             Dcache2mem_size    = DOUBLE; // 64 bits
             Dcache2mem_addr    = {cache_tags[wfi_bank][wfi_set][wfi_way], wfi_set, wfi_bank, {OFFSET_BITS{1'b0}}};
@@ -1078,7 +1091,7 @@ task automatic show_status();
              has_req_to_mem, send_miss_0, send_miss_1);
 
     // read path
-    $display("[READ]  en={b0,b1} = %b %b  addr={b0,b1} = %0d %0d",
+    $display("[READ]  en={b0,b1} = %b %b  addr={b0,b1} = %d %d",
              cache_read_en_0, cache_read_en_1,
              cache_read_addr_0, cache_read_addr_1);
 

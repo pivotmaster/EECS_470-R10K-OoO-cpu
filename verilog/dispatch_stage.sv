@@ -140,8 +140,9 @@ logic [$clog2(DISPATCH_WIDTH+1)-1:0] total_valid_instr;
         if (free_rs_slots_i < disp_n)  disp_n = free_rs_slots_i;
         if (free_rob_slots_i < disp_n) disp_n = free_rob_slots_i;
         if (free_regs_i < disp_n)      disp_n = free_regs_i;
-        // if (lq_count < disp_n)         disp_n = lq_count;
-        // if (st_count < disp_n)         disp_n = st_count;
+        if (lq_count < disp_n)         disp_n = lq_count;
+        if (st_count < disp_n)         disp_n = st_count;
+        // $display("lq_count=%d st_count=%d", lq_count, st_count);
     end
 `ifndef SYNTHESIS
     always_ff @(posedge clock) begin

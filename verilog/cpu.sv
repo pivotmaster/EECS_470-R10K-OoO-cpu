@@ -1794,7 +1794,7 @@ dcache dcache_0 (
         system_stop_next = '0;
         if(finished_wb_to_mem) begin
             committed_insts[0] = wfi;
-        end else begin
+        end else if (!system_stop) begin
             for(int i = 0; i < `N; i++) begin
                 if(wb_packet[i].halt != 1'b1) begin
                     committed_insts[i] = wb_packet[i];

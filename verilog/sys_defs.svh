@@ -28,7 +28,7 @@
 `define MULT_STAGES 4
 
 `define SQ_SIZE 4
-`define LQ_SIZE 4  
+`define LQ_SIZE 4
 `define LQ_IDX_WIDTH $clog2(`SQ_SIZE) 
 `define SQ_IDX_WIDTH $clog2(`LQ_SIZE)
 
