@@ -382,7 +382,7 @@ module lq #(
 
                 if (head <= snapshot_tail_i) begin
                     for(int i = 0; i < LQ_SIZE; i++) begin
-                        if (i >= snapshot_tail_i) begin
+                        if ((i >= 0 && i < head) || (i >= snapshot_tail_i)) begin
                             lq[i].valid <= 1'b0;
                             lq[i].data_valid <= 1'b0;
                             lq[i].issued <= 1'b0;
@@ -391,7 +391,7 @@ module lq #(
                     end
                 end else begin
                     for(int i = 0; i < LQ_SIZE; i++) begin
-                        if (i >= snapshot_tail_i || i < head) begin
+                        if (i >= snapshot_tail_i && i < head) begin
                             lq[i].valid <= 1'b0;
                             lq[i].data_valid <= 1'b0;
                             lq[i].issued <= 1'b0;
@@ -625,6 +625,8 @@ module lq #(
   task automatic show_lq_status();
     int i;
     $display("\n===================================================================");
+    $display("snapshot output: checkpoint_valid_o = %b | snapshot_tail_o = %d ", checkpoint_valid_o, snapshot_tail_o);
+    $display("snapshot_restore_valid_i = %b | store_tail = %d ", snapshot_restore_valid_i, snapshot_tail_i);
     $display("[LQ DUMP] Time: %0t", $time);
     
     // 1. 顯示佇列基本狀態 (State)
