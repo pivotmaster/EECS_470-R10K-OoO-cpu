@@ -3,7 +3,8 @@
 module sq #(
   parameter int DISPATCH_WIDTH = 1,
   parameter int SQ_SIZE = 128,
-  parameter int IDX_WIDTH = $clog2(SQ_SIZE)
+  parameter int IDX_WIDTH = $clog2(SQ_SIZE),
+  parameter int OFFSET_BITS = $clog2(8)
 )(
     input logic clock, reset,
 
@@ -43,6 +44,9 @@ module sq #(
     output ROB_IDX     dc_rob_idx,
     input  logic       dc_req_accept,
 
+    // Store Valid
+    input logic       dc_store_valid,
+    input ROB_IDX     dc_store_rob_idx,
 
     // =======================================================
     // ======== free slot count in sq    =====================
@@ -209,6 +213,13 @@ module sq #(
 
             if(sq[i].valid && (sq[i].rob_idx == data_rob_idx))begin
               // $display("sq[i].valid =%b | sq[i].rob_idx= %d | data_rob_idx=%d",sq[i].valid ,sq[i].rob_idx, data_rob_idx);
+              // unique case (sq[i].data_size)
+              //   BYTE:    sq[i].data.byte_level[0] <= data.byte_level[offset_0];
+              //   HALF:    sq[i].data.half_level[0] <= data.half_level[offset_0[OFFSET_BITS-1:1]];
+              //   WORD:    sq[i].data.word_level[0] <= data.word_level[offset_0[OFFSET_BITS-1:2]];
+              //   DOUBLE:  sq[i].data.dbbl_level <= data.dbbl_level;
+              //   default: sq[i].data.dbbl_level <= data.dbbl_level;
+              // endcase
               sq[i].data <= data;
               sq[i].data_valid <= 1'b1;
               sq[i].addr <= enq_addr;
@@ -247,15 +258,17 @@ module sq #(
           end
         end 
       
- 
         // if head is ready to send to dcache (committed && data_valid) and we get accept -> pop
-        if(dc_req_valid && dc_req_accept)begin
-          sq[head].valid <= 1'b0;
-          sq[head].data_valid <= 1'b0;
-          sq[head].commited <= 1'b0;
-          sq[head].addr_valid <= 1'b0;
-          // count <= count - 1'b1;
-          head <= next_ptr(head);
+        if(dc_store_valid)begin
+          for(int i = 0 ; i < SQ_SIZE ; i++)begin
+            if(sq[i].valid && (sq[i].rob_idx == dc_store_rob_idx)) begin
+              sq[i].valid <= 1'b0;
+              sq[i].data_valid <= 1'b0;
+              sq[i].commited <= 1'b0;
+              sq[i].addr_valid <= 1'b0;
+              head <= next_ptr(head);
+            end
+          end
         end
       end
     end

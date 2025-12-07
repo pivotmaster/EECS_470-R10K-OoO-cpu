@@ -90,7 +90,7 @@ typedef logic [$clog2(`ROB_DEPTH)-1:0] ROB_IDX;
 // you are not allowed to change this definition for your final processor
 // the project 3 processor has a massive boost in performance just from having no mem latency
 // see if you can beat it's CPI in project 4 even with a 100ns latency!
-`define MEM_LATENCY_IN_CYCLES  8
+`define MEM_LATENCY_IN_CYCLES  2
 // `define MEM_LATENCY_IN_CYCLES (100.0/`CLOCK_PERIOD+0.49999)
 // the 0.49999 is to force ceiling(100/period). The default behavior for
 // float to integer conversion is rounding to nearest
@@ -474,15 +474,18 @@ typedef enum logic [1:0] {
 
 
 typedef struct packed {
-    logic                         valid;
-    logic [`XLEN-1:0]                  value;
+    logic                          valid;
+    logic [`XLEN-1:0]              value;
     logic [$clog2(`PHYS_REGS)-1:0] dest_prf;
     logic [`XLEN-1:0] sw_data;
     logic                          is_lw;
     logic                          is_sw;
     logic [$clog2(`ROB_DEPTH)-1:0] rob_idx;
-    logic                         exception;
-    logic                         mispred;
+    logic                          exception;
+    logic                          mispred;
+    ADDR                           j_type_value;
+    logic                          is_jtype;
+    logic [2:0]                    funct3;
 } fu_resp_t;
 
 typedef struct packed {
@@ -511,6 +514,7 @@ typedef struct packed {
     MEM_BLOCK data;
     logic     issued;  //whether request was sent to dcache
     logic [$clog2(`PHYS_REGS)-1:0]disp_rd_new_prf;
+    logic [2:0] funct3;
 } lq_entry_t;
 
 
@@ -532,12 +536,15 @@ typedef struct packed {
     logic [$clog2(`PHYS_REGS)-1:0] dest_tag;      // destination physical reg tag
     logic [`XLEN-1:0]               src1_mux;
     logic [`XLEN-1:0]               src2_mux;
+    logic                          src1_valid;      // if src1_valid = 1 用rs1 ;  if src1_valid = 0 用imm
+    // logic [`XLEN-1:0]               src1_val;
     logic [`XLEN-1:0]               src1_val;      // actual operand value 1
     logic [`XLEN-1:0]               src2_val;      // actual operand value 2
     logic                           src2_valid;      // if src2_valid = 1 用rs2 ;  if src2_valid = 0 用imm
     logic [`XLEN-1:0]               imm;
     logic [$clog2(`ROB_DEPTH)-1:0] rob_idx;       // reorder buffer index
     DISP_PACKET                    disp_packet; //decoder_o 
+    // logic [2:0]                    funct3;
 } issue_packet_t;
 `endif // __SYS_DEFS_SVH__
 
