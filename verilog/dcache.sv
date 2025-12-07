@@ -373,6 +373,7 @@ module dcache (
             wfi_set   <= '0;
             wfi_way   <= '0;
             latency_counter <= '0;
+            send_wfi_to_mem <= '0;
         end else begin
             wfi_state <= wfi_state_next;
             wfi_bank <= wfi_bank_next;

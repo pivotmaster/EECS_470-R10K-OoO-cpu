@@ -42,7 +42,7 @@ module lsq_top #(
     // =====================================================
     output logic       wb_valid,
     output ROB_IDX     wb_rob_idx,
-    output logic [31:0]   wb_data, //TODO: only WORD level now
+    output DATA        wb_data, //TODO: only WORD level now
     output logic [2:0] funct3_o,
     output logic       wb_is_lw,
     output MEM_SIZE    wb_size,

@@ -12,7 +12,7 @@ module complete_stage #(
     // LSQ (only load instruction)
     input logic       wb_valid,
     input ROB_IDX     wb_rob_idx,
-    input logic [31:0]   wb_data, 
+    input DATA        wb_data, 
     input logic         wb_is_lw,
     input MEM_SIZE      wb_size,
     input logic [2:0]   funct3,

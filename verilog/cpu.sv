@@ -290,7 +290,7 @@ module cpu #(
 
     // mem output
     MEM_TAG   mem2proc_transaction_tag_dcache; // Memory tag for current transaction     
-    MEM_TAG   mem2proc_transaction_tag_icache;
+    // MEM_TAG   mem2proc_transaction_tag_icache;
     MEM_BLOCK mem2proc_data_dcache;            // Data coming back from memory
     MEM_TAG   mem2proc_data_tag_dcache;        // Tag for which transaction data is for
 // Issue
