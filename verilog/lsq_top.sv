@@ -42,7 +42,7 @@ module lsq_top #(
     // =====================================================
     output logic       wb_valid,
     output ROB_IDX     wb_rob_idx,
-    output logic [31:0]   wb_data, //TODO: only WORD level now
+    output DATA   wb_data, //TODO: only WORD level now
     output logic [2:0] funct3_o,
     output logic       wb_is_lw,
     output MEM_SIZE    wb_size,
@@ -182,8 +182,10 @@ module lsq_top #(
         end else if (dispatch_valid) begin
             pre_dispatch_rob <= dispatch_rob_idx;
         end
+        `ifndef SYNTHESIS
         // $display("dispatch_is_store=%b, dispatch_valid=%b, new_dispatch=%b, dispatch_rob_idx=%d, pre_dispatch_rob=%d", dispatch_is_store, dispatch_valid, new_dispatch, dispatch_rob_idx, pre_dispatch_rob);
         $display("sq_data_valid=%b | sq_data_rob_idx=%d | sq_data_addr=%h",sq_data_valid, sq_data_rob_idx, sq_data_addr);
+        `endif
     end
 
     // =====================================================
