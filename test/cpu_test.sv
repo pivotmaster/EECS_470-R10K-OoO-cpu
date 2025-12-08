@@ -379,9 +379,12 @@ module testbench;
     // end
 
     always_ff @(negedge clock) begin
-        if(clock_count > 1000000) begin
+        if(clock_count > 10000000) begin
             $display("forced finished");
             $finish;
+        end
+        if(clock_count % 10000 == 0) begin
+            $display("%d", clock_count);
         end
     end
 
