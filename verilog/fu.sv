@@ -58,7 +58,9 @@ module alu_fu #(
     resp_o.dest_prf  = req_i.dest_tag;
     resp_o.rob_idx   = req_i.rob_idx;
     resp_o.exception = 1'b0;
+    resp_o.cond_branch = 1'b0;
     resp_o.mispred   = 1'b0;
+    resp_o.taken     = 1'b0;
     resp_o.is_lw     = 1'b0;
     resp_o.is_sw     = 1'b0;
     resp_o.sw_data   = '0;
@@ -150,7 +152,9 @@ module mul_fu #(
         resp_o.dest_prf  = req_i_list[`MULT_STAGES-1].dest_tag;
         resp_o.rob_idx   = req_i_list[`MULT_STAGES-1].rob_idx;
         resp_o.exception = 1'b0;
+        resp_o.cond_branch = 1'b0;
         resp_o.mispred   = 1'b0;
+        resp_o.taken     = 1'b0;
         resp_o.is_lw     = 1'b0;
         resp_o.is_sw     = 1'b0;
         resp_o.sw_data   = '0;
@@ -183,7 +187,9 @@ module ls_fu #(
     resp_o.value     = addr;
     resp_o.rob_idx   = req_i.rob_idx;
     resp_o.exception = 1'b0;
+    resp_o.cond_branch = 1'b0;
     resp_o.mispred   = 1'b0;
+    resp_o.taken     = 1'b0;
     resp_o.j_type_value = '0;
     resp_o.is_jtype = '0;
     resp_o.funct3 = '0; // unsigned or signed
@@ -271,7 +277,14 @@ module branch_fu #(
     resp_o.dest_prf  = req_i.dest_tag;
     resp_o.rob_idx   = req_i.rob_idx;
     resp_o.exception = 1'b1; // TODO: is branch
-    resp_o.mispred   = take;
+    resp_o.cond_branch = req_i.disp_packet.cond_branch;
+    if (take) begin
+      resp_o.mispred   = ((take == req_i.disp_packet.pred) && (req_i.disp_packet.PRED_PC == resp_local_o.value)) ? 1'b0: 1'b1;
+    end else begin
+      resp_o.mispred   = (take == req_i.disp_packet.pred) ? 1'b0: 1'b1;
+    end
+    resp_o.taken     = take;
+    //resp_o.mispred   = take;
     resp_o.is_lw     = 1'b0;
     resp_o.is_sw     = 1'b0;
     resp_o.sw_data   = '0;
@@ -316,12 +329,21 @@ module fu #(
     output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0][$clog2(PHYS_REGS)-1:0] fu_dest_prf_o,
     output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0][$clog2(ROB_DEPTH)-1:0] fu_rob_idx_o,
     output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0]                    fu_exception_o,
+    output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0]                    fu_cond_branch_o,
     output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0]                    fu_mispred_o,
+    output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0]                    fu_taken_o,
     output ADDR  [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0]                    fu_jtype_value_o,               
     output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0]                    fu_is_jtype_o,
     output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0][2:0]               fu_funct3_o, //signed or unsigned
     output logic [ALU_COUNT+MUL_COUNT+LOAD_COUNT+BR_COUNT-1:0]                    fu_is_lw_o,
-    //FU -> LSQ
+    
+    // FU -> BP
+    output ADDR [BR_COUNT-1:0]                                                    br_pc_o,
+    output logic [BR_COUNT-1:0] [`HISTORY_BITS-1:0]                               br_history_o,
+    output logic [BR_COUNT-1:0]                                                   gshare_pred_o,
+    output logic [BR_COUNT-1:0]                                                   bi_pred_o,
+   
+   //FU -> LSQ
     output logic [LOAD_COUNT-1:0]                                               fu_ls_valid_o,
     output logic [LOAD_COUNT-1:0]             [$clog2(ROB_DEPTH)-1:0]           fu_ls_rob_idx_o,
     output ADDR [LOAD_COUNT-1:0]                                               fu_ls_addr_o,
@@ -342,6 +364,13 @@ module fu #(
         fu_ls_addr_o[j] = '0;
         fu_sw_data_o[j] = '0;
         fu_sw_funct3_o[j] = '0;
+    end
+
+    for (int i = 0; i < BR_COUNT; i++) begin
+      br_pc_o = br_req[i].disp_packet.PC;
+      br_history_o = br_req[i].disp_packet.bp_history;
+      gshare_pred_o = br_req[i].disp_packet.gshare_pred;
+      bi_pred_o = br_req[i].disp_packet.bi_pred;
     end
 
     // route fu_resp_bus to output to lsq 
@@ -430,7 +459,9 @@ module fu #(
       fu_dest_prf_o [k] = fu_resp_bus[k].dest_prf;
       fu_rob_idx_o  [k] = fu_resp_bus[k].rob_idx;
       fu_exception_o[k] = fu_resp_bus[k].exception;
+      fu_cond_branch_o[k] = fu_resp_bus[k].cond_branch;
       fu_mispred_o  [k] = fu_resp_bus[k].mispred;
+      fu_taken_o    [k] = fu_resp_bus[k].taken;
       fu_jtype_value_o[k] = fu_resp_bus[k].j_type_value; //addr
       fu_is_jtype_o[k]    = fu_resp_bus[k].is_jtype;
       fu_funct3_o[k]    = fu_resp_bus[k].funct3;
@@ -497,10 +528,7 @@ module fu #(
         end else begin
             fu_cycle_count <= fu_cycle_count + 1;
             dump_fu_state(fu_cycle_count);
-            $display("fu_ls_valid_o=%b | fu_ls_rob_idx_o=%d|fu_sw_data_o=%h", fu_ls_valid_o,fu_ls_rob_idx_o[0],fu_sw_data_o);
-
-                        
-
+            $display("fu_ls_valid_o=%b | fu_ls_rob_idx_o=%d|fu_sw_data_o=%h", fu_ls_valid_o,fu_ls_rob_idx_o[0],fu_sw_data_o);            
         end
     end
 

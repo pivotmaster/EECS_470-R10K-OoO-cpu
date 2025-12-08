@@ -19,17 +19,20 @@ module stage_if #(
     input logic                            reset,          // system reset
     input logic                            if_valid,       // only go to next PC when true (stall)
     input logic                            if_flush,   
-    input logic take_branch, //###    
+    //input logic take_branch, //###    
 
 
-    input logic [$clog2(`DISPATCH_WIDTH+1)-1:0] disp_n,
+    //input logic [$clog2(`DISPATCH_WIDTH+1)-1:0] disp_n,
     // =========================================================
     // Branch Predictor ->  Fetch (only first branch was computed!!)
     // =========================================================
-    input  logic                           pred_valid_i,     
-    input  logic [$clog2(FETCH_WIDTH)-1:0] pred_lane_i,      // which instruction is branch
-    input  logic                           pred_taken_i,     
-    input  logic [ADDR_WIDTH-1:0]          pred_target_i,    // predicted target PC Addr
+    //input  logic                           pred_valid_i,     
+    //input  logic [$clog2(FETCH_WIDTH)-1:0] pred_lane_i,      // which instruction is branch
+    input logic                    pred_taken_i,     
+    input logic [`FETCH_WIDTH-1:0] gshare_pred_taken_i,
+    input logic [`FETCH_WIDTH-1:0] bi_pred_taken_i,  
+    input logic [ADDR_WIDTH-1:0]   pred_target_i,    // predicted target PC Addr
+    input  logic [`FETCH_WIDTH-1:0] [`HISTORY_BITS-1:0] history_i,
 
     // =========================================================
     // Fetch <-> ICache / Mem (get instructions)
@@ -44,7 +47,7 @@ module stage_if #(
     // =========================================================
     // EXE -> Fetch (real branch result)
     // =========================================================
-    input logic [ADDR_WIDTH-1:0]           correct_pc_target_o, //exe stage will compute the correct target for branch instruction
+    input logic [ADDR_WIDTH-1:0]           correct_pc_target_i, //exe stage will compute the correct target for branch instruction
 
     // =========================================================
     // Fetch -> Dispatch 
@@ -73,13 +76,12 @@ module stage_if #(
     always_comb begin
         // default: hold
         PC_next = PC_reg;
-        if(take_branch) begin
-            PC_next = 32'h68;
-        end else if (if_flush) begin
-            PC_next = correct_pc_target_o;
-            // PC_next = 32'h68;
+        //if(take_branch) begin
+        //    PC_next = 32'h68;
+        if (if_flush) begin
+            PC_next = correct_pc_target_i;
         end else if (if_valid && !stall_fetch) begin
-            if (pred_valid_i && pred_taken_i) begin
+            if (pred_taken_i) begin
                 PC_next = pred_target_i;
                 `ifndef SYNTHESIS
                 $display("PC_next=%h", PC_next);
@@ -155,8 +157,10 @@ module stage_if #(
                 // TODO: for N-way, when one of the instructions miss, all instructions after it should be invalid?
                 if (reset || if_flush || !if_valid || !Icache_valid) begin
                     this_valid = 1'b0;
-                end else if (pred_valid_i && pred_taken_i) begin
-                    this_valid = (k <= pred_lane_i);
+                end else if (pred_taken_i) begin
+                    this_valid = 1'b1; //(k <= pred_lane_i);
+                // end else if (pred_valid_i && pred_taken_i) begin
+                //     this_valid = (k <= pred_lane_i);
                 end else begin
                     this_valid = 1'b1;
                 end
@@ -165,8 +169,13 @@ module stage_if #(
             // Packet output
             assign if_packet_o[k].PC    = this_pc;
             assign if_packet_o[k].NPC   = this_pc + 32'd4;
+            assign if_packet_o[k].PRED_PC = pred_target_i;
             assign if_packet_o[k].inst  = this_valid ? this_inst : `NOP;
             assign if_packet_o[k].valid = this_valid;
+            assign if_packet_o[k].pred = pred_taken_i;
+            assign if_packet_o[k].gshare_pred = gshare_pred_taken_i[k];
+            assign if_packet_o[k].bi_pred = bi_pred_taken_i[k];
+            assign if_packet_o[k].bp_history = history_i[k];
         end
     endgenerate
 `ifndef SYNTHESIS

@@ -75,43 +75,86 @@ module rs_single_entry #(
     // =========================================================
     // RS entry update
     // =========================================================
-    //update br tag
+
     always_comb begin
+        rs_entry_next   = rs_entry;
+        empty_next      = empty;
+        rs_busy_next    = rs_busy;
         br_mis_tag_next = br_mis_tag;
-        if (clear_br_tag_i && !empty) begin
-            br_mis_tag_next = 1'b0;
-        end else if (disp_enable_i && empty && rs_packets_i.valid )  begin
-            br_mis_tag_next = br_mis_tag_single_i;
-        end
-    end
 
-    // Update to RS entry 
-    always_comb begin : update_rs_entry
-        rs_entry_next = rs_entry;
-        empty_next    = empty;
-        rs_busy_next = rs_busy;
-
-        if (clear_wrong_instr_i && !empty && br_mis_tag && (rs_entry.disp_packet.fu_type!= FU_BRANCH)) begin // !empty = 有效指令
+        // 1. Flush Logic: If mispredict and the entry depends on the branch (br_mis_tag is set)
+        if (clear_wrong_instr_i && !empty && br_mis_tag && (rs_entry.disp_packet.fu_type != FU_BRANCH)) begin 
             empty_next    = 1'b1;
             rs_busy_next  = 1'b0;
-            rs_entry_next = '{default:'0}; 
-        end else if (disp_enable_i && empty &&rs_packets_i.valid ) begin
+            rs_entry_next = '0; 
+            
+        // 2. Dispatch Logic: Allocate new entry
+        end else if (disp_enable_i && empty && rs_packets_i.valid) begin
             rs_entry_next = rs_packets_i;
             empty_next    = 1'b0;
             rs_busy_next  = 1'b1; 
-        end else begin
+            br_mis_tag_next = br_mis_tag_single_i;
+            rs_entry_next.br_tag = br_mis_tag_single_i;
             
+            
+        // 3. Update/Hold Logic
+        end else begin
+            // FIXED: Only clear tag if the slot is actually occupied (!empty)
+            // FIXED: Must clear BOTH the struct field AND the control register (br_mis_tag_next)
+            if (clear_br_tag_i && !empty) begin
+                rs_entry_next.br_tag = 1'b0;
+                br_mis_tag_next      = 1'b0; // <--- ADDED THIS TO FIX THE BUG
+                // Do NOT force empty_next = 0 here; it is already handled by 'empty_next = empty' at top
+            end
+
             // CDB wake up
             rs_entry_next.src1_ready = rs_entry.src1_ready | src1_hit;
             rs_entry_next.src2_ready = rs_entry.src2_ready | src2_hit;
+            
             // Clear RS entry after issue
-            if ( issue_i&& ready_o) begin
+            if (issue_i && ready_o) begin
                 empty_next = 1'b1;
                 rs_busy_next = 1'b0;
             end
-            
         end
     end
+    //update br tag
+    // always_comb begin
+    //     br_mis_tag_next = br_mis_tag;
+    //     if (clear_br_tag_i && !empty) begin
+    //         br_mis_tag_next = 1'b0;
+    //     end else if (disp_enable_i && empty && rs_packets_i.valid )  begin
+    //         br_mis_tag_next = br_mis_tag_single_i;
+    //     end
+    // end
+
+    // Update to RS entry 
+    // always_comb begin : update_rs_entry
+    //     rs_entry_next = rs_entry;
+    //     empty_next    = empty;
+    //     rs_busy_next = rs_busy;
+
+    //     if (clear_wrong_instr_i && !empty && br_mis_tag && (rs_entry.disp_packet.fu_type!= FU_BRANCH)) begin // !empty = 有效指令
+    //         empty_next    = 1'b1;
+    //         rs_busy_next  = 1'b0;
+    //         rs_entry_next = '{default:'0}; 
+    //     end else if (disp_enable_i && empty &&rs_packets_i.valid ) begin
+    //         rs_entry_next = rs_packets_i;
+    //         empty_next    = 1'b0;
+    //         rs_busy_next  = 1'b1; 
+    //     end else begin
+            
+    //         // CDB wake up
+    //         rs_entry_next.src1_ready = rs_entry.src1_ready | src1_hit;
+    //         rs_entry_next.src2_ready = rs_entry.src2_ready | src2_hit;
+    //         // Clear RS entry after issue
+    //         if ( issue_i&& ready_o) begin
+    //             empty_next = 1'b1;
+    //             rs_busy_next = 1'b0;
+    //         end
+            
+    //     end
+    // end
 
     // Save the update to register
     always_ff @(posedge clock) begin : update

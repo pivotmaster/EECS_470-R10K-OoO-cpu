@@ -52,10 +52,26 @@
 `define CDB_SZ `N
 `define INST_W 16
 `define ADDR_WIDTH 32
-`define PHYS_REGS 64
+`define PHYS_REGS 64    //>= ROB+ARG
 `define ARCH_REGS 32
 `define XLEN 32
 `define OPCODE_N 7
+
+
+//BTB parameters
+`define BTB_SIZE 32
+`define BTB_INDEX_BITS $clog2(`BTB_SIZE)
+`define BTB_TAG_BITS 10
+`define BTB_VALUE_BITS 11
+
+//RAS parameters
+`define RAS_SIZE 32
+
+
+//GSHARE parameters
+`define GSHARE_SIZE 32
+`define HISTORY_BITS $clog2(`GSHARE_SIZE)
+
 
 // number of mult stages (2, 4) (you likely don't need 8)
 
@@ -332,10 +348,15 @@ endfunction
  * Data exchanged from the IF to the ID stage
  */
 typedef struct packed {
-    INST  inst;
-    ADDR  PC;
-    ADDR  NPC; // PC + 4
+    INST inst;
+    ADDR PC;
+    ADDR NPC; // PC + 4
+    ADDR PRED_PC;
     logic valid;
+    logic pred;
+    logic gshare_pred;
+    logic bi_pred;
+    logic [`HISTORY_BITS-1:0] bp_history;
 } IF_ID_PACKET;
 
 /**
@@ -428,6 +449,7 @@ typedef struct packed {
     INST inst; //INST.i.imm
     ADDR PC;
     ADDR NPC; // PC + 4
+    ADDR PRED_PC;
 
     //DATA rs1_value; // reg A value
     //DATA rs2_value; // reg B value
@@ -448,6 +470,10 @@ typedef struct packed {
     logic    [1:0]fu_type;
 
     logic    valid;
+    logic    pred;
+    logic   gshare_pred;
+    logic   bi_pred;
+    logic [`HISTORY_BITS-1:0] bp_history;
 } DISP_PACKET;
 
 typedef struct packed {
@@ -460,7 +486,7 @@ typedef struct packed {
     logic [$clog2(`PHYS_REGS)-1:0]  src2_tag;  // source reg 2
     logic                          src1_ready; // is value of source reg 1 ready?
     logic                          src2_ready; // is value of source reg 2 ready?
-    
+    logic                           br_tag;
     DISP_PACKET                   disp_packet; //decoder_o 
 } rs_entry_t;
 
@@ -480,12 +506,14 @@ typedef struct packed {
     logic [`XLEN-1:0] sw_data;
     logic                          is_lw;
     logic                          is_sw;
-    logic [$clog2(`ROB_DEPTH)-1:0] rob_idx;
-    logic                          exception;
-    logic                          mispred;
+    logic [$clog2(`ROB_DEPTH)-1:0] rob_idx; 
+    logic                         exception;    //is branch
+    logic                         cond_branch;
+    logic                         mispred;
+    logic                         taken; 
     ADDR                           j_type_value;
     logic                          is_jtype;
-    logic [2:0]                    funct3;
+    logic [2:0]                    funct3; 
 } fu_resp_t;
 
 typedef struct packed {

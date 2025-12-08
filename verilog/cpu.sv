@@ -86,7 +86,7 @@ module cpu #(
 
     // --- Wires for I-Cache <-> Main Memory ---
     MEM_COMMAND icache_to_mem_command; // Renamed from Imem_command
-    ADDR correct_pc_target_o;
+    ADDR correct_pc_target;
 
     // Outputs from IF-Stage and IF/ID Pipeline Register
     IF_ID_PACKET [`FETCH_WIDTH-1:0] if_packet, if_id_reg;
@@ -352,11 +352,19 @@ module cpu #(
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0][$clog2(`PHYS_REGS)-1:0] fu_dest_prf;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0][$clog2(`ROB_DEPTH)-1:0] fu_rob_idx;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_exception;
+    logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_cond_branch;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_mispred; 
+    logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_taken;
     ADDR [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0]  fu_jtype_value;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_is_jtype;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0][2:0] fu_funct3;
-    logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_is_lw;    
+    logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_is_lw;  
+
+    //FU -> Branch Predictor
+    ADDR [`BR_COUNT-1:0] br_pc;
+    logic [`BR_COUNT-1:0] [`HISTORY_BITS-1:0] br_history;
+    logic [`BR_COUNT-1:0] gshare_pred;
+    logic [`BR_COUNT-1:0] bi_pred;  
 
     //FU -> LSQ
     logic [`LOAD_COUNT-1:0] fu_ls_valid_o; 
@@ -371,11 +379,18 @@ module cpu #(
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0][$clog2(`PHYS_REGS)-1:0] fu_dest_prf_reg;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0][$clog2(`ROB_DEPTH)-1:0] fu_rob_idx_reg;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_exception_reg;
+    logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_cond_branch_reg;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_mispred_reg;
+    logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_taken_reg;
     ADDR [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0]  fu_jtype_value_reg;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_is_jtype_reg;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0][2:0] fu_funct3_reg;
     logic [`ALU_COUNT+`MUL_COUNT+`LOAD_COUNT+`BR_COUNT-1:0] fu_is_lw_reg;  
+
+    ADDR [`BR_COUNT-1:0] br_pc_reg;
+    logic [`BR_COUNT-1:0] [`HISTORY_BITS-1:0] br_history_reg;
+    logic [`BR_COUNT-1:0] gshare_pred_reg;
+    logic [`BR_COUNT-1:0]  bi_pred_reg;
 
     logic [`LOAD_COUNT-1:0] [`XLEN-1:0] fu_sw_data_o_reg; 
     logic [`LOAD_COUNT-1:0][2:0]        fu_sw_funct3_o_reg;
@@ -517,9 +532,11 @@ module cpu #(
     // assign stall_dcache = (Dmem_command != MEM_NONE) && (Imem_command != MEM_NONE);
     
     logic if_valid, if_flush,correct_predict;
-    logic pred_valid_i, pred_taken_i;
+    //logic pred_valid_i, pred_taken_i;
+    logic pred_taken;
     logic [$clog2(`FETCH_WIDTH)-1:0] pred_lane_i;   // which instruction is branch    
     ADDR pred_target_i; // predicted target PC Addr
+    ADDR [`FETCH_WIDTH-1:0] pred_pc;
 
 // ---------- Branch Stall ---------- 
     logic has_branch_in_pipline; // register (Store the branch info)
@@ -582,17 +599,25 @@ module cpu #(
     // assign if_valid = (cycle < 45) ? 1'b1 : 1'b0; //###
     // assign if_valid = 1'b1;
     //###TODO just predict first branch now
-    assign correct_pc_target_o = fu_value_reg[`FU_NUM - `FU_BRANCH];
+
+    logic [`FETCH_WIDTH-1:0] [`HISTORY_BITS-1:0] if_history;
+    logic ex_is_branch, ex_is_cond_branch, ex_branch_taken;
+
+    assign ex_is_branch = (wb_valid[`FU_NUM - `FU_BRANCH] & wb_exception[`FU_NUM - `FU_BRANCH]);
+    assign ex_is_cond_branch = (wb_valid[`FU_NUM - `FU_BRANCH] & fu_cond_branch_reg[`FU_NUM - `FU_BRANCH]);
+    assign ex_branch_taken = (wb_valid[`FU_NUM - `FU_BRANCH] & fu_taken_reg[`FU_NUM - `FU_BRANCH]);
+
+    assign correct_pc_target = (wb_valid[`FU_NUM - `FU_BRANCH] & fu_taken_reg[`FU_NUM - `FU_BRANCH]) ? fu_value_reg[`FU_NUM - `FU_BRANCH] : br_pc_reg+4 ; //fu_value_reg[`FU_NUM - `FU_BRANCH];
     assign correct_predict = (wb_valid[`FU_NUM - `FU_BRANCH] & !wb_mispred[`FU_NUM - `FU_BRANCH]); //###TODO: CORRECT PREDICT 
     assign if_flush = (wb_valid[`FU_NUM - `FU_BRANCH] & wb_mispred[`FU_NUM - `FU_BRANCH]); //### open flush
     // assign take_branch = wb_valid[3] & wb_mispred[3];
-    assign take_branch = 1'b0;
+        //assign take_branch = 1'b0;
     // assign if_flush = 1'b0; //### close flush
     // always @(posedge clock) begin
     //     $display("CPU. take_br, wb_valid, wb_mispred=%b %b %b", take_branch, wb_valid, wb_mispred);
     // end
-    assign pred_taken_i = 1'b0; //###
-    assign pred_valid_i = 1'b0; //###
+    //assign pred_taken_i = 1'b0; //###
+    //assign pred_valid_i = 1'b0; //###
 
     int cycle_count;
     always_ff @(posedge clock) begin
@@ -665,6 +690,8 @@ module cpu #(
     //                  IF-Stage                    //
     //                                              //
     //////////////////////////////////////////////////
+    logic [`FETCH_WIDTH-1:0] bi_pred_taken;
+    logic [`FETCH_WIDTH-1:0] gshare_pred_taken;
 
 
     stage_if #(
@@ -677,14 +704,17 @@ module cpu #(
         // Inputs
         .if_valid (if_valid),
         .if_flush (if_flush),  
-        .take_branch(take_branch),   
+        //.take_branch(take_branch),   
 
-        .disp_n(disp_n_fetch),  //todo
+        //.disp_n(disp_n_fetch),  //todo
 
-        .pred_valid_i(pred_valid_i),     
-        .pred_lane_i(pred_lane_i),      
-        .pred_taken_i(pred_taken_i),     
-        .pred_target_i(pred_target_i),    
+        //.pred_valid_i(pred_valid_i),     
+        //.pred_lane_i(pred_lane_i),      
+        .pred_taken_i(pred_taken),     
+        .gshare_pred_taken_i(gshare_pred_taken),
+        .bi_pred_taken_i(bi_pred_taken),
+        .pred_target_i(pred_pc),    
+        .history_i(if_history),
 
         // =========================================================
         // Fetch <-> ICache / Mem
@@ -698,7 +728,7 @@ module cpu #(
         // .Imem_command (Imem_command),  //### initially fetch -> mem so has this line (now control by icache)
         .Imem_addr (proc2Icache_addr), 
 
-        .correct_pc_target_o(correct_pc_target_o), 
+        .correct_pc_target_i(correct_pc_target), 
         .if_packet_o (if_packet)
     );
 
@@ -711,6 +741,49 @@ module cpu #(
 			if_valid_dbg[i] = if_packet[i].valid;
 		end
 	end
+
+    ADDR [`FETCH_WIDTH-1:0] if_pc;
+    INST [`FETCH_WIDTH-1:0] if_inst;
+    logic [`FETCH_WIDTH-1:0] if_valids;
+
+    always_comb begin
+        for(int i=0;i<`FETCH_WIDTH;i++)begin
+            if_pc[i] = if_packet[i].PC;
+            if_inst[i] = if_packet[i].inst;
+            if_valids[i] = if_packet[i].valid;
+        end
+    end
+
+    //////////////////////////////////////////////////
+    //                                              //
+    //              Branch Prediction               //
+    //                                              //
+    //////////////////////////////////////////////////
+
+    branch_predictor branch_predictor_0(
+        .clock(clock),
+        .reset(reset),
+        .if_pc_i(if_pc),
+        .inst_i(if_inst),
+        .if_valid_i(if_valids),
+
+        .ex_is_branch_i(ex_is_branch),
+        .ex_is_cond_branch_i(ex_is_cond_branch),
+        .ex_branch_taken_i(ex_branch_taken),
+        .ex_branch_pc_i(br_pc_reg),
+        .ex_target_pc_i(correct_pc_target),
+        .ex_history_i(br_history_reg),
+        .ex_gshare_pred_i(gshare_pred_reg),
+        .ex_bi_pred_i(bi_pred_reg),
+        .mispredict_i(if_flush),
+
+        .next_pc_o(pred_pc),
+        .take_branch(pred_taken),
+        .gshare_pred_taken(gshare_pred_taken),
+        .bi_pred_taken(bi_pred_taken),
+        .history_o(if_history)
+    );
+
 
     //////////////////////////////////////////////////
     //                                              //
@@ -728,12 +801,22 @@ module cpu #(
                 if_id_reg[i].valid <= `FALSE; //close this valid
                 if_id_reg[i].NPC   <= 0;
                 if_id_reg[i].PC    <= 0;
+                if_id_reg[i].PRED_PC <= 0;
+                if_id_reg[i].pred <= 0;
+                if_id_reg[i].gshare_pred <= 0;
+                if_id_reg[i].bi_pred <= 0;
+                if_id_reg[i].bp_history <= 0;
             end
         end else if (if_id_enable) begin
             for(int i=0;i<`FETCH_WIDTH;i++) begin
                 if_id_reg[i].inst <= if_packet[i].inst;
                 if_id_reg[i].NPC <= if_packet[i].NPC;
                 if_id_reg[i].PC <= if_packet[i].PC;
+                if_id_reg[i].PRED_PC <= if_packet[i].PRED_PC;
+                if_id_reg[i].pred <= if_packet[i].pred;
+                if_id_reg[i].gshare_pred <= if_packet[i].gshare_pred;
+                if_id_reg[i].bi_pred <= if_packet[i].bi_pred;
+                if_id_reg[i].bp_history <= if_packet[i].bp_history;
                 if(if_packet[i].inst == 0 || !(if_packet[i].valid) ) begin
                     if_id_reg[i].valid <= `FALSE;
                 end else begin
@@ -1452,11 +1535,18 @@ module cpu #(
         .fu_dest_prf_o(fu_dest_prf),
         .fu_rob_idx_o(fu_rob_idx),
         .fu_exception_o(fu_exception),
+        .fu_cond_branch_o(fu_cond_branch),
         .fu_mispred_o(fu_mispred),
+        .fu_taken_o(fu_taken),
         .fu_jtype_value_o(fu_jtype_value),
         .fu_is_jtype_o(fu_is_jtype),
         .fu_funct3_o(fu_funct3),
         .fu_is_lw_o(fu_is_lw),
+
+        .br_pc_o(br_pc),
+        .br_history_o(br_history),
+        .gshare_pred_o(gshare_pred),
+        .bi_pred_o(bi_pred),
 
         .fu_ls_valid_o(fu_ls_valid_o),
         .fu_ls_rob_idx_o(fu_ls_rob_idx_o),
@@ -1492,11 +1582,17 @@ module cpu #(
             fu_dest_prf_reg <= '0;
             fu_rob_idx_reg <= '0;
             fu_exception_reg <= '0;
+            fu_cond_branch_reg <= '0;
             fu_mispred_reg <= '0;
+            fu_taken_reg <= '0;
             fu_jtype_value_reg <= '0;
             fu_is_jtype_reg <= '0;
             fu_funct3_reg <= '0;
             fu_is_lw_reg <= '0;  
+            br_pc_reg <= '0;
+            br_history_reg <= '0;
+            gshare_pred_reg <= '0;
+            bi_pred_reg <= '0;
         end else begin
             fu_ls_valid_o_reg <= fu_ls_valid_o;
             fu_ls_rob_idx_o_reg <= fu_ls_rob_idx_o;
@@ -1511,11 +1607,17 @@ module cpu #(
             fu_dest_prf_reg <= fu_dest_prf;
             fu_rob_idx_reg <= fu_rob_idx;
             fu_exception_reg <= fu_exception;
+            fu_cond_branch_reg <= fu_cond_branch;
             fu_mispred_reg <= fu_mispred;
+            fu_taken_reg <= fu_taken;
             fu_jtype_value_reg <= fu_jtype_value;
             fu_is_jtype_reg <= fu_is_jtype;
             fu_funct3_reg <= fu_funct3;
             fu_is_lw_reg <= fu_is_lw;
+            br_pc_reg <= br_pc;
+            br_history_reg <= br_history;
+            gshare_pred_reg <= gshare_pred;
+            bi_pred_reg <= bi_pred;
             for(int i=0;i<`DISPATCH_WIDTH;i++) begin
                 ex_c_inst_dbg[i] <= s_ex_inst_dbg[i]; // debug output, just forwarded from ID
                 ex_c_reg[i] <= ex_packet[i];

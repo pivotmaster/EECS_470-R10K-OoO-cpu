@@ -174,9 +174,14 @@ logic clear_valid_by_stall;
             disp_packet_o[i].inst = if_packet_i[i].inst;
             disp_packet_o[i].PC = if_packet_i[i].PC;
             disp_packet_o[i].NPC = if_packet_i[i].NPC;
+            disp_packet_o[i].PRED_PC = if_packet_i[i].PRED_PC;
             disp_packet_o[i].valid = if_packet_i[i].valid;
             // disp_packet_o[i].valid = (clear_valid_by_stall ) ? '0 : if_packet_i[i].valid;
             disp_packet_o[i].dest_reg_idx = (disp_has_dest[i]) ? if_packet_i[i].inst.r.rd : `ZERO_REG;
+            disp_packet_o[i].pred = if_packet_i[i].pred;
+            disp_packet_o[i].gshare_pred = if_packet_i[i].gshare_pred;
+            disp_packet_o[i].bi_pred = if_packet_i[i].bi_pred;
+            disp_packet_o[i].bp_history = if_packet_i[i].bp_history;
             `ifndef SYNTHESIS
             $display("are your still work8?");
             `endif

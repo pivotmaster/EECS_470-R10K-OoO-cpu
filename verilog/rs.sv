@@ -93,7 +93,7 @@ module RS #(
     end
 
     always_comb begin 
-        if (branch_success_predict | br_mispredict_i) begin
+        if (branch_success_predict) begin
             clear_br_tag = 1'b1;
         end else begin
             clear_br_tag = 1'b0;
@@ -109,7 +109,7 @@ module RS #(
         end
     end
 
-    assign br_mis_tag_single = (br_mis_tag || br_mis_tag_next);
+    assign br_mis_tag_single = (br_mis_tag);// || br_mis_tag_next); //
     // =========================================================
     // Whole RS table
     // =========================================================

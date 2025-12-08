@@ -218,7 +218,15 @@ CPU_FILES = verilog/mult.sv \
 		   verilog/dcache.sv \
 		   verilog/sq.sv \
 		   verilog/lq.sv \
-		   verilog/lsq_top.sv
+		   verilog/lsq_top.sv \
+		   verilog/branch_predictor.sv \
+		   verilog/btb.sv \
+		   verilog/gshare.sv \
+		   verilog/ras.sv \
+		   verilog/psel_gen.sv \
+		   verilog/pre_decode.sv \
+		   verilog/bimodal.sv \
+		   verilog/predictor_selector.sv
 
 
 
