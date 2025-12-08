@@ -140,8 +140,25 @@ module sq #(
     // assign dc_req_cmd   = MEM_STORE;
     // assign dc_req_data  = sq[head].data;
 
-  assign count = (head > tail) ? (SQ_SIZE - head + tail) : (tail - head);
+  // assign count = (head > tail) ? (SQ_SIZE - head + tail) : (tail - head);
 
+logic sq_all_valid;
+  always_comb begin
+    sq_all_valid = 1'b1;
+    for(int i = 0; i < SQ_SIZE; i++) begin
+      if(sq[i].valid == 1'b0) begin
+        sq_all_valid = 1'b0;
+      end
+    end
+  end
+  always_comb begin
+    if(head == tail) begin
+      count = sq_all_valid ? SQ_SIZE : 0;
+    end else begin
+      count = (head > tail) ? (SQ_SIZE - head + tail) : (tail - head);
+    end
+  end
+  
   always_ff @(posedge clock)begin
     logic do_enq, do_deq;
     if(reset)begin
