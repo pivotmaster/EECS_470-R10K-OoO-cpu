@@ -189,8 +189,10 @@ module dcache (
     // here 0/1 means banks
     genvar w;
     for (w = 0; w < CACHE_WAYS; w++) begin
-        assign write_en_0[w] = cache_write_en_hit_0[w] | cache_write_en_refill_0[w];
-        assign write_en_1[w] = cache_write_en_hit_1[w] | cache_write_en_refill_1[w];
+        assign write_en_0[w] = (!halt_by_wfi) ? cache_write_en_hit_0[w] | cache_write_en_refill_0[w] : '0;
+        assign write_en_1[w] = (!halt_by_wfi) ? cache_write_en_hit_1[w] | cache_write_en_refill_1[w] : '0;
+        // assign write_en_0[w] = cache_write_en_hit_0[w] | cache_write_en_refill_0[w];
+        // assign write_en_1[w] = cache_write_en_hit_1[w] | cache_write_en_refill_1[w];
     end
 
     // assign cache_write_addr_0 =
@@ -971,6 +973,7 @@ module dcache (
             wb_mem_addr <= '0;
             wb_mem_size <= DOUBLE;
         end
+        $display("wb_valid=%d | wb_addr=%d | wb_data =%d | wb_size=%d",wb_mem_valid,wb_mem_addr,wb_mem_data,wb_mem_size);
     end
 
     // ---------- Send signal to the memory ------------------
