@@ -186,6 +186,26 @@ logic sq_all_valid;
         `endif
         tail <= snapshot_tail_i;
 
+          if (head <= snapshot_tail_i) begin
+              for(int i = 0; i < SQ_SIZE; i++) begin
+                  if ((i >= 0 && i < head) || (i >= snapshot_tail_i)) begin
+                    sq[i].valid <= 1'b0;
+                    sq[i].data_valid <= 1'b0;
+                    sq[i].commited <= 1'b0;
+                    sq[i].addr_valid <= 1'b0;
+                  end
+              end
+          end else begin
+              for(int i = 0; i < SQ_SIZE; i++) begin
+                  if (i >= snapshot_tail_i && i < head) begin
+                    sq[i].valid <= 1'b0;
+                    sq[i].data_valid <= 1'b0;
+                    sq[i].commited <= 1'b0;
+                    sq[i].addr_valid <= 1'b0;
+                  end
+              end
+          end
+
         if (head == snapshot_tail_i) begin
           sq[head].valid <= 1'b0;
           sq[head].data_valid <= 1'b0;
