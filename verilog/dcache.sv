@@ -375,7 +375,6 @@ module dcache (
             wfi_set   <= '0;
             wfi_way   <= '0;
             latency_counter <= '0;
-            send_wfi_to_mem <= '0;
         end else begin
             wfi_state <= wfi_state_next;
             wfi_bank <= wfi_bank_next;
@@ -462,9 +461,8 @@ module dcache (
                 DOUBLE:  Dcache_data_out_1.dbbl_level = (req_1_to_bank_0) ? line_data_0.dbbl_level : line_data_1.dbbl_level;
                 default: Dcache_data_out_1.dbbl_level = (req_1_to_bank_0) ? line_data_0.dbbl_level : line_data_1.dbbl_level;
             endcase
-            `ifndef SYNTHESIS
-            $display("[DCACHE] load_cache_hit_1=%h Dcache_req_rob_idx_1=%h mem2proc_data_tag=%h mshr[refill_mshr_id].mem_tag=%h mshr[refill_mshr_id].port_id=%h mshr[refill_mshr_id].rob_idx=%h", load_cache_hit_1, Dcache_req_rob_idx_1, mem2proc_data_tag, mshr[refill_mshr_id].mem_tag, mshr[refill_mshr_id].port_id, mshr[refill_mshr_id].rob_idx);
-            `endif
+        $display("[DCACHE] load_cache_hit_1=%h Dcache_req_rob_idx_1=%h mem2proc_data_tag=%h mshr[refill_mshr_id].mem_tag=%h mshr[refill_mshr_id].port_id=%h mshr[refill_mshr_id].rob_idx=%h", load_cache_hit_1, Dcache_req_rob_idx_1, mem2proc_data_tag, mshr[refill_mshr_id].mem_tag, mshr[refill_mshr_id].port_id, mshr[refill_mshr_id].rob_idx);
+
         // Data from memory refill_mshr_id
         end else if ((mem2proc_data_tag == mshr[refill_mshr_id].mem_tag) && mshr[refill_mshr_id].valid && mshr[refill_mshr_id].command == MEM_STORE) begin
             Dcache_data_rob_idx_0 = (mshr[refill_mshr_id].port_id == 0) ? mshr[refill_mshr_id].rob_idx: '0;
@@ -575,12 +573,23 @@ module dcache (
     logic [$clog2(CACHE_WAYS)-1:0] replace_way_0, replace_way_1;
     logic mshr_hit_0, mshr_hit_1;
     logic mshr_found;
+    logic send_evict_to_mem;
 
     assign miss_0       = req_0_accept && !cache_hit_0; //req_0_accept contains !mem_none
     assign miss_1       = req_1_accept && !cache_hit_1;
-    assign send_miss_0  = miss_0;
-    assign send_miss_1  = !miss_0 && miss_1;  // request_0 go first
+    assign send_miss_0  = miss_0 && !send_evict_to_mem && !mshr_hit_0 && mshr_found; // if both miss, request 0 go first
+    assign send_miss_1  = !miss_0 && miss_1 && !send_evict_to_mem && !mshr_hit_1 && mshr_found;  // request_0 go first
     assign has_req_to_mem = (send_miss_0 || send_miss_1);
+
+    always_ff @(posedge clock) begin
+        if (reset) begin
+            send_evict_to_mem <= 1'b0;
+        end else if (has_req_to_mem) begin
+            send_evict_to_mem <= 1'b1;
+        end else begin 
+            send_evict_to_mem <= 1'b0;
+        end
+    end
 
     // Block normal operations during WFI flush
     assign Dcache_req_1_accept = (wfi_state == WFI_IDLE) && req_1_accept && !(miss_0 && miss_1) && !mshr_hit_1 && (cache_hit_1 || mshr_found); // if request 0 and 1 both miss, give up request 1
@@ -729,7 +738,6 @@ module dcache (
         end
     end
 
-    assign send_new_mem_req = (has_req_to_mem && mshr_found && !mshr_hit_0 && !mshr_hit_1);
 
     // Find refill MSHR id (when data tag comes back from memory)
     //### Handle the case that transaction tag and data tag come back at the same cycle ###//
@@ -790,7 +798,7 @@ module dcache (
             end
         end else begin
             // ---------- Record #MSHR that was used & Allocate to the MSHR ---------- 
-            if (send_new_mem_req && !pending_req_to_mem) begin
+            if (has_req_to_mem && (send_miss_1 || send_miss_0)) begin
                 // Record #MSHR
                 pending_mshr_id <= free_mshr_idx;
                 pending_req_to_mem <= 0;
@@ -842,23 +850,19 @@ module dcache (
                     cache_valid[bank_1][index_1][hit_way_1] <= 1'b1;
                     cache_tags [bank_1][index_1][hit_way_1] <= tag_1;
                 end else if (send_miss_1) begin 
-                    `ifndef SYNTHESIS
                     $display("tag=%d | data = %d", tag_1, Dcache_store_data_1);
                     $display("bank_1=%d | index_1 = %d |replace_way_1=%d ", bank_1, index_1,replace_way_1);
-                    `endif
                     cache_dirty[bank_1][index_1][replace_way_1] <= 1'b1;
                     cache_valid[bank_1][index_1][replace_way_1] <= 1'b1;
                     cache_tags [bank_1][index_1][replace_way_1] <= tag_1;
                 end               
             end
         end
-        `ifndef SYNTHESIS
         for (int b = 0; b < BANKS; b++) begin
             for (int s = 0; s < SETS_PER_BANK; s++) begin
                 $display("dirty[%b][%d]=%b",b,s,cache_dirty[b][s]);
             end
         end
-        `endif
     end
 
     //  Get Result from memory => update cache data with received data
@@ -901,7 +905,7 @@ module dcache (
 
     // only port 1 support store
     always_comb begin
-        if (store_cache_hit_0)  begin
+        if (store_cache_hit_0 && !mshr_hit_0)  begin
             Dcache_store_valid_0 = 1'b1;
         end else if ((mem2proc_data_tag == mshr[refill_mshr_id].mem_tag || transaction_data_tag_the_same_time) && mshr[refill_mshr_id].valid && mshr[refill_mshr_id].command == MEM_STORE && mshr[refill_mshr_id].port_id == 1'b0) begin
             Dcache_store_valid_0 = 1'b1;
@@ -909,7 +913,7 @@ module dcache (
             Dcache_store_valid_0 = 1'b0;
         end
 
-        if (store_cache_hit_1)  begin
+        if (store_cache_hit_1 && !mshr_hit_1 && Dcache_req_1_accept)  begin
             Dcache_store_valid_1 = 1'b1;
             Dcache_data_rob_idx_1 = Dcache_req_rob_idx_1;
         end else if ((mem2proc_data_tag == mshr[refill_mshr_id].mem_tag || transaction_data_tag_the_same_time) && mshr[refill_mshr_id].valid && mshr[refill_mshr_id].command == MEM_STORE && mshr[refill_mshr_id].port_id == 1'b1) begin
@@ -938,8 +942,8 @@ module dcache (
         victim_bank  = '0;
         victim_way   = '0;
         wb_mem_read_en = '0;
-
-        if (send_new_mem_req) begin
+        $display("test");
+        if (has_req_to_mem) begin
             wb_mem_read_en = 1'b1;
             if (send_miss_0) begin
                 victim_index = index_0;
@@ -961,7 +965,7 @@ module dcache (
             wb_mem_data <= '0;
             wb_mem_addr <= '0;
             wb_mem_size <= DOUBLE;
-        end else if (send_new_mem_req) begin
+        end else if (has_req_to_mem) begin
             wb_mem_size <= (send_miss_0) ? Dcache_size_0 : Dcache_size_1;
             wb_mem_addr <= {victim_tag, victim_index, victim_bank, {OFFSET_BITS{1'b0}}};
 
@@ -979,9 +983,7 @@ module dcache (
             wb_mem_addr <= '0;
             wb_mem_size <= DOUBLE;
         end
-        `ifndef SYNTHESIS
         $display("wb_valid=%d | wb_addr=%d | wb_data =%d | wb_size=%d",wb_mem_valid,wb_mem_addr,wb_mem_data,wb_mem_size);
-        `endif
     end
 
     // ---------- Send signal to the memory ------------------
@@ -1001,7 +1003,7 @@ module dcache (
         end 
         // Normal cache miss - load from memory
         // todo: might happend at the same cycle need to fix
-        else if (send_new_mem_req) begin
+        else if (has_req_to_mem) begin
             Dcache2mem_command = MEM_LOAD;
             Dcache2mem_size    = DOUBLE;    
             Dcache2mem_data = '0; 
@@ -1103,8 +1105,8 @@ task automatic show_status();
     $display("== Bank / Cache Control ===========================================");
     $display("[BANK] req_to_bank = {req0->b0,b1, req1->b0,b1} = %b%b%b%b",
              req_0_to_bank_0, req_0_to_bank_1, req_1_to_bank_0, req_1_to_bank_1);
-    $display("[BANK] has_req_to_mem=%b  send_miss_0=%b  send_miss_1=%b",
-             has_req_to_mem, send_miss_0, send_miss_1);
+    $display("[BANK] has_req_to_mem=%b  send_miss_0=%b  send_miss_1=%b  send_evict_to_mem=%b",
+             has_req_to_mem, send_miss_0, send_miss_1, send_evict_to_mem);
 
     // read path
     $display("[READ]  en={b0,b1} = %b %b  addr={b0,b1} = %d %d",
@@ -1189,7 +1191,7 @@ endtask
 
 always_ff @(posedge clock) begin
     if (!reset) begin
-        show_status();
+        //show_status();
     end
 end
 `endif

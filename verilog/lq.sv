@@ -50,7 +50,7 @@ module lq #(
 
     output logic       wb_valid,
     output ROB_IDX     wb_rob_idx,
-    output DATA   wb_data, //TODO: only WORD level now
+    output MEM_BLOCK   wb_data, //TODO: only WORD level now
     output logic [2:0]       funct3_o,
     output logic       wb_is_lw,
     output MEM_SIZE     wb_size,
@@ -368,9 +368,7 @@ module lq #(
                 lq[i].rob_idx <= '0;
                 lq[i].data <= '0;
                 lq[i].disp_rd_new_prf <= '0;
-                lq[i].funct3 <= '0;
             end
-            funct3_o <= '0;
         end else begin
             checkpoint_valid_o <= checkpoint_valid_next;
             wb_valid <= 1'b0; 

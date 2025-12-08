@@ -221,6 +221,7 @@ module RS #(
     $display("===================================================================");
     $display("                            RS ENTRY                               ");
     $display("===================================================================");
+    $display("clear_br_tag_i = %0b, br_mis_tag_single = %b has branch=%b branch_success_predict=%b | br_mispredict_i=%b | clear_br_tag=%b", clear_br_tag, br_mis_tag_single, (rs_packets_i[0].disp_packet.fu_type == FU_BRANCH && rs_packets_i[0].valid),branch_success_predict , br_mispredict_i,clear_br_tag );
     for (int i = 0; i < RS_DEPTH; i++) begin
         if (!rs_empty[i]) begin
         $display("Entry %0d: PC=%0h, br_tag=%b, i_imm = %0h, u_imm =%0h, opb_select=%0d, ready=%b, valid=%b, alu_func=%0d, rob_idx=%0d, fu_type=%0d, dest_reg_idx=%0d, dest_tag=%0d, src1_tag=%0d(%b), src2_tag=%0d(%b)", 

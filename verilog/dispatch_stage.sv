@@ -116,6 +116,7 @@ module dispatch_stage #(
 logic [DISPATCH_WIDTH-1:0] disp_has_dest;
 logic [DISPATCH_WIDTH-1:0] disp_rd_wen_o;
 logic [$clog2(DISPATCH_WIDTH+1)-1:0] total_valid_instr;
+logic clear_valid_by_stall;
 
     //### 11/10 sychenn ###// (for map table restore)
     always_comb begin
@@ -123,6 +124,17 @@ logic [$clog2(DISPATCH_WIDTH+1)-1:0] total_valid_instr;
           //### TODO: Fetch width need to be smaller then dispatch width ###//
             is_branch_o[i] = disp_packet_o[i].valid && (disp_packet_o[i].cond_branch || disp_packet_o[i].uncond_branch);
         end
+    end
+
+    always_ff @(posedge clock) begin
+      if (!reset) begin
+        clear_valid_by_stall <= 1;
+        if (!stall) begin
+          clear_valid_by_stall <= 0;
+        end else if (stall) begin
+          clear_valid_by_stall <= 1;
+        end
+      end
     end
 
     assign stall = (disp_n < `N);
@@ -163,7 +175,9 @@ logic [$clog2(DISPATCH_WIDTH+1)-1:0] total_valid_instr;
             disp_packet_o[i].PC = if_packet_i[i].PC;
             disp_packet_o[i].NPC = if_packet_i[i].NPC;
             disp_packet_o[i].valid = if_packet_i[i].valid;
+            // disp_packet_o[i].valid = (clear_valid_by_stall ) ? '0 : if_packet_i[i].valid;
             disp_packet_o[i].dest_reg_idx = (disp_has_dest[i]) ? if_packet_i[i].inst.r.rd : `ZERO_REG;
+            $display("are your still work8?");
         end
     end
 

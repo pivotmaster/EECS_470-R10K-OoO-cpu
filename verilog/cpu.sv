@@ -291,7 +291,7 @@ module cpu #(
 
     // mem output
     MEM_TAG   mem2proc_transaction_tag_dcache; // Memory tag for current transaction     
-    // MEM_TAG   mem2proc_transaction_tag_icache;
+    MEM_TAG   mem2proc_transaction_tag_icache;
     MEM_BLOCK mem2proc_data_dcache;            // Data coming back from memory
     MEM_TAG   mem2proc_data_tag_dcache;        // Tag for which transaction data is for
 // Issue
@@ -535,9 +535,9 @@ module cpu #(
             if (branch_resolve && has_branch_in_pipline) begin
                 has_branch_in_pipline <= '0;
                 branch_stall_reg <= '0;
-            end else if (|is_branch && !has_branch_in_pipline) begin
+            end else if (|is_branch && !has_branch_in_pipline && !stall) begin
                 has_branch_in_pipline <= 1;
-            end else if (branch_stall_next) begin
+            end else if (branch_stall_next && !stall) begin
                 branch_stall_reg <= 1;
             end
         end
@@ -734,7 +734,7 @@ module cpu #(
                 if_id_reg[i].inst <= if_packet[i].inst;
                 if_id_reg[i].NPC <= if_packet[i].NPC;
                 if_id_reg[i].PC <= if_packet[i].PC;
-                if(if_packet[i].inst == 0 || !(if_packet[i].valid)) begin
+                if(if_packet[i].inst == 0 || !(if_packet[i].valid) ) begin
                     if_id_reg[i].valid <= `FALSE;
                 end else begin
                     if_id_reg[i].valid <= `TRUE;
@@ -1006,8 +1006,10 @@ module cpu #(
             end else if (has_snapshot) begin
                 for(int i =0 ; i < `ARCH_REGS ; i++)begin
                     // wb ready for the same phy reg in snapshot
-                    if ((snapshot_reg[i].phys == prf_waddr) && (prf_wr_en))begin
-                        snapshot_reg[i].valid <= 1'b1;
+                    for (int j = 0; j < `WB_WIDTH ; j++) begin
+                        if ((snapshot_reg[i].phys == prf_waddr[j]) && (prf_wr_en[j])) begin
+                            snapshot_reg[i].valid <= 1'b1;
+                        end
                     end
                 end           
             end
@@ -1413,9 +1415,7 @@ module cpu #(
             br_req_reg[i].src2_val =  br_req_reg_org[i].src2_valid ? rdata[7 + i*8]: br_req_reg_org[i].src2_val;
             br_req_reg[i].src1_mux = rdata[6 + i*8];
             br_req_reg[i].src2_mux = rdata[7 + i*8];
-            `ifndef SYNTHESIS
             $display("[Real Value @ %t]br_req_reg_org[i].src2_valid = %b,br_req_reg[i].src1_mux=%d, br_req_reg[i].src2_mux= %d" ,$time, br_req_reg_org[i].src2_valid, br_req_reg[i].src1_mux,br_req_reg[i].src2_mux);
-            `endif
         end
     end
     
@@ -1501,9 +1501,7 @@ module cpu #(
             fu_ls_addr_o_reg <= fu_ls_addr_o;
             fu_sw_data_o_reg <= fu_sw_data_o; // for store instr
             fu_sw_funct3_o_reg <= fu_sw_funct3_o;
-            `ifndef SYNTHESIS
             $display("fu_sw_funct3_o_reg=%b",fu_sw_funct3_o_reg);
-            `endif
             fu_valid_reg <= fu_valid;
             fu_value_reg <= fu_value;
             fu_dest_prf_reg <= fu_dest_prf;

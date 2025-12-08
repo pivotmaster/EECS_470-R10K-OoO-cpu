@@ -59,6 +59,8 @@ module rs_single_entry #(
     // When cdb tag arrive => pull up ready at the same cycle (comb) & store src1_ready at the next cycle (reg).
     // This let [CDB wakeup & RS receive tag] at the same cycle
     // =========================================================
+    
+
     always_comb begin: cdb
         src1_hit = 1'b0;
         src2_hit = 1'b0;
@@ -73,12 +75,21 @@ module rs_single_entry #(
     // =========================================================
     // RS entry update
     // =========================================================
+    //update br tag
+    always_comb begin
+        br_mis_tag_next = br_mis_tag;
+        if (clear_br_tag_i && !empty) begin
+            br_mis_tag_next = 1'b0;
+        end else if (disp_enable_i && empty && rs_packets_i.valid )  begin
+            br_mis_tag_next = br_mis_tag_single_i;
+        end
+    end
+
     // Update to RS entry 
     always_comb begin : update_rs_entry
         rs_entry_next = rs_entry;
         empty_next    = empty;
         rs_busy_next = rs_busy;
-        br_mis_tag_next = br_mis_tag;
 
         if (clear_wrong_instr_i && !empty && br_mis_tag && (rs_entry.disp_packet.fu_type!= FU_BRANCH)) begin // !empty = 有效指令
             empty_next    = 1'b1;
@@ -88,7 +99,6 @@ module rs_single_entry #(
             rs_entry_next = rs_packets_i;
             empty_next    = 1'b0;
             rs_busy_next  = 1'b1; 
-            br_mis_tag_next = br_mis_tag_single_i;
         end else begin
             
             // CDB wake up
