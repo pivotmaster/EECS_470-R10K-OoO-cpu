@@ -381,8 +381,8 @@ module lsq_top #(
     assign Dcache_command_1    = sq_req_valid ? sq_req_cmd : MEM_NONE;
     
     assign Dcache_addr_1       = sq_req_addr;
-    // assign Dcache_size_1       = sq_req_size;
-    assign Dcache_size_1       = WORD;
+    assign Dcache_size_1       = sq_req_size;
+    // assign Dcache_size_1       = WORD;
     assign Dcache_store_data_1 = sq_req_data;
     assign Dcache_req_rob_idx_1      = sq_req_rob_idx; //TODO    
     // 將 Cache 的 Accept 回傳給 SQ

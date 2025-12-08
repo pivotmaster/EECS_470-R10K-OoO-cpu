@@ -82,10 +82,10 @@ module RS #(
 
     always_comb begin
         for (int i = 0; i < DISPATCH_WIDTH; i++) begin
-            if (rs_packets_i[i].disp_packet.fu_type == FU_BRANCH && rs_packets_i[i].valid) begin
-                br_mis_tag_next = 1'b1;
-            end else if (branch_success_predict | br_mispredict_i) begin
+            if (clear_br_tag) begin
                 br_mis_tag_next = 1'b0;
+            end else if (rs_packets_i[i].disp_packet.fu_type == FU_BRANCH && rs_packets_i[i].valid) begin
+                br_mis_tag_next = 1'b1;
             end else begin
                 br_mis_tag_next = br_mis_tag;
             end

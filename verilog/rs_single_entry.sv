@@ -80,7 +80,7 @@ module rs_single_entry #(
         br_mis_tag_next = br_mis_tag;
         if (clear_br_tag_i && !empty) begin
             br_mis_tag_next = 1'b0;
-        end else if (disp_enable_i && empty && rs_packets_i.valid )  begin
+        end else if (disp_enable_i && empty && rs_packets_i.valid ) begin
             br_mis_tag_next = br_mis_tag_single_i;
         end
     end

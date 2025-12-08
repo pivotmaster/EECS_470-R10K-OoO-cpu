@@ -543,7 +543,7 @@ module cpu #(
         end
     end
 
-    assign branch_stall_next = (|is_branch && has_branch_in_pipline && !branch_resolve);
+    assign branch_stall_next = (|is_branch  && !stall && has_branch_in_pipline && !branch_resolve);
     assign branch_stall = branch_stall_reg || branch_stall_next;
     // assign branch_stall = 0;
     assign branch_resolve = wb_valid[`FU_NUM - `FU_BRANCH]; // no matter it is mispredict or not
