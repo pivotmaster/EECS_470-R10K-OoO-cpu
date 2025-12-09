@@ -222,41 +222,6 @@ module lq #(
         $display("{%t} stall_older_store_unknown = %0b", $time, stall_older_store_unknown);
         `endif
 
-        // Only issue request if:
-        // 1. We found a candidate (found_unissued)
-        // 2. SQ is NOT saying "Wait, I have data pending" (sq_fwd_pending)
-        // 3. SQ is NOT immediately providing data (sq_forward_valid) -> optimization
-
-    //    // send load signal logic 
-    //     if (!stall_older_store_unknown) begin
-    //         // forward data from store -> load
-            
-    //     end else if (!stall_older_store_unknown && found_unissued && !has_same_addr && !sq_fwd_pending && !sq_forward_valid) begin
-    //         // to dcache    
-    //         dc_req_valid = 1'b1;
-    //         dc_req_addr  = sq_query_addr; // Same as lq[query_idx].addr
-    //         dc_req_size  = sq_query_size;
-    //         dc_req_tag   = query_idx;
-    //         dc_rob_idx = rob_idx_to_dcache;
-    //     end
-
-
-        // if (!stall_older_store_unknown ) => bypass
-        // if (found_unissued && !stall_older_store_unknown && !sq_fwd_pending && !sq_forward_valid) begin
-        //     if  (sq_forward_valid) begin
-        //         $display("sq_forward_valid = %0b" ,sq_forward_valid);
-        //         dc_req_valid = 1'b0;
-        //     end else begin
-        //     //### Here sent request to dcache 
-        //         dc_req_valid = 1'b1;
-        //         dc_req_addr  = sq_query_addr; // Same as lq[query_idx].addr
-        //         dc_req_size  = sq_query_size;
-        //         dc_req_tag   = query_idx;
-        //         dc_rob_idx = rob_idx_to_dcache;
-        //         $display("dc_req_valid: %0b , dc_req_addr: %0h ,dc_req_size: %0d, dc_req_tag:%0d " ,dc_req_valid,dc_req_addr,dc_req_size, dc_req_tag);
-        //     end
-        // end
-
         if(found_unissued && !stall_older_store_unknown)begin
             int k;
             int i;
@@ -286,7 +251,7 @@ module lq #(
                             `ifndef SYNTHESIS
                             $display("[RTL-SQ-FWD] Overlap at idx=%0d. DataValid=%b. Data=%h", i, sq_view_i[i].data_valid, sq_view_i[i].data);
                             `endif
-                            if(sq_view_i[i].data_valid && is_older(sq_view_i[i].rob_idx, lq[query_idx].rob_idx, rob_head))begin
+                            if(sq_view_i[i].data_valid && (is_older(sq_view_i[i].rob_idx, lq[query_idx].rob_idx, rob_head) ||sq_view_i[i].commited)) begin
                                 fwd_found = 1'b1;
                                 // pending_found = 1'b0;
                                 fwd_data = sq_view_i[i].data;

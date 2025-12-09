@@ -178,7 +178,7 @@ logic clear_valid_by_stall;
             // disp_packet_o[i].valid = (clear_valid_by_stall ) ? '0 : if_packet_i[i].valid;
             disp_packet_o[i].dest_reg_idx = (disp_has_dest[i]) ? if_packet_i[i].inst.r.rd : `ZERO_REG;
             `ifndef SYNTHESIS
-            $display("are your still work1?");
+            $display("are your still work2?");
             `endif
         end
     end
