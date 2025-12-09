@@ -1201,7 +1201,7 @@ endtask
 
 always_ff @(posedge clock) begin
     if (!reset) begin
-        //show_status();
+        show_status();
     end
 end
 `endif

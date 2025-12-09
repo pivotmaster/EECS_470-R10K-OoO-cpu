@@ -36,6 +36,7 @@ module branch_predictor (
     ADDR link_pc, return_pc;
     logic [`FETCH_WIDTH-1:0] jump_psel_gnt, jump_back_psel_gnt, branch_psel_gnt;
     logic push, pop;
+    logic ras_empty;
 
     //BTB signals
     logic [`FETCH_WIDTH-1:0] btb_hit;
@@ -94,7 +95,7 @@ module branch_predictor (
         for (int i = 0; i < `FETCH_WIDTH; i++) begin
             next_pc_o[i] = if_pc_i[i] + 4;
 
-            if (jump_back_psel_gnt[i]) begin
+            if (jump_back_psel_gnt[i] && ! ras_empty) begin
                 next_pc_o[i] = return_pc;
             end else if (btb_hit[i] && (pred_taken[i] | jump_psel_gnt[i])) begin             
                 next_pc_o[i] = pred_pc[i];
@@ -192,7 +193,8 @@ module branch_predictor (
         .pc_in(link_pc),
         .push(push),
         .pop(pop),
-        .return_pc_o(return_pc)
+        .return_pc_o(return_pc),
+        .empty_o(ras_empty)
     );
 
     for (genvar i = 0; i < `FETCH_WIDTH; i++) begin : pre_decoders

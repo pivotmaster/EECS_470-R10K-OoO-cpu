@@ -291,7 +291,7 @@ module cpu #(
 
     // mem output
     MEM_TAG   mem2proc_transaction_tag_dcache; // Memory tag for current transaction     
-    // MEM_TAG   mem2proc_transaction_tag_icache;
+    MEM_TAG   mem2proc_transaction_tag_icache;
     MEM_BLOCK mem2proc_data_dcache;            // Data coming back from memory
     MEM_TAG   mem2proc_data_tag_dcache;        // Tag for which transaction data is for
 // Issue
@@ -543,14 +543,14 @@ module cpu #(
     logic branch_stall, branch_stall_reg, branch_stall_next;   // branch_stall_next is to let stall at the same cycle
     logic branch_resolve;
     logic stall_dispatch;
-
+//wb_mispred
     always_ff @(posedge clock) begin
         if (reset) begin
             has_branch_in_pipline <= '0;
             branch_stall_reg <= '0; 
         end else begin
             if (branch_resolve && has_branch_in_pipline) begin
-                has_branch_in_pipline <= '0;
+                has_branch_in_pipline <= (correct_predict) ? (|is_branch && !stall && !branch_stall) : '0;
                 branch_stall_reg <= '0;
             end else if (|is_branch && !has_branch_in_pipline && !stall) begin
                 has_branch_in_pipline <= 1;
@@ -560,11 +560,10 @@ module cpu #(
         end
     end
 
-    assign branch_stall_next = (|is_branch && has_branch_in_pipline && !branch_resolve);
+    assign branch_stall_next = (|is_branch && !stall && has_branch_in_pipline && !branch_resolve);
     assign branch_stall = branch_stall_reg || branch_stall_next;
-    // assign branch_stall = 0;
     assign branch_resolve = wb_valid[`FU_NUM - `FU_BRANCH]; // no matter it is mispredict or not
-    assign stall_dispatch = branch_stall || stall;
+    // assign stall_dispatch = branch_stall || stall;
 
 `ifndef SYNTHESIS
     always_ff @(posedge clock) begin
@@ -1274,6 +1273,7 @@ module cpu #(
         //flush (br)
         .br_mispredict_i(if_flush),
         .branch_success_predict(correct_predict)
+
     );
 
     //////////////////////////////////////////////////
@@ -1498,9 +1498,7 @@ module cpu #(
             br_req_reg[i].src2_val =  br_req_reg_org[i].src2_valid ? rdata[7 + i*8]: br_req_reg_org[i].src2_val;
             br_req_reg[i].src1_mux = rdata[6 + i*8];
             br_req_reg[i].src2_mux = rdata[7 + i*8];
-            `ifndef SYNTHESIS
             $display("[Real Value @ %t]br_req_reg_org[i].src2_valid = %b,br_req_reg[i].src1_mux=%d, br_req_reg[i].src2_mux= %d" ,$time, br_req_reg_org[i].src2_valid, br_req_reg[i].src1_mux,br_req_reg[i].src2_mux);
-            `endif
         end
     end
     
@@ -1599,9 +1597,7 @@ module cpu #(
             fu_ls_addr_o_reg <= fu_ls_addr_o;
             fu_sw_data_o_reg <= fu_sw_data_o; // for store instr
             fu_sw_funct3_o_reg <= fu_sw_funct3_o;
-            `ifndef SYNTHESIS
             $display("fu_sw_funct3_o_reg=%b",fu_sw_funct3_o_reg);
-            `endif
             fu_valid_reg <= fu_valid;
             fu_value_reg <= fu_value;
             fu_dest_prf_reg <= fu_dest_prf;

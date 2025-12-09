@@ -183,7 +183,7 @@ logic clear_valid_by_stall;
             disp_packet_o[i].bi_pred = if_packet_i[i].bi_pred;
             disp_packet_o[i].bp_history = if_packet_i[i].bp_history;
             `ifndef SYNTHESIS
-            $display("are your still work8?");
+            $display("are your still work1?");
             `endif
         end
     end
