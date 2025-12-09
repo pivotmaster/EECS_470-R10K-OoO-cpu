@@ -57,7 +57,7 @@ module cpu #(
     output DATA [`DISPATCH_WIDTH-1:0] ex_c_inst_dbg
     //output logic ex_c_valid_dbg
 );
-
+    logic sq_checkpoint_valid_o;
     //////////////////////////////////////////////////
     //                                              //
     //                Pipeline Wires                //
@@ -291,7 +291,7 @@ module cpu #(
 
     // mem output
     MEM_TAG   mem2proc_transaction_tag_dcache; // Memory tag for current transaction     
-    MEM_TAG   mem2proc_transaction_tag_icache;
+    // MEM_TAG   mem2proc_transaction_tag_icache;
     MEM_BLOCK mem2proc_data_dcache;            // Data coming back from memory
     MEM_TAG   mem2proc_data_tag_dcache;        // Tag for which transaction data is for
 // Issue
@@ -1415,7 +1415,9 @@ module cpu #(
             br_req_reg[i].src2_val =  br_req_reg_org[i].src2_valid ? rdata[7 + i*8]: br_req_reg_org[i].src2_val;
             br_req_reg[i].src1_mux = rdata[6 + i*8];
             br_req_reg[i].src2_mux = rdata[7 + i*8];
+            `ifndef SYNTHESIS
             $display("[Real Value @ %t]br_req_reg_org[i].src2_valid = %b,br_req_reg[i].src1_mux=%d, br_req_reg[i].src2_mux= %d" ,$time, br_req_reg_org[i].src2_valid, br_req_reg[i].src1_mux,br_req_reg[i].src2_mux);
+            `endif
         end
     end
     
@@ -1501,7 +1503,9 @@ module cpu #(
             fu_ls_addr_o_reg <= fu_ls_addr_o;
             fu_sw_data_o_reg <= fu_sw_data_o; // for store instr
             fu_sw_funct3_o_reg <= fu_sw_funct3_o;
+            `ifndef SYNTHESIS
             $display("fu_sw_funct3_o_reg=%b",fu_sw_funct3_o_reg);
+            `endif
             fu_valid_reg <= fu_valid;
             fu_value_reg <= fu_value;
             fu_dest_prf_reg <= fu_dest_prf;
