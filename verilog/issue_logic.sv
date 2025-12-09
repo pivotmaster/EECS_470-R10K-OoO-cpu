@@ -234,86 +234,86 @@ end
 //                 br_req_o[0].imm, br_req_o[0].src1_val, br_req_o[0].src2_val);
 //         */
 //     endtask
-`ifndef SYNTHESIS
-task automatic show_issue_output;
-    // ---- ALU requests ----
-$write("ALU_REQ:\n");
-for (int i = 0; i < ALU_COUNT; i++) begin
-    $write("  [%0d] valid=%b | rob=%0d | dest=%0d | src1=%h | src2=%h | imm=%h | src2_valid=%b | fu=%p\n",
-           i,
-           alu_req_o[i].valid,
-           alu_req_o[i].rob_idx,
-           alu_req_o[i].dest_tag,
-           alu_req_o[i].src1_val,
-           alu_req_o[i].src2_val,
-           alu_req_o[i].imm,
-           alu_req_o[i].src2_valid,
-           alu_req_o[i].fu_type);
-end
+// `ifndef SYNTHESIS
+// task automatic show_issue_output;
+//     // ---- ALU requests ----
+// $write("ALU_REQ:\n");
+// for (int i = 0; i < ALU_COUNT; i++) begin
+//     $write("  [%0d] valid=%b | rob=%0d | dest=%0d | src1=%h | src2=%h | imm=%h | src2_valid=%b | fu=%p\n",
+//            i,
+//            alu_req_o[i].valid,
+//            alu_req_o[i].rob_idx,
+//            alu_req_o[i].dest_tag,
+//            alu_req_o[i].src1_val,
+//            alu_req_o[i].src2_val,
+//            alu_req_o[i].imm,
+//            alu_req_o[i].src2_valid,
+//            alu_req_o[i].fu_type);
+// end
 
 
-    // ---- MUL requests ----
-    $write("MUL_REQ:\n");
-    for (int i = 0; i < MUL_COUNT; i++) begin
-        $write("  [%0d] valid=%b | rob=%0d | dest=%0d | src1=%h | src2=%h | imm=%h | src2_valid=%b | fu=%p\n",
-            i,
-            mul_req_o[i].valid,
-            mul_req_o[i].rob_idx,
-            mul_req_o[i].dest_tag,
-            mul_req_o[i].src1_val,
-            mul_req_o[i].src2_val,
-            mul_req_o[i].imm,
-            mul_req_o[i].src2_valid,
-            mul_req_o[i].fu_type);
-    end
+//     // ---- MUL requests ----
+//     $write("MUL_REQ:\n");
+//     for (int i = 0; i < MUL_COUNT; i++) begin
+//         $write("  [%0d] valid=%b | rob=%0d | dest=%0d | src1=%h | src2=%h | imm=%h | src2_valid=%b | fu=%p\n",
+//             i,
+//             mul_req_o[i].valid,
+//             mul_req_o[i].rob_idx,
+//             mul_req_o[i].dest_tag,
+//             mul_req_o[i].src1_val,
+//             mul_req_o[i].src2_val,
+//             mul_req_o[i].imm,
+//             mul_req_o[i].src2_valid,
+//             mul_req_o[i].fu_type);
+//     end
 
-    // ---- LOAD requests ----
-    $write("LOAD_REQ:\n");
-    for (int i = 0; i < LOAD_COUNT; i++) begin
-        $write("  [%0d] valid=%0b | rob=%0d | dest=%0d | src1=%0d | src2=%0d\n",
-               i,
-               load_req_o[i].valid,
-               load_req_o[i].rob_idx,
-               load_req_o[i].dest_tag,
-               load_req_o[i].src1_val,
-               load_req_o[i].src2_val);
-    end
+//     // ---- LOAD requests ----
+//     $write("LOAD_REQ:\n");
+//     for (int i = 0; i < LOAD_COUNT; i++) begin
+//         $write("  [%0d] valid=%0b | rob=%0d | dest=%0d | src1=%0d | src2=%0d\n",
+//                i,
+//                load_req_o[i].valid,
+//                load_req_o[i].rob_idx,
+//                load_req_o[i].dest_tag,
+//                load_req_o[i].src1_val,
+//                load_req_o[i].src2_val);
+//     end
 
-    // ---- BRANCH requests ----
-    $write("BR_REQ:\n");
-    for (int i = 0; i < BR_COUNT; i++) begin
-        $write("  [%0d] valid=%0b | rob=%0d | dest=%0d | src1=%0d | src2=%0d | src1_mux=%0d | src2_mux=%0d\n",
-               i,
-               br_req_o[i].valid,
-               br_req_o[i].rob_idx,
-               br_req_o[i].dest_tag,
-               br_req_o[i].src1_val,
-               br_req_o[i].src2_val,
-               br_req_o[i].src1_mux,
-               br_req_o[i].src2_mux);
-    end
+//     // ---- BRANCH requests ----
+//     $write("BR_REQ:\n");
+//     for (int i = 0; i < BR_COUNT; i++) begin
+//         $write("  [%0d] valid=%0b | rob=%0d | dest=%0d | src1=%0d | src2=%0d | src1_mux=%0d | src2_mux=%0d\n",
+//                i,
+//                br_req_o[i].valid,
+//                br_req_o[i].rob_idx,
+//                br_req_o[i].dest_tag,
+//                br_req_o[i].src1_val,
+//                br_req_o[i].src2_val,
+//                br_req_o[i].src1_mux,
+//                br_req_o[i].src2_mux);
+//     end
 
-    $write("=============================================================\n\n");
-endtask
+//     $write("=============================================================\n\n");
+// endtask
 
-  int cycle_count;
-  always_ff @(posedge clock) begin
-    if (reset)  
-        cycle_count <= 0;
-    else
-      cycle_count <= cycle_count + 1;
-      $display("// ---------------- CYCLE = %d ---------------- //",cycle_count);
-      //test_reqs();
-      //test_grant_vector(cycle_count);
-    //   show_rs_input();
+//   int cycle_count;
+//   always_ff @(posedge clock) begin
+//     if (reset)  
+//         cycle_count <= 0;
+//     else
+//       cycle_count <= cycle_count + 1;
+//       // $display("// ---------------- CYCLE = %d ---------------- //",cycle_count);
+//       //test_reqs();
+//       //test_grant_vector(cycle_count);
+//     //   show_rs_input();
       
-      //show_issue_packets(cycle_count);
-      //test_issue_selector(cycle_count);
-      show_issue_output();
+//       //show_issue_packets(cycle_count);
+//       //test_issue_selector(cycle_count);
+//       show_issue_output();
       
     
-  end
-`endif
+//   end
+// `endif
 
 endmodule
 

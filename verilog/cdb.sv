@@ -47,24 +47,24 @@ module cdb #(
 
 );
 
-`ifndef SYNTHESIS
-always_ff @(posedge clock) begin
-    if (!reset) begin
-        for (int i = 0; i < CDB_WIDTH; i++) begin
-            if (cdb_packets_i[i].valid) begin
-                $display("[CDB %0t] lane=%0d | arch=%0d | phys=%0d | value=0x%0h | cdb out valid, tag=%0d, %0d",
-                         $time,
-                         i,
-                         cdb_packets_i[i].dest_arch,
-                         cdb_packets_i[i].phys_tag,
-                         cdb_packets_i[i].value,
-                         cdb_valid_mp_o[i], 
-                         cdb_tag_rs_o[i]);
-            end
-        end
-    end
-end
-`endif
+// `ifndef SYNTHESIS
+// always_ff @(posedge clock) begin
+//     if (!reset) begin
+//         for (int i = 0; i < CDB_WIDTH; i++) begin
+//             if (cdb_packets_i[i].valid) begin
+//                 $display("[CDB %0t] lane=%0d | arch=%0d | phys=%0d | value=0x%0h | cdb out valid, tag=%0d, %0d",
+//                          $time,
+//                          i,
+//                          cdb_packets_i[i].dest_arch,
+//                          cdb_packets_i[i].phys_tag,
+//                          cdb_packets_i[i].value,
+//                          cdb_valid_mp_o[i], 
+//                          cdb_tag_rs_o[i]);
+//             end
+//         end
+//     end
+// end
+// `endif
 
     // =========================================================
     // Internal signals

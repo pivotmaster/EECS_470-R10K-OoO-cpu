@@ -548,26 +548,26 @@ module cpu #(
     assign branch_resolve = wb_valid[`FU_NUM - `FU_BRANCH]; // no matter it is mispredict or not
     // assign stall_dispatch = branch_stall || stall;
 
-`ifndef SYNTHESIS
-    always_ff @(posedge clock) begin
-        if(!reset) begin
-            $display("wb_valid=%b", wb_valid);
-            $display("rob_store_ready_valid=%b | rob_store_ready_idx=%d", rob_store_ready_valid, rob_store_ready_idx);
-            $display("is_branch_early=%b | branch_resolve=%b", |is_branch_early, branch_resolve);
-            $display("|is_branch=%b | has_branch_in_pipline=%b | branch_stall=%b | branch_resolve=%b", |is_branch, has_branch_in_pipline, branch_stall, branch_resolve);
-            $display("branch_stall_reg=%b |branch_stall_next=%b",branch_stall_reg,branch_stall_next);
-            $display("stall_disp=%b",stall_dispatch);
-        end
-    end
+// `ifndef SYNTHESIS
+//     always_ff @(posedge clock) begin
+//         if(!reset) begin
+//             // $display("wb_valid=%b", wb_valid);
+//             // $display("rob_store_ready_valid=%b | rob_store_ready_idx=%d", rob_store_ready_valid, rob_store_ready_idx);
+//             // $display("is_branch_early=%b | branch_resolve=%b", |is_branch_early, branch_resolve);
+//             // $display("|is_branch=%b | has_branch_in_pipline=%b | branch_stall=%b | branch_resolve=%b", |is_branch, has_branch_in_pipline, branch_stall, branch_resolve);
+//             // $display("branch_stall_reg=%b |branch_stall_next=%b",branch_stall_reg,branch_stall_next);
+//             // $display("stall_disp=%b",stall_dispatch);
+//         end
+//     end
 
     // valid bit will cycle through the pipeline and come back from the wb stage
     // assign if_valid = ((!stall) && (if_packet[0].inst != 32'h10500073)) ? 1'b1 : 1'b0;//###
-    always_ff @(negedge clock) begin
-        for(int i = 0; i < `N; i++) begin
-            $display("inst[%d] valid(%b) : %h", i, if_packet[i].valid, if_packet[i].inst);
-        end
-    end
-`endif
+//     always_ff @(negedge clock) begin
+//         for(int i = 0; i < `N; i++) begin
+//             // $display("inst[%d] valid(%b) : %h", i, if_packet[i].valid, if_packet[i].inst);
+//         end
+//     end
+// `endif
     // assign if_valid = 1'b1;
     assign if_valid = !stall && !branch_stall && !stall_dcache;
     //###
@@ -600,7 +600,7 @@ module cpu #(
         end else begin
             if (if_flush) begin
                 `ifndef SYNTHESIS
-                $display("cycle[%d]| if_flush=%b | wb_valid=%b | wb_mispred=%b | wb_rob_idx=%d | correct_pc_target_o=%h", cycle_count, if_flush, wb_valid, wb_mispred, wb_rob_idx[`FU_NUM - `FU_BRANCH], fu_value_reg[`FU_NUM - `FU_BRANCH]);
+                // $display("cycle[%d]| if_flush=%b | wb_valid=%b | wb_mispred=%b | wb_rob_idx=%d | correct_pc_target_o=%h", cycle_count, if_flush, wb_valid, wb_mispred, wb_rob_idx[`FU_NUM - `FU_BRANCH], fu_value_reg[`FU_NUM - `FU_BRANCH]);
                 `endif
             end else begin
                 cycle_count <= cycle_count + 1;
@@ -914,16 +914,16 @@ module cpu #(
 `ifndef SYNTHESIS
     always_ff @(negedge clock) begin
         for (int i = 0; i < `DISPATCH_WIDTH; i++) begin
-            $display("DISP[%0d] rs1_arch=%0d rs2_arch=%0d rd_arch=%0d rs1_phys=%0d rs2_phys=%0d rd_phys=%0d",
-                    i,
-                    src1_arch[i],
-                    src2_arch[i],
-                    dest_arch[i],
-                    rs1_phys_dest[i],
-                    rs2_phys_dest[i],
-                    alloc_phys[i]);
+            // $display("DISP[%0d] rs1_arch=%0d rs2_arch=%0d rd_arch=%0d rs1_phys=%0d rs2_phys=%0d rd_phys=%0d",
+            //         i,
+            //         src1_arch[i],
+            //         src2_arch[i],
+            //         dest_arch[i],
+            //         rs1_phys_dest[i],
+            //         rs2_phys_dest[i],
+            //         alloc_phys[i]);
         end
-        $display();
+        // $display();
     end
 `endif
 
@@ -1418,7 +1418,7 @@ module cpu #(
             br_req_reg[i].src1_mux = rdata[6 + i*8];
             br_req_reg[i].src2_mux = rdata[7 + i*8];
             `ifndef SYNTHESIS
-            $display("[Real Value @ %t]br_req_reg_org[i].src2_valid = %b,br_req_reg[i].src1_mux=%d, br_req_reg[i].src2_mux= %d" ,$time, br_req_reg_org[i].src2_valid, br_req_reg[i].src1_mux,br_req_reg[i].src2_mux);
+            // $display("[Real Value @ %t]br_req_reg_org[i].src2_valid = %b,br_req_reg[i].src1_mux=%d, br_req_reg[i].src2_mux= %d" ,$time, br_req_reg_org[i].src2_valid, br_req_reg[i].src1_mux,br_req_reg[i].src2_mux);
             `endif
         end
     end
@@ -1505,9 +1505,9 @@ module cpu #(
             fu_ls_addr_o_reg <= fu_ls_addr_o;
             fu_sw_data_o_reg <= fu_sw_data_o; // for store instr
             fu_sw_funct3_o_reg <= fu_sw_funct3_o;
-            `ifndef SYNTHESIS
-            $display("fu_sw_funct3_o_reg=%b",fu_sw_funct3_o_reg);
-            `endif
+            // `ifndef SYNTHESIS
+            // $display("fu_sw_funct3_o_reg=%b",fu_sw_funct3_o_reg);
+            // `endif
             fu_valid_reg <= fu_valid;
             fu_value_reg <= fu_value;
             fu_dest_prf_reg <= fu_dest_prf;
@@ -1647,9 +1647,9 @@ lsq_top #(
                 sq_snapshot_tail_reg <= sq_snapshot_tail_o;
                 lq_snapshot_tail_reg <= lq_snapshot_tail_o;
             end          
-            `ifndef SYNTHESIS
-            $display("sq_snapshot_tail_o=%d, lq_snapshot_tail_o=%d", sq_snapshot_tail_reg, lq_snapshot_tail_reg);
-            `endif
+            // `ifndef SYNTHESIS
+            // $display("sq_snapshot_tail_o=%d, lq_snapshot_tail_o=%d", sq_snapshot_tail_reg, lq_snapshot_tail_reg);
+            // `endif
         end
     end
 
@@ -1682,8 +1682,8 @@ always_ff @(posedge clock) begin
         Dcache_command_0_reg <=  (dcache_send_new_mem_req) ? Dcache_command_0 : MEM_NONE;
         Dcache_command_1_reg <=  (dcache_send_new_mem_req) ? Dcache_command_1 : MEM_NONE;
         `ifndef SYNTHESIS
-        $display("Dcache_command_0_reg = %d, Dcache_command_1_reg = %d", Dcache_command_0_reg, Dcache_command_1_reg);
-        $display("mem2proc_transaction_tag_dcache = %d, mem2proc_transaction_tag_icache = %d, mem2proc_transaction_tag = %d", mem2proc_transaction_tag_dcache, mem2proc_transaction_tag_icache, mem2proc_transaction_tag);
+        // $display("Dcache_command_0_reg = %d, Dcache_command_1_reg = %d", Dcache_command_0_reg, Dcache_command_1_reg);
+        // $display("mem2proc_transaction_tag_dcache = %d, mem2proc_transaction_tag_icache = %d, mem2proc_transaction_tag = %d", mem2proc_transaction_tag_dcache, mem2proc_transaction_tag_icache, mem2proc_transaction_tag);
         `endif
     end
 
@@ -1912,23 +1912,23 @@ dcache dcache_0 (
         if (!reset) begin
             integer i;
             if (stall_dcache) begin
-                $display("[%t]stall_dcache = %b", $time, stall_dcache);
+                // $display("[%t]stall_dcache = %b", $time, stall_dcache);
             end
             // $display("[%t]proc2mem_command = %s, Imem_command = %s, Dmem_command = %s", $time, proc2mem_command.name, Imem_command.name, Dmem_command.name);
             for (i = 0; i < `N; i++) begin
                 if(committed_insts[i].valid) begin
-                $display("[%t]Commit[%0d]: valid=%b halt=%b illegal=%b reg=%0d data=%h NPC=%h",
-                        $time,
-                        i,
-                        committed_insts[i].valid,
-                        committed_insts[i].halt,
-                        committed_insts[i].illegal,
-                        committed_insts[i].reg_idx,
-                        committed_insts[i].data,
-                        committed_insts[i].NPC);
+                // $display("[%t]Commit[%0d]: valid=%b halt=%b illegal=%b reg=%0d data=%h NPC=%h",
+                //         $time,
+                //         i,
+                //         committed_insts[i].valid,
+                //         committed_insts[i].halt,
+                //         committed_insts[i].illegal,
+                //         committed_insts[i].reg_idx,
+                //         committed_insts[i].data,
+                //         committed_insts[i].NPC);
             end
             end
-            $display("-------------------\n");
+            // $display("-------------------\n");
         end
     end
 `endif

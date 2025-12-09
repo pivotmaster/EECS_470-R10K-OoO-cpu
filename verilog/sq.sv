@@ -182,7 +182,7 @@ logic sq_all_valid;
 
       if (snapshot_restore_valid_i) begin
         `ifndef SYNTHESIS
-        $display("[SQ mispredict snapshot restore!!]");
+        // $display("[SQ mispredict snapshot restore!!]");
         `endif
         tail <= snapshot_tail_i;
 
@@ -366,7 +366,7 @@ logic sq_all_valid;
       // if (sq[head].valid  && sq[head].data_valid) begin
       if (sq[head].valid &&sq[head].commited && sq[head].data_valid) begin
         `ifndef SYNTHESIS
-        $display("sent data to dcache!! %t", $time);
+        // $display("sent data to dcache!! %t", $time);
         `endif
         dc_req_req = 1'b1;
         dc_req_addr = sq[head].addr;
@@ -374,7 +374,7 @@ logic sq_all_valid;
         dc_store_data = sq[head].data;
         dc_rob_idx = sq[head].rob_idx;
         `ifndef SYNTHESIS
-        $display("dc_req_addr=%h, dc_req_size=%t, dc_store_data=%h", dc_req_addr, dc_req_size, dc_store_data);
+        // $display("dc_req_addr=%h, dc_req_size=%t, dc_store_data=%h", dc_req_addr, dc_req_size, dc_store_data);
         `endif
       end
     end
@@ -414,40 +414,42 @@ logic sq_all_valid;
     // =======================================================
 
   // Simple debug display for Store Queue state
-  `ifndef SYNTHESIS
+  // `ifndef SYNTHESIS
+  /*
   task automatic show_sq_status();
     int i;
-    $display("===================================================================");
-    $display("Store Queue Status @ time %0t", $time);
-    $display("snapshot_restore_valid_i=%b", snapshot_restore_valid_i);
-    $display("[SQ] head=%0d tail=%0d count=%0d full=%0b", head, tail, count, full);
+    // $display("===================================================================");
+    // $display("Store Queue Status @ time %0t", $time);
+    // $display("snapshot_restore_valid_i=%b", snapshot_restore_valid_i);
+    // $display("[SQ] head=%0d tail=%0d count=%0d full=%0b", head, tail, count, full);
     for (i = 0; i < SQ_SIZE; i++) begin
       if (sq[i].valid) begin
-        $display("[SQ[%0d]] valid=%b addr=%h addr_valid=%b size=%0d rob_idx=%0d data_valid=%b commited=%b data=%h",
-                 i,
-                 sq[i].valid,
-                 sq[i].addr,
-                 sq[i].addr_valid,
-                 sq[i].size,
-                 sq[i].rob_idx,
-                 sq[i].data_valid,
-                 sq[i].commited,
-                 sq[i].data);
+        // $display("[SQ[%0d]] valid=%b addr=%h addr_valid=%b size=%0d rob_idx=%0d data_valid=%b commited=%b data=%h",
+        //          i,
+        //          sq[i].valid,
+        //          sq[i].addr,
+        //          sq[i].addr_valid,
+        //          sq[i].size,
+        //          sq[i].rob_idx,
+        //          sq[i].data_valid,
+        //          sq[i].commited,
+        //          sq[i].data);
       end
     end
-    $display("-------------------------------------------------------------------");
+    // $display("-------------------------------------------------------------------");
   endtask
+  */
 
-  always_ff @(posedge clock) begin
-    if (!reset) begin
-      show_sq_status();
-        if(sq[0].valid)begin
-          // $display("aaaa [DEBUG-FWD]@Time %t Checking idx=%0d. SQ_Addr=%h, SQ_Size=%0d | Load_Addr=%h, Load_Size=%0d | overlap=%b", 
-          //          $time, 0, sq[0].addr, sq[0].size, load_addr, load_size, addr_overlap(sq[0].addr , sq[0].size , load_addr , load_size));
-        end
-    end
-  end
-  `endif
+  // always_ff @(posedge clock) begin
+  //   if (!reset) begin
+  //     show_sq_status();
+  //       if(sq[0].valid)begin
+  //         // $display("aaaa [DEBUG-FWD]@Time %t Checking idx=%0d. SQ_Addr=%h, SQ_Size=%0d | Load_Addr=%h, Load_Size=%0d | overlap=%b", 
+  //         //          $time, 0, sq[0].addr, sq[0].size, load_addr, load_size, addr_overlap(sq[0].addr , sq[0].size , load_addr , load_size));
+  //       end
+  //   end
+  // end
+  // `endif
 
 endmodule
 

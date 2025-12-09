@@ -182,10 +182,10 @@ module lsq_top #(
         end else if (dispatch_valid) begin
             pre_dispatch_rob <= dispatch_rob_idx;
         end
-        `ifndef SYNTHESIS
-        // $display("dispatch_is_store=%b, dispatch_valid=%b, new_dispatch=%b, dispatch_rob_idx=%d, pre_dispatch_rob=%d", dispatch_is_store, dispatch_valid, new_dispatch, dispatch_rob_idx, pre_dispatch_rob);
-        $display("sq_data_valid=%b | sq_data_rob_idx=%d | sq_data_addr=%h",sq_data_valid, sq_data_rob_idx, sq_data_addr);
-        `endif
+        // `ifndef SYNTHESIS
+        // // $display("dispatch_is_store=%b, dispatch_valid=%b, new_dispatch=%b, dispatch_rob_idx=%d, pre_dispatch_rob=%d", dispatch_is_store, dispatch_valid, new_dispatch, dispatch_rob_idx, pre_dispatch_rob);
+        // $display("sq_data_valid=%b | sq_data_rob_idx=%d | sq_data_addr=%h",sq_data_valid, sq_data_rob_idx, sq_data_addr);
+        // `endif
     end
 
     // =====================================================
@@ -393,52 +393,52 @@ module lsq_top #(
     assign sq_snapshot_tail_o = sq_view_tail;
     assign sq_snapshot_count_o = sq_view_count;
 
-    // =====================================================
-    // Debug Display Task
-    // =====================================================
-`ifndef SYNTHESIS
-    task automatic show_lsq_status();
-        $display("=== LSQ Status (Cycle %0d) ===", $time);
+//     // =====================================================
+//     // Debug Display Task
+//     // =====================================================
+// `ifndef SYNTHESIS
+//     task automatic show_lsq_status();
+//         $display("=== LSQ Status (Cycle %0d) ===", $time);
         
-        // LSQ Status
-        $display("LSQ Dispatch");
-        $display("LQ Status: lq_enq_valid=%b, dispatch_size=%p, dispatch_rob_idx=%d , sq_data_funct3 = %b", lq_enq_valid, dispatch_size, dispatch_rob_idx,sq_data_funct3);
-        $display("SQ Status: sq_enq_valid=%b,  dispatch_size=%p, dispatch_rob_idx=%d", sq_enq_valid,dispatch_size, dispatch_rob_idx); 
+//         // LSQ Status
+//         $display("LSQ Dispatch");
+//         $display("LQ Status: lq_enq_valid=%b, dispatch_size=%p, dispatch_rob_idx=%d , sq_data_funct3 = %b", lq_enq_valid, dispatch_size, dispatch_rob_idx,sq_data_funct3);
+//         $display("SQ Status: sq_enq_valid=%b,  dispatch_size=%p, dispatch_rob_idx=%d", sq_enq_valid,dispatch_size, dispatch_rob_idx); 
 
-        $display("LSQ Get DATA/ADDR");
-        $display("LSQ: addr=%h | data=%h(%b) | rob_idx=%d", sq_data_addr, sq_data, sq_data_valid, sq_data_rob_idx);
+//         $display("LSQ Get DATA/ADDR");
+//         $display("LSQ: addr=%h | data=%h(%b) | rob_idx=%d", sq_data_addr, sq_data, sq_data_valid, sq_data_rob_idx);
 
-        // D-Cache Interface Status
-        $display("\n=== D-Cache Interface ===");
-        $display("Load Port (0): cmd=%s, addr=%h, size=%0d, accept=%b, valid_out=%b, data_out=%h, lq_req_valid=%s",
-                Dcache_command_0.name(), Dcache_addr_0, Dcache_size_0, 
-                Dcache_req_0_accept, Dcache_valid_out_0, Dcache_data_out_0,lq_req_valid);
+//         // D-Cache Interface Status
+//         $display("\n=== D-Cache Interface ===");
+//         $display("Load Port (0): cmd=%s, addr=%h, size=%0d, accept=%b, valid_out=%b, data_out=%h, lq_req_valid=%s",
+//                 Dcache_command_0.name(), Dcache_addr_0, Dcache_size_0, 
+//                 Dcache_req_0_accept, Dcache_valid_out_0, Dcache_data_out_0,lq_req_valid);
         
-        $display("Store Port (1): cmd=%s, addr=%h, size=%0d, accept=%b, valid_out=%b, data_out=%h, sq_req_valid=%s",
-                Dcache_command_1.name(), Dcache_addr_1, Dcache_size_1,
-                Dcache_req_1_accept, Dcache_valid_out_1, Dcache_data_out_1,sq_req_valid);
+//         $display("Store Port (1): cmd=%s, addr=%h, size=%0d, accept=%b, valid_out=%b, data_out=%h, sq_req_valid=%s",
+//                 Dcache_command_1.name(), Dcache_addr_1, Dcache_size_1,
+//                 Dcache_req_1_accept, Dcache_valid_out_1, Dcache_data_out_1,sq_req_valid);
         
-        // Writeback Status
-        $display("\n=== Writeback ===");
-        $display("WB Valid: %b, ROB IDX: %0d, Data: %h", 
-                wb_valid, wb_rob_idx, wb_data);
+//         // Writeback Status
+//         $display("\n=== Writeback ===");
+//         $display("WB Valid: %b, ROB IDX: %0d, Data: %h", 
+//                 wb_valid, wb_rob_idx, wb_data);
         
-        $display("==================================\n");
-    endtask
+//         $display("==================================\n");
+//     endtask
 
 
-    // Call the debug display on every clock edge (can be modified to trigger on specific conditions)
-    always_ff @(posedge clock) begin
-        if (!reset) begin
-            // Uncomment the line below to enable continuous debugging
-            show_lsq_status();
+//     // Call the debug display on every clock edge (can be modified to trigger on specific conditions)
+//     always_ff @(posedge clock) begin
+//         if (!reset) begin
+//             // Uncomment the line below to enable continuous debugging
+//             show_lsq_status();
             
-            // Or add specific conditions to trigger the display, for example:
-            // if (dispatch_valid || commit_valid || wb_valid || Dcache_valid_out_0 || Dcache_valid_out_1) begin
-            //     show_lsq_status();
-            // end
-        end
-    end
-`endif
+//             // Or add specific conditions to trigger the display, for example:
+//             // if (dispatch_valid || commit_valid || wb_valid || Dcache_valid_out_0 || Dcache_valid_out_1) begin
+//             //     show_lsq_status();
+//             // end
+//         end
+//     end
+// `endif
 
 endmodule

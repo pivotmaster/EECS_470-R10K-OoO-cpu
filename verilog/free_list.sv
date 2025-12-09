@@ -139,7 +139,7 @@ output logic [$clog2(PHYS_REGS+1)-1:0]                       free_count_o, // nu
                 if (flush_free_regs[k]) begin
                     N_free++;
                     `ifndef SYNTHESIS
-                    $display("flush N_free= %d ", N_free);
+                    // $display("flush N_free= %d ", N_free);
                     `endif
                 end
             end
@@ -249,9 +249,9 @@ output logic [$clog2(PHYS_REGS+1)-1:0]                       free_count_o, // nu
                 // $display("free_fifo[%0d] = %0d" , i , free_fifo[i]);
             end
         end else begin
-            `ifndef SYNTHESIS
-            $display("flush_free_regs =%b" , flush_free_regs);
-            `endif
+            // `ifndef SYNTHESIS
+            // $display("flush_free_regs =%b" , flush_free_regs);
+            // `endif
   
             head <= next_head;
             tail <= next_tail;
@@ -264,7 +264,7 @@ output logic [$clog2(PHYS_REGS+1)-1:0]                       free_count_o, // nu
                 if (total_free_valid[k]) begin
                     free_fifo[(tail + k) % (PHYS_REGS-ARCH_REGS)] <= total_free_reg_idx[k];
                     `ifndef SYNTHESIS
-                    $display("free reg[%0d] = %0d" , (tail + k) % (PHYS_REGS-ARCH_REGS) , total_free_reg_idx[k]);
+                    // $display("free reg[%0d] = %0d" , (tail + k) % (PHYS_REGS-ARCH_REGS) , total_free_reg_idx[k]);
                     `endif
                 end
             end
@@ -287,20 +287,20 @@ output logic [$clog2(PHYS_REGS+1)-1:0]                       free_count_o, // nu
         end
     end 
     
-`ifndef SYNTHESIS
-    always_ff @(negedge clock)begin 
-        $display("free_phys = %0d , free_valid = %d\n", free_phys_i , free_valid_i);
-        $display("N_alloc=%d, N_free=%d", N_alloc, N_free);
-        $display("next: head: %d , tail: %d, count: %d, next_count_debug: %d" , next_head, next_tail, next_count, next_count_debug);
-        $display("head: %d , tail: %d, count: %d, full: %b" , head, tail, count, full_o);
-        for(int i =0 ; i< (PHYS_REGS-ARCH_REGS); i++)begin
-            $display("free_fifo[%d] = %0d ", i, free_fifo[i]);
-        end
-    end
+// `ifndef SYNTHESIS
+//     always_ff @(negedge clock)begin 
+//         $display("free_phys = %0d , free_valid = %d\n", free_phys_i , free_valid_i);
+//         $display("N_alloc=%d, N_free=%d", N_alloc, N_free);
+//         $display("next: head: %d , tail: %d, count: %d, next_count_debug: %d" , next_head, next_tail, next_count, next_count_debug);
+//         $display("head: %d , tail: %d, count: %d, full: %b" , head, tail, count, full_o);
+//         for(int i =0 ; i< (PHYS_REGS-ARCH_REGS); i++)begin
+//             $display("free_fifo[%d] = %0d ", i, free_fifo[i]);
+//         end
+//     end
     
-    always_ff @(posedge clock) begin 
-        $display("total_available = %0d", total_available);
-    end
-`endif
+//     always_ff @(posedge clock) begin 
+//         $display("total_available = %0d", total_available);
+//     end
+// `endif
 
 endmodule

@@ -28,10 +28,10 @@ module alu_fu #(
             // here to prevent latches:
             default:  result = 32'hfacebeec;
         endcase
-    `ifndef SYNTHESIS
-    $display("ALU op=%0d src1=%h src2=%h result=%h time=%0t",
-             req_i.opcode, req_i.src1_val, req_i.src2_val, result, $time);
-    `endif
+    // `ifndef SYNTHESIS
+    // $display("ALU op=%0d src1=%h src2=%h result=%h time=%0t",
+    //          req_i.opcode, req_i.src1_val, req_i.src2_val, result, $time);
+    // `endif
     end
 
 /*
@@ -194,9 +194,9 @@ module ls_fu #(
       resp_o.dest_prf  = req_i.dest_tag;
       resp_o.sw_data   = '0;
       resp_o.funct3 = req_i.disp_packet.inst.i.funct3;
-      `ifndef SYNTHESIS
-      $display("resp_o.funct3=%b", resp_o.funct3);
-      `endif
+      // `ifndef SYNTHESIS
+      // $display("resp_o.funct3=%b", resp_o.funct3);
+      // `endif
 
     end else if (req_i.disp_packet.wr_mem) begin
       resp_o.is_lw     = 1'b0;
@@ -204,9 +204,9 @@ module ls_fu #(
       resp_o.dest_prf  = '0;
       resp_o.sw_data   = req_i.src2_val;
       resp_o.funct3 = '0;
-      `ifndef SYNTHESIS
-      $display("ROB %0d:sw | src2_val=%h", req_i.rob_idx, req_i.src2_val);
-      `endif
+      // `ifndef SYNTHESIS
+      // // $display("ROB %0d:sw | src2_val=%h", req_i.rob_idx, req_i.src2_val);
+      // `endif
 
     end else begin
       resp_o.is_lw     = 1'b0;
@@ -259,7 +259,7 @@ module branch_fu #(
           endcase
     end
     `ifndef SYNTHESIS
-    $display(" un_br=%b | fun3=%b |src1/2=%d,%d |take =%b", req_i.disp_packet.uncond_branch, req_i.disp_packet.inst.b.funct3, signed'(req_i.src1_mux),signed'(req_i.src2_mux), take);
+    // $display(" un_br=%b | fun3=%b |src1/2=%d,%d |take =%b", req_i.disp_packet.uncond_branch, req_i.disp_packet.inst.b.funct3, signed'(req_i.src1_mux),signed'(req_i.src2_mux), take);
     `endif
   end
 
@@ -350,14 +350,14 @@ module fu #(
         fu_ls_valid_o[idx] = fu_resp_bus[i].valid;
         fu_ls_rob_idx_o[idx] = fu_resp_bus[i].rob_idx;
         `ifndef SYNTHESIS
-        $display("idx =%d | fu_resp_bus[i].rob_idx=%d", idx, fu_resp_bus[i].rob_idx);
-        $display("idx =%d | fu_ls_rob_idx_o[i].rob_idx=%d", idx, fu_ls_rob_idx_o[idx]);
+        // $display("idx =%d | fu_resp_bus[i].rob_idx=%d", idx, fu_resp_bus[i].rob_idx);
+        // $display("idx =%d | fu_ls_rob_idx_o[i].rob_idx=%d", idx, fu_ls_rob_idx_o[idx]);
         `endif
         fu_ls_addr_o[idx] = fu_resp_bus[i].value;
         fu_sw_data_o[idx] = fu_resp_bus[i].sw_data;
         fu_sw_funct3_o[idx] = fu_resp_bus[i].funct3;
         `ifndef SYNTHESIS
-        $display("fu_sw_funct3_o[%0d]=%b", idx, fu_sw_funct3_o[idx]);
+        // $display("fu_sw_funct3_o[%0d]=%b", idx, fu_sw_funct3_o[idx]);
         `endif
         idx ++;
       end
@@ -436,75 +436,75 @@ module fu #(
       fu_funct3_o[k]    = fu_resp_bus[k].funct3;
       fu_is_lw_o[k]    = fu_resp_bus[k].is_lw;
       `ifndef SYNTHESIS
-      $display("fu_funct3_o[k]=%b", fu_funct3_o[k]);
+      // $display("fu_funct3_o[k]=%b", fu_funct3_o[k]);
       `endif
     end
 
   end
 
-`ifndef SYNTHESIS
-        // =========================================================
-    // For GUI Debugger (FU Trace)
-    // =========================================================
-    integer fu_trace_fd;
+// `ifndef SYNTHESIS
+//         // =========================================================
+//     // For GUI Debugger (FU Trace)
+//     // =========================================================
+//     integer fu_trace_fd;
 
-    initial begin
-        fu_trace_fd = $fopen("dump_files/fu_trace.json", "w");
-        if (fu_trace_fd == 0)
-            $fatal("Failed to open dump_files/fu_trace.json!");
-    end
+//     initial begin
+//         fu_trace_fd = $fopen("dump_files/fu_trace.json", "w");
+//         if (fu_trace_fd == 0)
+//             $fatal("Failed to open dump_files/fu_trace.json!");
+//     end
 
-    task automatic dump_fu_state(int cycle);
+//     task automatic dump_fu_state(int cycle);
 
-        $fdisplay(fu_trace_fd, "FU TRACE DUMP TRIGGERED AT CYCLE %0d", cycle);
-        $fwrite(fu_trace_fd, "{ \"cycle\": %0d, \"FU\": [", cycle);
-        for (int i = 0; i < TOTAL_FU; i++) begin
-            automatic issue_packet_t req;
+//         $fdisplay(fu_trace_fd, "FU TRACE DUMP TRIGGERED AT CYCLE %0d", cycle);
+//         $fwrite(fu_trace_fd, "{ \"cycle\": %0d, \"FU\": [", cycle);
+//         for (int i = 0; i < TOTAL_FU; i++) begin
+//             automatic issue_packet_t req;
 
-            // Identify FU input source by index
-            if (i < ALU_COUNT)
-                req = alu_req[i];
-            else if (i < ALU_COUNT + MUL_COUNT)
-                req = mul_req[i - ALU_COUNT];
-            else if (i < ALU_COUNT + MUL_COUNT + LOAD_COUNT)
-                req = load_req[i - ALU_COUNT - MUL_COUNT];
-            else
-                req = br_req[i - ALU_COUNT - MUL_COUNT - LOAD_COUNT];
+//             // Identify FU input source by index
+//             if (i < ALU_COUNT)
+//                 req = alu_req[i];
+//             else if (i < ALU_COUNT + MUL_COUNT)
+//                 req = mul_req[i - ALU_COUNT];
+//             else if (i < ALU_COUNT + MUL_COUNT + LOAD_COUNT)
+//                 req = load_req[i - ALU_COUNT - MUL_COUNT];
+//             else
+//                 req = br_req[i - ALU_COUNT - MUL_COUNT - LOAD_COUNT];
 
-            if (req.valid) begin
-                $fwrite(fu_trace_fd,
-                    "{\"idx\":%0d, \"valid\":1, \"dest_tag\":%0d, \"rob_idx\":%0d, \"src1_val\":%0d, \"src2_val\":%0d}",
-                    i, req.dest_tag, req.rob_idx, req.src1_val, req.src2_val
-                );
-            end else begin
-                $fwrite(fu_trace_fd, "{\"idx\":%0d, \"valid\":0}", i);
-            end
+//             if (req.valid) begin
+//                 $fwrite(fu_trace_fd,
+//                     "{\"idx\":%0d, \"valid\":1, \"dest_tag\":%0d, \"rob_idx\":%0d, \"src1_val\":%0d, \"src2_val\":%0d}",
+//                     i, req.dest_tag, req.rob_idx, req.src1_val, req.src2_val
+//                 );
+//             end else begin
+//                 $fwrite(fu_trace_fd, "{\"idx\":%0d, \"valid\":0}", i);
+//             end
 
-            if (i != TOTAL_FU - 1)
-                $fwrite(fu_trace_fd, ",");
-        end
-        $fwrite(fu_trace_fd, "]}\n");
-        $fflush(fu_trace_fd);
-    endtask
+//             if (i != TOTAL_FU - 1)
+//                 $fwrite(fu_trace_fd, ",");
+//         end
+//         $fwrite(fu_trace_fd, "]}\n");
+//         $fflush(fu_trace_fd);
+//     endtask
 
-    // =========================================================
-    // Auto Dump per Cycle
-    // =========================================================
-    int fu_cycle_count;
-    always_ff @(posedge clock) begin
-        if (reset) begin
-            fu_cycle_count <= 0;
-        end else begin
-            fu_cycle_count <= fu_cycle_count + 1;
-            dump_fu_state(fu_cycle_count);
-            $display("fu_ls_valid_o=%b | fu_ls_rob_idx_o=%d|fu_sw_data_o=%h", fu_ls_valid_o,fu_ls_rob_idx_o[0],fu_sw_data_o);
+//     // =========================================================
+//     // Auto Dump per Cycle
+//     // =========================================================
+//     int fu_cycle_count;
+//     always_ff @(posedge clock) begin
+//         if (reset) begin
+//             fu_cycle_count <= 0;
+//         end else begin
+//             fu_cycle_count <= fu_cycle_count + 1;
+//             dump_fu_state(fu_cycle_count);
+//             $display("fu_ls_valid_o=%b | fu_ls_rob_idx_o=%d|fu_sw_data_o=%h", fu_ls_valid_o,fu_ls_rob_idx_o[0],fu_sw_data_o);
 
                         
 
-        end
-    end
+//         end
+//     end
 
-`endif
+// `endif
 
 
 endmodule

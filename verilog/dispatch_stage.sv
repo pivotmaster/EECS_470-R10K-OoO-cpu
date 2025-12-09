@@ -156,17 +156,17 @@ logic clear_valid_by_stall;
         if (st_count < disp_n)         disp_n = st_count;
         // $display("lq_count=%d st_count=%d", lq_count, st_count);
     end
-`ifndef SYNTHESIS
-    always_ff @(posedge clock) begin
-      if (!reset) begin
-        for (int i = 0; i < DISPATCH_WIDTH; i++) begin
-            $display("[%0t] DISPATCH: if_packet_i[%b] valid=%0d", $time, i, if_packet_i[i].valid);
-        end
-        $display("[%0t] DISPATCH: RS=%0d ROB=%0d REG=%0d  W=%0d  -> disp_n=%0d",
-                $time,free_rs_slots_i, free_rob_slots_i, free_regs_i, DISPATCH_WIDTH, disp_n);
-      end
-    end
-`endif
+// `ifndef SYNTHESIS
+//     always_ff @(posedge clock) begin
+//       if (!reset) begin
+//         for (int i = 0; i < DISPATCH_WIDTH; i++) begin
+//             $display("[%0t] DISPATCH: if_packet_i[%b] valid=%0d", $time, i, if_packet_i[i].valid);
+//         end
+//         $display("[%0t] DISPATCH: RS=%0d ROB=%0d REG=%0d  W=%0d  -> disp_n=%0d",
+//                 $time,free_rs_slots_i, free_rob_slots_i, free_regs_i, DISPATCH_WIDTH, disp_n);
+//       end
+//     end
+// `endif
 
     //pass packet
     always_comb begin
@@ -177,9 +177,9 @@ logic clear_valid_by_stall;
             disp_packet_o[i].valid = if_packet_i[i].valid;
             // disp_packet_o[i].valid = (clear_valid_by_stall ) ? '0 : if_packet_i[i].valid;
             disp_packet_o[i].dest_reg_idx = (disp_has_dest[i]) ? if_packet_i[i].inst.r.rd : `ZERO_REG;
-            `ifndef SYNTHESIS
-            $display("are your still work2?");
-            `endif
+            // `ifndef SYNTHESIS
+            // $display("are your still work2?");
+            // `endif
         end
     end
 
@@ -320,30 +320,30 @@ logic clear_valid_by_stall;
   end
 */
 
-  // =========================================================
-  // DEBUG
-  // =========================================================
-  `ifndef SYNTHESIS
-  integer cycle_count;
-  always_ff @(posedge clock) begin
-    if (reset)
-      cycle_count <= 0;
-    else
-      cycle_count <= cycle_count + 1;
+//   // =========================================================
+//   // DEBUG
+//   // =========================================================
+//   `ifndef SYNTHESIS
+//   integer cycle_count;
+//   always_ff @(posedge clock) begin
+//     if (reset)
+//       cycle_count <= 0;
+//     else
+//       cycle_count <= cycle_count + 1;
 
-    for (int i = 0; i < DISPATCH_WIDTH; i++) begin
-      $display("disp_rs_valid_o=%b | rs_packets_o valid=%b", disp_rs_valid_o[0], rs_packets_o[0].valid);
-      if (disp_rs_valid_o[i]) begin
-        $display("Dispatch %0d | ROB_idx=%0d | Dest=%0d | Src1=%0d (%b) | Src2=%0d (%b)",
-                 i,
-                 rs_packets_o[i].rob_idx,
-                 rs_packets_o[i].dest_tag,
-                 rs_packets_o[i].src1_tag, rs_packets_o[i].src1_ready,
-                 rs_packets_o[i].src2_tag, rs_packets_o[i].src2_ready);
-      end
-    end
-  end
-`endif
+//     for (int i = 0; i < DISPATCH_WIDTH; i++) begin
+//       $display("disp_rs_valid_o=%b | rs_packets_o valid=%b", disp_rs_valid_o[0], rs_packets_o[0].valid);
+//       if (disp_rs_valid_o[i]) begin
+//         $display("Dispatch %0d | ROB_idx=%0d | Dest=%0d | Src1=%0d (%b) | Src2=%0d (%b)",
+//                  i,
+//                  rs_packets_o[i].rob_idx,
+//                  rs_packets_o[i].dest_tag,
+//                  rs_packets_o[i].src1_tag, rs_packets_o[i].src1_ready,
+//                  rs_packets_o[i].src2_tag, rs_packets_o[i].src2_ready);
+//       end
+//     end
+//   end
+// `endif
 
 endmodule
 
