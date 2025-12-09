@@ -980,7 +980,9 @@ module cpu #(
         .snapshot_data_o(snapshot_data_o),
         .snapshot_valid_o(snapshot_valid),
 
-        .branch_stall_i(branch_stall)
+        .branch_stall_i(branch_stall),
+
+        .stall_i(branch_stall || stall)
     );
 
 
@@ -1645,6 +1647,9 @@ lsq_top #(
                 sq_snapshot_tail_reg <= sq_snapshot_tail_o;
                 lq_snapshot_tail_reg <= lq_snapshot_tail_o;
             end          
+            `ifndef SYNTHESIS
+            $display("sq_snapshot_tail_o=%d, lq_snapshot_tail_o=%d", sq_snapshot_tail_reg, lq_snapshot_tail_reg);
+            `endif
         end
     end
 

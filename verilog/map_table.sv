@@ -107,9 +107,12 @@ module map_table#(
     input  map_entry_t      snapshot_data_i [ARCH_REGS-1:0],
     
     output map_entry_t       snapshot_data_o [ARCH_REGS-1:0],
-    output logic snapshot_valid_o //### 11/10 sychenn ###//
+    output logic snapshot_valid_o, //### 11/10 sychenn ###//
 
     // input logic is_jtpe
+    
+    //stall
+    input logic stall_i
 );
 
     // =======================================================
@@ -128,7 +131,7 @@ module map_table#(
         snapshot_valid_o = 1'b0;
         if (!branch_stall_i)begin
             for(int i =0 ; i < DISPATCH_WIDTH ; i++)begin
-                if(is_branch_i[i])begin
+                if(is_branch_i[i] && !stall_i)begin
                     snapshot_valid_o = 1'b1;
                     break;
                 end 
