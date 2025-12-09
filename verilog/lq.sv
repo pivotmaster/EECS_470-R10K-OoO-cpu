@@ -286,7 +286,7 @@ module lq #(
                             `ifndef SYNTHESIS
                             $display("[RTL-SQ-FWD] Overlap at idx=%0d. DataValid=%b. Data=%h", i, sq_view_i[i].data_valid, sq_view_i[i].data);
                             `endif
-                            if(sq_view_i[i].data_valid)begin
+                            if(sq_view_i[i].data_valid && is_older(sq_view_i[i].rob_idx, lq[query_idx].rob_idx, rob_head))begin
                                 fwd_found = 1'b1;
                                 // pending_found = 1'b0;
                                 fwd_data = sq_view_i[i].data;
